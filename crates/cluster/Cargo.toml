@@ -4,12 +4,13 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
-[lints]
-workspace = true
-
 [features]
+cli = ["clap", "tokio/full", "serde_with"]
 default = []
 testing = []
+
+[lints]
+workspace = true
 
 [dependencies]
 # Local
@@ -54,9 +55,15 @@ alloy = { workspace = true, features = [
     "contract",
     "signer-local",
     "reqwest",
+    "provider-http",
     "provider-ws",
     "rpc-types",
 ] }
+anyhow.workspace = true
+clap = { version = "4.5.40", features = ["derive", "env"], optional = true }
+base64.workspace = true
+rand.workspace = true
+serde_with = { version = "3.14.1", optional = true }
 
 [dev-dependencies]
 libp2p-identity = { workspace = true, features = ["rand"] }
@@ -66,10 +73,14 @@ alloy = { version = "1.0", default-features = false, features = [
     "provider-anvil-node",
     "node-bindings",
 ] }
-tokio = { version = "1", default-features = false }
+tokio = { version = "1", features = ["full"] }
+arc-swap = "1.7"
+clap = { version = "4.5.40", features = ["derive", "env"] }
+assert_cmd = "2.0.17"
 
 tracing-subscriber = { version = "0.3", features = [
     "env-filter",
     "parking_lot",
     "json",
 ] }
+hex = "0.4.3"

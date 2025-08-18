@@ -74,7 +74,7 @@
               text = ''cargo "$@"'';
             })
 
-            fenixPackages.rust-analyzer 
+            fenixPackages.rust-analyzer
             cargo-udeps
             docker-compose
 
@@ -89,6 +89,7 @@
             alias gco="$(which git) checkout -b"
             alias glog="$(which git) log"
             alias lsa="ls -lah"
+            alias prettyup="cargo fmt --all && cargo clippy --all-features --fix --allow-dirty"
           '';
         };
       }
