@@ -1,13 +1,7 @@
 use {
     crate::commands::{parse_operators_from_str, read_operators_from_file, ClusterConfig},
-    itertools::Itertools,
     std::path::PathBuf,
-    wcn_cluster::{
-        smart_contract::{Deployer, Read},
-        EncryptionKey,
-        NodeOperators,
-        Settings,
-    },
+    wcn_cluster::{smart_contract::Read, Cluster, EncryptionKey, Settings},
 };
 
 // TODO: discuss if ideal
@@ -31,7 +25,7 @@ pub struct DeployCmd {
 pub async fn exec(cmd: DeployCmd) -> anyhow::Result<()> {
     let provider = cmd.shared_args.provider().await?;
 
-    // TOOD: maybe consider impl a default
+    // TODO: maybe consider impl a default
     let settings = Settings {
         max_node_operator_data_bytes: MAX_NODE_OPERATOR_DATA_BYTES,
     };
@@ -57,16 +51,10 @@ pub async fn exec(cmd: DeployCmd) -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to decode encryption key: {}", e))?;
 
     let cfg = ClusterConfig { encryption_key };
-    let slots = initial_operators.into_iter().map(Some);
 
-    let operators = NodeOperators::from_slots(slots)?
-        .into_slots()
-        .into_iter()
-        .filter_map(|slot| slot.map(|operator| operator.serialize(cfg.as_ref())))
-        .try_collect()?;
+    let cluster = Cluster::deploy(cfg, &provider, settings, initial_operators).await?;
 
-    let contract = provider.deploy(settings, operators).await?;
-    let address = contract.address()?;
+    let address = cluster.smart_contract().address()?;
 
     println!("Cluster contract deployed at address: {address}");
 
