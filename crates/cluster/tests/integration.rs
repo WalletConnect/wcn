@@ -281,7 +281,7 @@ fn test_update(
     op.name = node_operator::Name::new("UpdatedName").unwrap();
 
     // NOTE: in real usage, it shouldn't be a node's peer id
-    let peer_id = op.nodes().get(0).unwrap().peer_id;
+    let peer_id = op.nodes().first().unwrap().peer_id;
 
     let new_client = Client {
         peer_id,
@@ -307,7 +307,7 @@ fn test_update(
         .arg(address.to_string())
         .arg("update")
         .arg("--operators")
-        .arg(operators.clone())
+        .arg(operators)
         .arg("--view-after-update")
         .assert()
         .success()
