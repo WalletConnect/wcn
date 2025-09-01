@@ -1,10 +1,18 @@
 use {
+    anyhow::Context,
     base64::Engine as _,
+    derive_where::derive_where,
     libp2p_identity::{Keypair, PeerId},
+    metrics_exporter_prometheus::PrometheusHandle,
     serde::{Deserialize, Deserializer},
-    std::{path::PathBuf, time::Duration},
+    std::{
+        net::{Ipv4Addr, SocketAddrV4, TcpListener},
+        path::PathBuf,
+        time::Duration,
+    },
     tap::{Pipe as _, TapOptional as _},
     wcn_rocks::RocksdbDatabaseConfig,
+    wcn_rpc::server::ShutdownSignal,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -16,13 +24,13 @@ pub enum Error {
     InvalidNodeAddress,
 }
 
-#[derive(Clone, Debug)]
+#[derive_where(Debug)]
 pub struct Config {
     pub keypair: Keypair,
 
-    pub primary_rpc_server_port: u16,
-    pub secondary_rpc_server_port: u16,
-    pub metrics_server_port: u16,
+    pub primary_rpc_server_socket: wcn_rpc::server::Socket,
+    pub secondary_rpc_server_socket: wcn_rpc::server::Socket,
+    pub metrics_server_socket: TcpListener,
 
     pub connection_timeout: Duration,
     pub max_connections: u32,
@@ -32,6 +40,12 @@ pub struct Config {
 
     pub rocksdb_dir: PathBuf,
     pub rocksdb: RocksdbDatabaseConfig,
+
+    pub shutdown_signal: ShutdownSignal,
+
+    /// [`PrometheusHandle`] to use for getting metrics in metrics server.
+    #[derive_where(skip)]
+    pub prometheus_handle: PrometheusHandle,
 }
 
 impl Config {
@@ -41,17 +55,31 @@ impl Config {
 }
 
 impl Config {
-    pub fn from_env() -> envy::Result<Self> {
+    pub fn from_env(prometheus_handle: PrometheusHandle) -> anyhow::Result<Self> {
         let raw = envy::from_env::<RawConfig>()?;
         let rocksdb = create_rocksdb_config(&raw);
 
         tracing::info!(config = ?rocksdb, "rocksdb configuration");
 
+        let primary_rpc_server_socket =
+            wcn_rpc::server::Socket::new_high_priority(raw.primary_rpc_server_port)
+                .context("Failed to bind primary rpc server socket")?;
+
+        let secondary_rpc_server_socket =
+            wcn_rpc::server::Socket::new_low_priority(raw.secondary_rpc_server_port)
+                .context("Failed to bind secondary rpc server socket")?;
+
+        let metrics_server_socket = TcpListener::bind(SocketAddrV4::new(
+            Ipv4Addr::UNSPECIFIED,
+            raw.metrics_server_port,
+        ))
+        .context("Failed to bind metrics server socket")?;
+
         Ok(Self {
             keypair: raw.keypair,
-            primary_rpc_server_port: raw.primary_rpc_server_port,
-            secondary_rpc_server_port: raw.secondary_rpc_server_port,
-            metrics_server_port: raw.metrics_server_port,
+            primary_rpc_server_socket,
+            secondary_rpc_server_socket,
+            metrics_server_socket,
             connection_timeout: raw
                 .db_connection_timeout_ms
                 .unwrap_or(10_000)
@@ -62,6 +90,8 @@ impl Config {
             max_concurrent_rpcs: raw.db_max_concurrent_rpcs.unwrap_or(4000),
             rocksdb_dir: raw.rocksdb_dir,
             rocksdb,
+            shutdown_signal: ShutdownSignal::new(),
+            prometheus_handle,
         })
     }
 }

@@ -101,11 +101,10 @@ impl<API: Api> Client<API> {
         let transport_config = quic::new_quinn_transport_config(cfg.max_concurrent_rpcs);
         let socket_addr = SocketAddr::new(std::net::Ipv4Addr::new(0, 0, 0, 0).into(), 0);
         let endpoint = quic::new_quinn_endpoint(
-            socket_addr,
+            quic::new_udp_socket(socket_addr, cfg.priority).map_err(Error::io)?,
             &cfg.keypair,
             transport_config,
             None,
-            cfg.priority,
         )
         .map_err(Error::new)?;
 

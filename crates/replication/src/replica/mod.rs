@@ -90,7 +90,10 @@ impl<C: Config> StorageApi for InboundConnection<C> {
             .database
             .execute_ref(operation)
             .await
-            .map_err(|_| Error::new(storage_api::ErrorKind::Internal))
+            .map_err(|err| {
+                Error::new(storage_api::ErrorKind::Internal)
+                    .with_message(format!("Database error: {err}"))
+            })
     }
 
     async fn read_data(

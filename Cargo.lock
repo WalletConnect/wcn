@@ -5878,6 +5878,7 @@ dependencies = [
  "axum",
  "base64",
  "const-hex",
+ "derive-where",
  "envy",
  "futures",
  "futures-concurrency",
@@ -6081,6 +6082,32 @@ dependencies = [
  "wcn_rpc",
  "wcn_storage_api",
  "xxhash-rust",
+]
+
+[[package]]
+name = "wcn_testing"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "const-hex",
+ "derive_more",
+ "futures",
+ "futures-concurrency",
+ "libp2p-identity",
+ "metrics-exporter-prometheus",
+ "rand 0.9.2",
+ "smallvec",
+ "tap",
+ "time",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wcn_client",
+ "wcn_cluster",
+ "wcn_db",
+ "wcn_node",
+ "wcn_rpc",
+ "wcn_storage_api",
 ]
 
 [[package]]
