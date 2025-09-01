@@ -152,7 +152,7 @@ impl<N> NodeOperators<N> {
         self.slots[idx as usize].as_ref().unwrap()
     }
 
-    pub fn into_slots(self) -> Vec<Option<NodeOperator<N>>> {
+    pub(super) fn into_slots(self) -> Vec<Option<NodeOperator<N>>> {
         self.slots
     }
 

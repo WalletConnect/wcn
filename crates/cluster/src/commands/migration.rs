@@ -42,7 +42,7 @@ mod start {
 
     #[derive(Debug, clap::Args)]
     pub struct StartCmd {
-        // TOOD: operators list
+        // TODO: operators list
     }
 
     pub async fn exec<S: SmartContract>(cmd: StartCmd, client: S) -> anyhow::Result<()> {
