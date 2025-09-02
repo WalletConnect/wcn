@@ -36,6 +36,7 @@ use {
 pub use {
     encryption::{Error as EncryptionError, Key as EncryptionKey},
     libp2p_identity::{Keypair, PeerId},
+    op::Output as OperationOutput,
     smart_contract::ReadError as SmartContractError,
     wcn_cluster::{CreationError as ClusterCreationError, EncryptionKey as ClusterKey},
     wcn_cluster_api::Error as ClusterError,
