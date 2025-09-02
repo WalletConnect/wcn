@@ -1,7 +1,7 @@
 #[cfg(target_os = "linux")]
 use nix::sys::socket::{setsockopt, sockopt};
 use {
-    crate::transport::{self, Priority},
+    crate::transport::Priority,
     libp2p_identity::{Keypair, PeerId},
     quinn::{crypto::rustls::QuicClientConfig, rustls::pki_types::CertificateDer, VarInt},
     std::{
@@ -38,11 +38,10 @@ pub(crate) fn new_quinn_transport_config(
 }
 
 pub(crate) fn new_quinn_endpoint(
-    socket_addr: SocketAddr,
+    socket: UdpSocket,
     keypair: &Keypair,
     transport_config: Arc<quinn::TransportConfig>,
     server_config: Option<quinn::ServerConfig>,
-    priority: transport::Priority,
 ) -> Result<quinn::Endpoint, Error> {
     let client_tls_config =
         libp2p_tls::make_client_config(keypair, None).map_err(|err| Error::Tls(err.to_string()))?;
@@ -50,8 +49,6 @@ pub(crate) fn new_quinn_endpoint(
         QuicClientConfig::try_from(client_tls_config).map_err(|err| Error::Tls(err.to_string()))?;
     let mut client_config = quinn::ClientConfig::new(Arc::new(client_tls_config));
     client_config.transport_config(transport_config);
-
-    let socket = new_udp_socket(socket_addr, priority).map_err(Error::Socket)?;
 
     let mut endpoint = quinn::Endpoint::new(
         quinn::EndpointConfig::default(),
@@ -64,7 +61,7 @@ pub(crate) fn new_quinn_endpoint(
     Ok(endpoint)
 }
 
-fn new_udp_socket(addr: SocketAddr, priority: Priority) -> io::Result<UdpSocket> {
+pub(crate) fn new_udp_socket(addr: SocketAddr, priority: Priority) -> io::Result<UdpSocket> {
     use socket2::{Domain, Protocol, Socket, Type};
 
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;

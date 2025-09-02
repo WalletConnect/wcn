@@ -30,7 +30,8 @@ wcn_storage_api = { workspace = true, features = ["rpc_server"] }
 wc = { workspace = true, features = ["alloc", "future", "metrics"] }
 
 # Derives
-thiserror = { workspace = true}
+thiserror = { workspace = true }
+derive-where = { workspace = true }
 
 # General purpose
 anyhow = { workspace = true }

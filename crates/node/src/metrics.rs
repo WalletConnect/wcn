@@ -1,14 +1,19 @@
 use {
-    crate::Config,
-    std::{future::Future, io, net::SocketAddr, time::Duration},
+    metrics_exporter_prometheus::PrometheusHandle,
+    std::{future::Future, io, net::TcpListener, time::Duration},
     sysinfo::Networks,
+    wcn_rpc::server::ShutdownSignal,
 };
 
-pub(super) async fn serve(cfg: &Config) -> io::Result<impl Future<Output = ()>> {
-    let cfg_ = cfg.clone();
-    tokio::task::spawn_blocking(move || update_loop(cfg_));
+pub(super) fn serve(
+    socket: TcpListener,
+    prometheus: PrometheusHandle,
+    shutdown_signal: ShutdownSignal,
+) -> io::Result<impl Future<Output = ()>> {
+    let shutdown_signal_ = shutdown_signal.clone();
+    let prometheus_ = prometheus.clone();
+    tokio::task::spawn_blocking(move || update_loop(prometheus_, shutdown_signal_));
 
-    let prometheus = cfg.prometheus_handle.clone();
     let svc = axum::Router::new()
         .route(
             "/metrics",
@@ -16,9 +21,9 @@ pub(super) async fn serve(cfg: &Config) -> io::Result<impl Future<Output = ()>> 
         )
         .into_make_service();
 
-    let shutdown_signal = cfg.shutdown_signal.clone();
-    let addr: SocketAddr = ([0, 0, 0, 0], cfg.metrics_server_port).into();
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    socket.set_nonblocking(true)?;
+    let listener = tokio::net::TcpListener::from_std(socket)?;
+
     Ok(async {
         let _ = axum::serve(listener, svc)
             .with_graceful_shutdown(async move { shutdown_signal.wait().await })
@@ -26,11 +31,11 @@ pub(super) async fn serve(cfg: &Config) -> io::Result<impl Future<Output = ()>> 
     })
 }
 
-fn update_loop(config: Config) {
+fn update_loop(prometheus: PrometheusHandle, shutdown_signal: ShutdownSignal) {
     let mut sys = sysinfo::System::new_all();
 
     loop {
-        if config.shutdown_signal.is_emitted() {
+        if shutdown_signal.is_emitted() {
             return;
         }
 
@@ -62,7 +67,7 @@ fn update_loop(config: Config) {
                 .set(net.total_received() as f64);
         }
 
-        config.prometheus_handle.run_upkeep();
+        prometheus.run_upkeep();
         std::thread::sleep(Duration::from_secs(15));
     }
 }

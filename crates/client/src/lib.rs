@@ -505,7 +505,7 @@ where
         namespace: Namespace,
         key: impl AsRef<[u8]>,
         value: impl AsRef<[u8]>,
-        ttl: Duration,
+        ttl: impl Into<RecordExpiration>,
     ) -> Result<(), Error> {
         self.execute_request(op::SetBorrowed {
             namespace,
@@ -549,7 +549,7 @@ where
         &self,
         namespace: Namespace,
         key: impl AsRef<[u8]>,
-        ttl: Duration,
+        ttl: impl Into<RecordExpiration>,
     ) -> Result<(), Error> {
         self.execute_request(op::SetExpBorrowed {
             namespace,
@@ -582,7 +582,7 @@ where
         key: impl AsRef<[u8]>,
         field: impl AsRef<[u8]>,
         value: impl AsRef<[u8]>,
-        ttl: Duration,
+        ttl: impl Into<RecordExpiration>,
     ) -> Result<(), Error> {
         self.execute_request(op::HSetBorrowed {
             namespace,
@@ -638,7 +638,7 @@ where
         namespace: Namespace,
         key: impl AsRef<[u8]>,
         field: impl AsRef<[u8]>,
-        ttl: Duration,
+        ttl: impl Into<RecordExpiration>,
     ) -> Result<(), Error> {
         self.execute_request(op::HSetExpBorrowed {
             namespace,

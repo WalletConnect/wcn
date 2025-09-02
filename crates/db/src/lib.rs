@@ -1,10 +1,12 @@
 pub use config::Config;
 use {
     crate::storage::Storage,
+    futures::FutureExt as _,
     futures_concurrency::future::Join as _,
     metrics_exporter_prometheus::BuildError as PrometheusBuildError,
     std::{future::Future, io, time::Duration},
-    wcn_rpc::server::{Api as _, Server, ShutdownSignal},
+    tap::Pipe as _,
+    wcn_rpc::server::{Api as _, Server},
 };
 
 pub mod metrics;
@@ -28,45 +30,43 @@ pub enum Error {
     DatabaseServer(#[from] wcn_rpc::server::Error),
 }
 
-pub fn run(
-    shutdown_signal: ShutdownSignal,
-    cfg: Config,
-) -> Result<impl Future<Output = ()> + Send, Error> {
+pub fn run(cfg: Config) -> Result<impl Future<Output = ()> + Send, Error> {
     let id = cfg.id();
 
-    tracing::info!(ports = ?[cfg.primary_rpc_server_port, cfg.secondary_rpc_server_port], %id, "starting database server");
+    tracing::info!(ports = ?[cfg.primary_rpc_server_socket.port(), cfg.secondary_rpc_server_socket.port()], %id, "starting database server");
 
     let storage = Storage::new(&cfg)?;
 
-    let metrics_guard = metrics::run_update_loop(metrics::Config {
-        rocksdb_dir: cfg.rocksdb_dir.clone(),
-        rocksdb: cfg.rocksdb.enable_metrics.then(|| storage.db().clone()),
-    });
-
     let primary_rpc_server_cfg = wcn_rpc::server::Config {
         name: "primary",
-        port: cfg.primary_rpc_server_port,
+        socket: cfg.primary_rpc_server_socket,
         keypair: cfg.keypair.clone(),
         connection_timeout: cfg.connection_timeout,
         max_connections: cfg.max_connections,
         max_connections_per_ip: cfg.max_connections_per_ip,
         max_connection_rate_per_ip: cfg.max_connection_rate_per_ip,
         max_concurrent_rpcs: cfg.max_concurrent_rpcs,
-        priority: wcn_rpc::transport::Priority::High,
-        shutdown_signal: shutdown_signal.clone(),
+        shutdown_signal: cfg.shutdown_signal.clone(),
     };
 
     let secondary_rpc_server_cfg = wcn_rpc::server::Config {
         name: "secondary",
-        port: cfg.secondary_rpc_server_port,
+        socket: cfg.secondary_rpc_server_socket,
         keypair: cfg.keypair,
         connection_timeout: cfg.connection_timeout,
         max_connections: cfg.max_connections,
         max_connections_per_ip: cfg.max_connections_per_ip,
         max_connection_rate_per_ip: cfg.max_connection_rate_per_ip,
         max_concurrent_rpcs: cfg.max_concurrent_rpcs,
-        priority: wcn_rpc::transport::Priority::Low,
-        shutdown_signal,
+        shutdown_signal: cfg.shutdown_signal.clone(),
+    };
+
+    let metrics_server_cfg = metrics::ServerConfig {
+        socket: cfg.metrics_server_socket,
+        rocksdb_dir: cfg.rocksdb_dir.clone(),
+        rocksdb: cfg.rocksdb.enable_metrics.then(|| storage.db().clone()),
+        prometheus: cfg.prometheus_handle,
+        shutdown_signal: cfg.shutdown_signal,
     };
 
     let database_api = wcn_storage_api::rpc::DatabaseApi::new()
@@ -80,11 +80,14 @@ pub fn run(
 
     let secondary_rpc_server_fut = database_api.into_server().serve(secondary_rpc_server_cfg)?;
 
-    Ok(async move {
-        let _metrics_guard = metrics_guard;
+    let metrics_server_fut = metrics::serve(metrics_server_cfg).map_err(Error::MetricsServer)?;
 
-        (primary_rpc_server_fut, secondary_rpc_server_fut)
-            .join()
-            .await;
-    })
+    (
+        primary_rpc_server_fut,
+        secondary_rpc_server_fut,
+        metrics_server_fut,
+    )
+        .join()
+        .map(drop)
+        .pipe(Ok)
 }
