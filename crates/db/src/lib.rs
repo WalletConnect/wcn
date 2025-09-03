@@ -46,6 +46,7 @@ pub fn run(cfg: Config) -> Result<impl Future<Output = ()> + Send, Error> {
         max_connections_per_ip: cfg.max_connections_per_ip,
         max_connection_rate_per_ip: cfg.max_connection_rate_per_ip,
         max_concurrent_rpcs: cfg.max_concurrent_rpcs,
+        max_idle_connection_timeout: Duration::from_millis(200),
         shutdown_signal: cfg.shutdown_signal.clone(),
     };
 
@@ -58,6 +59,7 @@ pub fn run(cfg: Config) -> Result<impl Future<Output = ()> + Send, Error> {
         max_connections_per_ip: cfg.max_connections_per_ip,
         max_connection_rate_per_ip: cfg.max_connection_rate_per_ip,
         max_concurrent_rpcs: cfg.max_concurrent_rpcs,
+        max_idle_connection_timeout: Duration::from_millis(200),
         shutdown_signal: cfg.shutdown_signal.clone(),
     };
 

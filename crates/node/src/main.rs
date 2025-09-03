@@ -9,6 +9,7 @@ use {
     std::{
         net::{Ipv4Addr, SocketAddrV4, TcpListener},
         pin::pin,
+        time::Duration,
     },
     wcn_cluster::smart_contract,
     wcn_node::Config,
@@ -27,6 +28,8 @@ struct EnvConfig {
     primary_rpc_server_port: u16,
     secondary_rpc_server_port: u16,
     metrics_server_port: u16,
+
+    max_idle_connection_timeout_ms: Option<u32>,
 
     database_rpc_server_address: String,
     database_peer_id: String,
@@ -109,6 +112,9 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
     ))
     .context("Failed to bind metrics server socket")?;
 
+    let max_idle_connection_timeout =
+        Duration::from_millis(env.max_idle_connection_timeout_ms.unwrap_or(500) as u64);
+
     let smart_contract_address = env
         .smart_contract_address
         .parse()
@@ -140,6 +146,7 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
         primary_rpc_server_socket,
         secondary_rpc_server_socket,
         metrics_server_socket,
+        max_idle_connection_timeout,
         smart_contract_address,
         smart_contract_signer,
         smart_contract_encryption_key,

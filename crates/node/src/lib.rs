@@ -45,6 +45,10 @@ pub struct Config {
     /// Socket to serve the Prometheus metrics server on.
     pub metrics_server_socket: TcpListener,
 
+    /// For how long an inbound connection is allowed to be idle before it
+    /// gets timed out.
+    pub max_idle_connection_timeout: Duration,
+
     /// [`Ipv4Addr`] of the local WCN Database to connect to.
     ///
     /// WCN Databases don't have authorization and MUST not be exposed to the
@@ -113,6 +117,7 @@ impl Config {
             connection_timeout: Duration::from_secs(2),
             reconnect_interval: Duration::from_millis(100),
             max_concurrent_rpcs: 10000,
+            max_idle_connection_timeout: Duration::from_millis(200),
             priority: wcn_rpc::transport::Priority::High,
         };
 
@@ -121,6 +126,7 @@ impl Config {
             connection_timeout: Duration::from_secs(10),
             reconnect_interval: Duration::from_secs(1),
             max_concurrent_rpcs: 200,
+            max_idle_connection_timeout: self.max_idle_connection_timeout,
             priority: wcn_rpc::transport::Priority::Low,
         };
 
@@ -129,6 +135,7 @@ impl Config {
             connection_timeout: Duration::from_secs(1),
             reconnect_interval: Duration::from_millis(100),
             max_concurrent_rpcs: 5000,
+            max_idle_connection_timeout: self.max_idle_connection_timeout,
             priority: wcn_rpc::transport::Priority::High,
         };
 
@@ -137,6 +144,7 @@ impl Config {
             connection_timeout: Duration::from_secs(1),
             reconnect_interval: Duration::from_millis(100),
             max_concurrent_rpcs: 200,
+            max_idle_connection_timeout: self.max_idle_connection_timeout,
             priority: wcn_rpc::transport::Priority::Low,
         };
 
@@ -306,6 +314,7 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         max_connections_per_ip: 50,
         max_connection_rate_per_ip: 50,
         max_concurrent_rpcs: 10000,
+        max_idle_connection_timeout: config.max_idle_connection_timeout,
         shutdown_signal: config.shutdown_signal.clone(),
     };
 
@@ -318,6 +327,7 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         max_connections_per_ip: 10,
         max_connection_rate_per_ip: 10,
         max_concurrent_rpcs: 1000,
+        max_idle_connection_timeout: config.max_idle_connection_timeout,
         shutdown_signal: config.shutdown_signal.clone(),
     };
 

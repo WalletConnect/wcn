@@ -212,6 +212,7 @@ impl Client {
             operation_timeout: Duration::from_secs(2),
             reconnect_interval: Duration::from_millis(100),
             max_concurrent_rpcs: 5000,
+            max_idle_connection_timeout: Duration::from_secs(5),
             nodes,
             metrics_tag: "integration_tests",
         })
@@ -394,6 +395,7 @@ impl NodeOperator {
                         .unwrap(),
                     secondary_rpc_server_socket: wcn_rpc::server::Socket::new_low_priority(0)
                         .unwrap(),
+                    max_idle_connection_timeout: Duration::from_secs(5),
                     metrics_server_socket: new_tcp_socket(),
                     database_rpc_server_address: Ipv4Addr::LOCALHOST,
                     database_peer_id: db_peer_id,
@@ -486,6 +488,7 @@ fn clone_node_config(cfg: &wcn_node::Config) -> wcn_node::Config {
         keypair: cfg.keypair.clone(),
         primary_rpc_server_socket: cfg.primary_rpc_server_socket.try_clone().unwrap(),
         secondary_rpc_server_socket: cfg.secondary_rpc_server_socket.try_clone().unwrap(),
+        max_idle_connection_timeout: Duration::from_secs(5),
         metrics_server_socket: cfg.metrics_server_socket.try_clone().unwrap(),
         database_rpc_server_address: cfg.database_rpc_server_address,
         database_peer_id: cfg.database_peer_id,

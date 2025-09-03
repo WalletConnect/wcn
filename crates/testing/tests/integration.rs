@@ -45,6 +45,7 @@ async fn test_client_encryption(cluster: &TestCluster) {
             keypair: client.keypair().clone(),
             cluster_key: wcn_cluster::testing::encryption_key(),
             connection_timeout: Duration::from_secs(1),
+            max_idle_connection_timeout: Duration::from_secs(5),
             operation_timeout: Duration::from_secs(2),
             reconnect_interval: Duration::from_millis(100),
             max_concurrent_rpcs: 5000,

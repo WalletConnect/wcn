@@ -78,6 +78,10 @@ pub struct Config {
     /// Highest allowed frequency of connection retries.
     pub reconnect_interval: Duration,
 
+    /// For how long an outbound connection is allowed to be idle before it
+    /// gets timed out.
+    pub max_idle_connection_timeout: Duration,
+
     /// Maximum number of concurrent RPCs.
     pub max_concurrent_rpcs: u32,
 
@@ -98,7 +102,10 @@ pub struct Client<API: Api> {
 impl<API: Api> Client<API> {
     /// Creates a new RPC [`Client`].
     pub fn new(cfg: Config, api: API) -> Result<Self, Error> {
-        let transport_config = quic::new_quinn_transport_config(cfg.max_concurrent_rpcs);
+        let transport_config = quic::new_quinn_transport_config(
+            cfg.max_concurrent_rpcs,
+            cfg.max_idle_connection_timeout,
+        );
         let socket_addr = SocketAddr::new(std::net::Ipv4Addr::new(0, 0, 0, 0).into(), 0);
         let endpoint = quic::new_quinn_endpoint(
             quic::new_udp_socket(socket_addr, cfg.priority).map_err(Error::io)?,
