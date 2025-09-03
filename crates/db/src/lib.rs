@@ -52,6 +52,7 @@ pub fn run(
         max_connections_per_ip: cfg.max_connections_per_ip,
         max_connection_rate_per_ip: cfg.max_connection_rate_per_ip,
         max_concurrent_rpcs: cfg.max_concurrent_rpcs,
+        max_idle_connection_timeout: Duration::from_millis(200),
         priority: wcn_rpc::transport::Priority::High,
         shutdown_signal: shutdown_signal.clone(),
     };
@@ -65,6 +66,7 @@ pub fn run(
         max_connections_per_ip: cfg.max_connections_per_ip,
         max_connection_rate_per_ip: cfg.max_connection_rate_per_ip,
         max_concurrent_rpcs: cfg.max_concurrent_rpcs,
+        max_idle_connection_timeout: Duration::from_millis(200),
         priority: wcn_rpc::transport::Priority::Low,
         shutdown_signal,
     };

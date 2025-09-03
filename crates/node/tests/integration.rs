@@ -113,6 +113,7 @@ async fn test_suite() {
         operation_timeout: Duration::from_secs(2),
         reconnect_interval: Duration::from_millis(100),
         max_concurrent_rpcs: 5000,
+        max_idle_connection_timeout: Duration::from_secs(1),
         nodes: vec![bootstrap_node.clone()],
         metrics_tag: "mainnet",
     })
@@ -151,6 +152,7 @@ async fn test_encryption(
             operation_timeout: Duration::from_secs(2),
             reconnect_interval: Duration::from_millis(100),
             max_concurrent_rpcs: 5000,
+            max_idle_connection_timeout: Duration::from_secs(1),
             nodes: vec![node.clone()],
             metrics_tag: "mainnet",
         })
@@ -373,6 +375,7 @@ impl NodeOperator {
                     primary_rpc_server_port: find_available_port(),
                     secondary_rpc_server_port: find_available_port(),
                     metrics_server_port: find_available_port(),
+                    max_idle_connection_timeout: Duration::from_secs(1),
                     database_rpc_server_address: Ipv4Addr::LOCALHOST,
                     database_peer_id: db_peer_id,
                     database_primary_rpc_server_port: db_config.primary_rpc_server_port,

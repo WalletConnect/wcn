@@ -110,6 +110,10 @@ pub struct Config {
     /// Concurrency limit for the storage operations.
     pub max_concurrent_rpcs: u32,
 
+    /// For how long an outbound connection is allowed to be idle before it
+    /// gets timed out.
+    pub max_idle_connection_timeout: Duration,
+
     /// [`PeerAddr`]s of the bootstrap nodes.
     pub nodes: Vec<PeerAddr>,
 
@@ -140,6 +144,7 @@ impl Client {
             connection_timeout: config.connection_timeout,
             reconnect_interval: config.reconnect_interval,
             max_concurrent_rpcs: 50,
+            max_idle_connection_timeout: config.max_idle_connection_timeout,
             priority: wcn_rpc::transport::Priority::High,
         };
 
@@ -153,6 +158,7 @@ impl Client {
             connection_timeout: config.connection_timeout,
             reconnect_interval: config.reconnect_interval,
             max_concurrent_rpcs: config.max_concurrent_rpcs,
+            max_idle_connection_timeout: config.max_idle_connection_timeout,
             priority: wcn_rpc::transport::Priority::High,
         };
 

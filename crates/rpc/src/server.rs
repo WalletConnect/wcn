@@ -96,6 +96,10 @@ pub struct Config {
     /// Maximum number of concurrent RPCs.
     pub max_concurrent_rpcs: u32,
 
+    /// For how long an inbound connection is allowed to be idle before it
+    /// gets timed out.
+    pub max_idle_connection_timeout: Duration,
+
     /// [`transport::Priority`] of the server.
     pub priority: transport::Priority,
 
@@ -123,7 +127,10 @@ where
 
     /// Runs this RPC [`Server`]
     fn serve(self, cfg: Config) -> Result<impl Future<Output = ()> + Send> {
-        let transport_config = quic::new_quinn_transport_config(cfg.max_concurrent_rpcs);
+        let transport_config = quic::new_quinn_transport_config(
+            cfg.max_concurrent_rpcs,
+            cfg.max_idle_connection_timeout,
+        );
         let server_tls_config = libp2p_tls::make_server_config(&cfg.keypair).map_err(Error::new)?;
         let server_tls_config =
             QuicServerConfig::try_from(server_tls_config).map_err(Error::new)?;
