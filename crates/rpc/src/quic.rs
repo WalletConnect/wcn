@@ -14,12 +14,11 @@ use {
 
 pub(crate) fn new_quinn_transport_config(
     max_concurrent_streams: u32,
+    max_idle_timeout: Duration,
 ) -> Arc<quinn::TransportConfig> {
     const STREAM_WINDOW: u32 = 4 * 1024 * 1024; // 4 MiB
 
-    // Our tests are too slow and connections get dropped because of missing keep
-    // alive messages. Setting idle timeout higher for debug builds.
-    let max_idle_timeout_ms = if cfg!(debug_assertions) { 5000 } else { 200 };
+    let max_idle_timeout_ms = max_idle_timeout.as_millis().try_into().unwrap_or(u32::MAX);
 
     let mut transport = quinn::TransportConfig::default();
     // Disable uni-directional streams and datagrams.

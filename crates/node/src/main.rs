@@ -6,7 +6,7 @@ use {
     libp2p_identity::Keypair,
     metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle},
     serde::Deserialize,
-    std::pin::pin,
+    std::{pin::pin, time::Duration},
     wcn_cluster::smart_contract,
     wcn_node::Config,
     wcn_rpc::server::ShutdownSignal,
@@ -24,6 +24,8 @@ struct EnvConfig {
     primary_rpc_server_port: u16,
     secondary_rpc_server_port: u16,
     metrics_server_port: u16,
+
+    max_idle_connection_timeout_ms: Option<u32>,
 
     database_rpc_server_address: String,
     database_peer_id: String,
@@ -92,6 +94,9 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
 
     let keypair = Keypair::ed25519_from_bytes(secret_key).context("SECRET_KEY")?;
 
+    let max_idle_connection_timeout =
+        Duration::from_millis(env.max_idle_connection_timeout_ms.unwrap_or(500) as u64);
+
     let smart_contract_address = env
         .smart_contract_address
         .parse()
@@ -123,6 +128,7 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
         primary_rpc_server_port: env.primary_rpc_server_port,
         secondary_rpc_server_port: env.secondary_rpc_server_port,
         metrics_server_port: env.metrics_server_port,
+        max_idle_connection_timeout,
         smart_contract_address,
         smart_contract_signer,
         smart_contract_encryption_key,

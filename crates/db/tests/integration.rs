@@ -64,6 +64,7 @@ async fn test_e2e() {
             connection_timeout: Duration::from_secs(10),
             reconnect_interval: Duration::from_secs(1),
             max_concurrent_rpcs: 100,
+            max_idle_connection_timeout: Duration::from_secs(1),
             priority: wcn_rpc::transport::Priority::High,
         })
         .unwrap();
