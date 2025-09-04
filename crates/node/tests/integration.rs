@@ -106,7 +106,7 @@ async fn test_suite() {
         .parse()
         .unwrap();
 
-    let client = wcn_client::Client::new(wcn_client::Config {
+    let client = ClientBuilder::new(wcn_client::Config {
         keypair: operators[0].clients[0].keypair.clone(),
         cluster_key: encryption_key,
         connection_timeout: Duration::from_secs(1),
@@ -117,9 +117,9 @@ async fn test_suite() {
         nodes: vec![bootstrap_node.clone()],
         metrics_tag: "mainnet",
     })
+    .build()
     .await
-    .unwrap()
-    .build();
+    .unwrap();
 
     client
         .set(namespace, b"foo", b"bar", Duration::from_secs(60))
@@ -145,7 +145,7 @@ async fn test_encryption(
     ns: Namespace,
 ) {
     let create_client = || {
-        wcn_client::Client::new(wcn_client::Config {
+        ClientBuilder::new(wcn_client::Config {
             keypair: keypair.clone(),
             cluster_key,
             connection_timeout: Duration::from_secs(1),
@@ -159,18 +159,18 @@ async fn test_encryption(
     };
 
     let client1 = create_client()
-        .await
-        .unwrap()
         .with_encryption(wcn_client::EncryptionKey::new(b"12345").unwrap())
-        .build();
+        .build()
+        .await
+        .unwrap();
 
     let client2 = create_client()
-        .await
-        .unwrap()
         .with_encryption(wcn_client::EncryptionKey::new(b"23456").unwrap())
-        .build();
+        .build()
+        .await
+        .unwrap();
 
-    let unencrypted_client = create_client().await.unwrap().build();
+    let unencrypted_client = create_client().build().await.unwrap();
 
     let ttl = Duration::from_secs(60);
 

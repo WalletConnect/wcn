@@ -1,4 +1,16 @@
 use {
+    crate::{
+        Client,
+        ClientBuilder,
+        Config,
+        LoadBalancer,
+        MiddlewareBuilder,
+        NodeData,
+        OperationOutput,
+        Request,
+        RequestExecutor,
+        cluster,
+    },
     rand::{Rng, SeedableRng as _, rngs::StdRng},
     ring::{aead, hkdf},
     wcn_storage_api::{MapEntry, Record, RecordBorrowed, operation as op},
@@ -21,6 +33,77 @@ pub enum Error {
 
     #[error("Failed to decrypt")]
     Decrypt,
+}
+
+pub struct WithEncryptionBuilder<T> {
+    inner: T,
+    key: Key,
+}
+
+impl<T> MiddlewareBuilder for WithEncryptionBuilder<T>
+where
+    T: MiddlewareBuilder + Send + Sync,
+{
+    type NodeData = T::NodeData;
+
+    type Inner<D>
+        = WithEncryption<T::Inner<D>>
+    where
+        D: NodeData;
+
+    async fn build<D>(self, config: Config) -> Result<Self::Inner<D>, crate::Error>
+    where
+        D: NodeData,
+    {
+        Ok(WithEncryption {
+            core: self.inner.build(config).await?,
+            key: self.key,
+        })
+    }
+}
+
+pub struct WithEncryption<C = Client> {
+    core: C,
+    key: Key,
+}
+
+impl<C, D> LoadBalancer<D> for WithEncryption<C>
+where
+    C: LoadBalancer<D> + Send + Sync,
+{
+    fn using_next_node<F, R>(&self, cb: F) -> R
+    where
+        F: Fn(&cluster::Node<D>) -> R,
+    {
+        self.core.using_next_node(cb)
+    }
+}
+
+impl<C> RequestExecutor for WithEncryption<C>
+where
+    C: RequestExecutor + Send + Sync,
+{
+    async fn execute(&self, mut req: Request<'_>) -> Result<OperationOutput, crate::Error> {
+        req.op = req.op.encrypt(&self.key)?;
+        let mut output = self.core.execute(req).await?;
+        decrypt_output(&mut output, &self.key)?;
+        Ok(output)
+    }
+}
+
+impl<T> ClientBuilder<T>
+where
+    T: MiddlewareBuilder,
+{
+    pub fn with_encryption(self, key: Key) -> ClientBuilder<WithEncryptionBuilder<T>> {
+        ClientBuilder {
+            inner: WithEncryptionBuilder {
+                inner: self.inner,
+                key,
+            },
+            config: self.config,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -102,7 +185,7 @@ impl Key {
     }
 }
 
-pub(super) fn decrypt_output(output: &mut op::Output, key: &Key) -> Result<(), Error> {
+fn decrypt_output(output: &mut op::Output, key: &Key) -> Result<(), Error> {
     match output {
         op::Output::Record(Some(rec)) => {
             let decrypted = key.open_in_place(&mut rec.value)?.into();
@@ -122,7 +205,7 @@ pub(super) fn decrypt_output(output: &mut op::Output, key: &Key) -> Result<(), E
     Ok(())
 }
 
-pub(super) trait Encrypt {
+pub trait Encrypt {
     type Output;
 
     fn encrypt(self, key: &Key) -> Result<Self::Output, Error>;
