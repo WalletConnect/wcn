@@ -114,8 +114,8 @@ async fn test_suite() {
         reconnect_interval: Duration::from_millis(100),
         max_concurrent_rpcs: 5000,
         max_idle_connection_timeout: Duration::from_secs(1),
+        max_retries: 0,
         nodes: vec![bootstrap_node.clone()],
-        metrics_tag: "mainnet",
     })
     .build()
     .await
@@ -153,8 +153,8 @@ async fn test_encryption(
             reconnect_interval: Duration::from_millis(100),
             max_concurrent_rpcs: 5000,
             max_idle_connection_timeout: Duration::from_secs(1),
+            max_retries: 0,
             nodes: vec![node.clone()],
-            metrics_tag: "mainnet",
         })
     };
 

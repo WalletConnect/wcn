@@ -1,8 +1,9 @@
 use {
-    crate::middleware::MiddlewareBuilder,
+    client::BaseClient,
     derive_where::derive_where,
-    sealed::{LoadBalancer, Request},
     std::{net::SocketAddrV4, sync::Arc, time::Duration},
+    tap::Pipe,
+    wc::metrics::{self, enum_ordinalize::Ordinalize},
     wcn_cluster::smart_contract,
     wcn_storage_api::{
         MapEntryBorrowed,
@@ -11,26 +12,11 @@ use {
         RecordExpiration,
         RecordVersion,
         operation as op,
-        rpc::client::CoordinatorConnection,
     },
 };
 pub use {
-    client::Client,
+    encryption::{Error as EncryptionError, Key as EncryptionKey},
     libp2p_identity::{Keypair, PeerId},
-    middleware::{
-        BaseClientBuilder,
-        EncryptionError,
-        EncryptionKey,
-        OperationName,
-        RequestMetadata,
-        RequestObserver,
-        WithEncryption,
-        WithEncryptionBuilder,
-        WithObserver,
-        WithObserverBuilder,
-        WithRetries,
-        WithRetriesBuilder,
-    },
     op::Output as OperationOutput,
     smart_contract::ReadError as SmartContractError,
     wcn_cluster::{
@@ -51,7 +37,7 @@ pub use {
 
 mod client;
 mod cluster;
-mod middleware;
+mod encryption;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -115,11 +101,11 @@ pub struct Config {
     /// gets timed out.
     pub max_idle_connection_timeout: Duration,
 
+    /// Maximum number of retries in case of a failed operation.
+    pub max_retries: usize,
+
     /// [`PeerAddr`]s of the bootstrap nodes.
     pub nodes: Vec<PeerAddr>,
-
-    /// Additional metrics tag being used for all [`Driver`] metrics.
-    pub metrics_tag: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -129,55 +115,66 @@ pub struct PeerAddr {
 }
 
 pub struct ClientBuilder<T> {
-    inner: T,
     config: Config,
+    observer: T,
+    encryption_key: Option<EncryptionKey>,
 }
 
-impl ClientBuilder<BaseClientBuilder> {
+impl ClientBuilder<()> {
     pub fn new(config: Config) -> Self {
         Self {
-            inner: BaseClientBuilder {},
             config,
+            observer: (),
+            encryption_key: None,
         }
+    }
+}
+
+impl<T> ClientBuilder<T> {
+    pub fn with_observer<O>(self, observer: O) -> ClientBuilder<O>
+    where
+        O: RequestObserver,
+    {
+        ClientBuilder {
+            config: self.config,
+            observer,
+            encryption_key: self.encryption_key,
+        }
+    }
+
+    pub fn with_encryption(mut self, key: EncryptionKey) -> Self {
+        self.encryption_key = Some(key);
+        self
     }
 }
 
 impl<T> ClientBuilder<T>
 where
-    T: MiddlewareBuilder,
+    T: RequestObserver,
 {
-    pub async fn build(self) -> Result<CoordinatorClient<T::Inner<T::NodeData>>, Error> where {
-        let inner = self.inner.build(self.config).await?;
-
-        Ok(CoordinatorClient {
-            inner: Arc::new(inner),
+    pub async fn build(self) -> Result<Client<T>, Error> {
+        Ok(Client {
+            inner: BaseClient::new(self.config, self.observer, self.encryption_key)
+                .await?
+                .pipe(Arc::new),
         })
     }
 }
 
-pub trait NodeData: Send + Sync + Clone + 'static {
-    fn init(operator_id: &NodeOperatorId, node: &Node) -> Self;
-}
-
-impl NodeData for () {
-    fn init(_: &NodeOperatorId, _: &Node) -> Self {}
-}
-
-pub trait RequestExecutor {
-    fn execute(
-        &self,
-        req: Request<'_>,
-    ) -> impl Future<Output = Result<op::Output, Error>> + Send + Sync;
-}
-
 #[derive_where(Clone)]
-pub struct CoordinatorClient<C> {
-    inner: Arc<C>,
+pub struct Client<T: RequestObserver = ()> {
+    inner: Arc<BaseClient<T>>,
 }
 
-impl<C> CoordinatorClient<C>
+impl Client<()> {
+    pub fn builder(config: Config) -> ClientBuilder<()> {
+        ClientBuilder::new(config)
+    }
+}
+
+impl<T> Client<T>
 where
-    C: RequestExecutor + Send + Sync,
+    T: RequestObserver + Send + Sync,
 {
     pub async fn get(
         &self,
@@ -369,108 +366,82 @@ where
         .await
     }
 
-    async fn execute_request<T>(&self, op: impl Into<op::Borrowed<'_>>) -> Result<T, Error>
+    async fn execute_request<R>(&self, op: impl Into<op::Borrowed<'_>>) -> Result<R, Error>
     where
-        op::Output: op::DowncastOutput<T>,
+        op::Output: op::DowncastOutput<R>,
     {
         self.inner
-            .execute(Request::new(op::Operation::Borrowed(op.into())))
+            .execute(op::Operation::Borrowed(op.into()))
             .await?
             .try_into()
             .map_err(|_| Error::InvalidResponseType)
     }
 }
 
-mod sealed {
-    use super::*;
-
-    pub trait LoadBalancer<D> {
-        fn using_next_node<F, R>(&self, cb: F) -> R
-        where
-            F: Fn(&cluster::Node<D>) -> R;
-    }
-
-    #[derive(Clone)]
-    pub struct Request<'a> {
-        pub op: op::Operation<'a>,
-        pub conn: Option<CoordinatorConnection>,
-    }
-
-    impl<'a> Request<'a> {
-        pub fn new(op: op::Operation<'a>) -> Self {
-            Self { op, conn: None }
-        }
-
-        pub fn with_connection(self, conn: CoordinatorConnection) -> Self {
-            Self {
-                op: self.op,
-                conn: Some(conn),
-            }
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct RequestMetadata<D = ()> {
+    pub operator_id: NodeOperatorId,
+    pub node_id: PeerId,
+    pub node_data: D,
+    pub operation: OperationName,
+    pub duration: Duration,
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
+#[derive(Debug, Clone, Copy, Ordinalize)]
+pub enum OperationName {
+    Get,
+    Set,
+    Del,
+    GetExp,
+    SetExp,
+    HGet,
+    HSet,
+    HDel,
+    HGetExp,
+    HSetExp,
+    HCard,
+    HScan,
+}
 
-    #[allow(dead_code)]
-    #[derive(Clone)]
-    struct TestData {
-        foo: u32,
-    }
+pub trait NodeData: Send + Sync + Clone + 'static {
+    fn init(operator_id: &NodeOperatorId, node: &Node) -> Self;
+}
 
-    impl NodeData for TestData {
-        fn init(_: &NodeOperatorId, _: &Node) -> Self {
-            Self { foo: 42 }
+pub trait RequestObserver {
+    type NodeData: NodeData;
+
+    fn observe(
+        &self,
+        metadata: RequestMetadata<Self::NodeData>,
+        result: &Result<OperationOutput, Error>,
+    );
+}
+
+impl NodeData for () {
+    fn init(_: &NodeOperatorId, _: &Node) -> Self {}
+}
+
+impl RequestObserver for () {
+    type NodeData = ();
+
+    fn observe(&self, _: RequestMetadata<Self::NodeData>, _: &Result<OperationOutput, Error>) {}
+}
+
+impl metrics::Enum for OperationName {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Get => "get",
+            Self::Set => "set",
+            Self::Del => "del",
+            Self::GetExp => "get_exp",
+            Self::SetExp => "set_exp",
+            Self::HGet => "hget",
+            Self::HSet => "hset",
+            Self::HDel => "hdel",
+            Self::HGetExp => "hget_exp",
+            Self::HSetExp => "hset_exp",
+            Self::HCard => "hcard",
+            Self::HScan => "hscan",
         }
-    }
-
-    #[allow(dead_code)]
-    struct Observer;
-
-    impl RequestObserver for Observer {
-        type NodeData = TestData;
-
-        fn observe(
-            &self,
-            metadata: RequestMetadata<Self::NodeData>,
-            _result: &Result<op::Output, Error>,
-        ) {
-            assert_eq!(metadata.node_data.foo, 42);
-        }
-    }
-
-    async fn _create_raw_client(config: Config) -> CoordinatorClient<Client> {
-        ClientBuilder::new(config).build().await.unwrap()
-    }
-
-    async fn _create_observable_client(
-        config: Config,
-    ) -> CoordinatorClient<WithEncryption<WithRetries<WithObserver<Observer, Client<TestData>>>>>
-    {
-        ClientBuilder::new(config)
-            .with_observer(Observer)
-            .with_retries(3)
-            .with_encryption(EncryptionKey::new(b"12345").unwrap())
-            .build()
-            .await
-            .unwrap()
-    }
-
-    async fn _create_retryable_client(config: Config) -> CoordinatorClient<WithRetries> {
-        ClientBuilder::new(config)
-            .with_retries(3)
-            .build()
-            .await
-            .unwrap()
-    }
-
-    async fn _create_encrypted_client(config: Config) -> CoordinatorClient<WithEncryption> {
-        ClientBuilder::new(config)
-            .with_encryption(EncryptionKey::new(b"12345").unwrap())
-            .build()
-            .await
-            .unwrap()
     }
 }
