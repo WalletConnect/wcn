@@ -2,14 +2,7 @@
 
 use {
     crate::{
-        self as cluster,
-        client,
-        node,
-        smart_contract,
-        Client,
-        Config,
-        EncryptionKey,
-        Node,
+        self as cluster, client, node, smart_contract, Client, Config, EncryptionKey, Node,
         Version as ClusterVersion,
     },
     derive_more::derive::{AsRef, Into},
@@ -217,10 +210,7 @@ pub struct Removed {
 }
 
 impl NodeOperator {
-    pub(super) fn serialize(
-        self,
-        key: &EncryptionKey,
-    ) -> Result<Serialized, DataSerializationError> {
+    pub fn serialize(self, key: &EncryptionKey) -> Result<Serialized, DataSerializationError> {
         use DataSerializationError as Error;
 
         let nodes = self
@@ -249,7 +239,7 @@ impl NodeOperator {
 }
 
 impl Serialized {
-    pub(super) fn deserialize<C: Config>(
+    pub fn deserialize<C: Config>(
         self,
         cfg: &C,
     ) -> Result<NodeOperator<C::Node>, DataDeserializationError> {
