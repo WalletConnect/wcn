@@ -6022,7 +6022,6 @@ dependencies = [
  "base64",
  "clap",
  "const-hex",
- "data-encoding",
  "derive-where",
  "derive_more",
  "fpe",
