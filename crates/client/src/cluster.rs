@@ -25,8 +25,7 @@ use {
 
 #[derive(Clone)]
 pub struct Node<D> {
-    pub operator_id: node_operator::Id,
-    pub node: wcn_cluster::Node,
+    pub peer_id: PeerId,
     pub cluster_conn: ClusterConnection,
     pub coordinator_conn: CoordinatorConnection,
     pub data: D,
@@ -34,7 +33,7 @@ pub struct Node<D> {
 
 impl<D> AsRef<PeerId> for Node<D> {
     fn as_ref(&self) -> &PeerId {
-        &self.node.peer_id
+        &self.peer_id
     }
 }
 
@@ -80,11 +79,10 @@ where
                 .new_connection(node.primary_socket_addr(), &node.peer_id, ());
 
         Node {
-            data: D::init(&operator_id, &node),
-            operator_id,
-            node,
+            peer_id: node.peer_id,
             cluster_conn,
             coordinator_conn,
+            data: D::init(&operator_id, &node),
         }
     }
 }

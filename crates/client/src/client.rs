@@ -5,9 +5,8 @@ use {
         EncryptionKey,
         Error,
         OperationName,
-        RequestMetadata,
         RequestObserver,
-        cluster::{self, Node},
+        cluster,
         encryption::{self, Encrypt as _},
     },
     arc_swap::ArcSwap,
@@ -17,7 +16,7 @@ use {
     },
     tokio::sync::oneshot,
     wc::future::FutureExt,
-    wcn_storage_api::{StorageApi, operation as op},
+    wcn_storage_api::{StorageApi, operation as op, rpc::client::CoordinatorConnection},
 };
 
 pub struct BaseClient<T: RequestObserver> {
@@ -110,10 +109,9 @@ where
     }
 
     pub async fn execute(&self, op: op::Operation<'_>) -> Result<op::Output, Error> {
-        let node = self.find_next_node();
+        let (conn, node_data) = self.find_next_node();
 
-        let is_connected = node
-            .coordinator_conn
+        let is_connected = conn
             .wait_open()
             .with_timeout(self.connection_timeout)
             .await
@@ -136,7 +134,7 @@ where
             let mut attempt = 0;
 
             while attempt < self.max_attempts {
-                match self.execute_internal(&node, &op).await {
+                match self.execute_internal(&conn, &op, &node_data).await {
                     Ok(data) => return Ok(data),
 
                     Err(err) => match err {
@@ -154,23 +152,20 @@ where
 
             Err(Error::RetriesExhausted)
         } else {
-            self.execute_internal(&node, &op).await
+            self.execute_internal(&conn, &op, &node_data).await
         }
     }
 
     async fn execute_internal(
         &self,
-        node: &Node<T::NodeData>,
+        conn: &CoordinatorConnection,
         op: &op::Operation<'_>,
+        node_data: &T::NodeData,
     ) -> Result<op::Output, Error> {
         let start_time = Instant::now();
 
         let result = async {
-            let mut output = node
-                .coordinator_conn
-                .execute_ref(op)
-                .await
-                .map_err(Error::from)?;
+            let mut output = conn.execute_ref(op).await.map_err(Error::from)?;
 
             if let Some(key) = &self.encryption_key {
                 encryption::decrypt_output(&mut output, key)?;
@@ -180,20 +175,13 @@ where
         }
         .await;
 
-        let metadata = RequestMetadata {
-            operator_id: node.operator_id,
-            node_id: node.node.peer_id,
-            node_data: node.data.clone(),
-            operation: op_name(op),
-            duration: start_time.elapsed(),
-        };
-
-        self.observer.observe(metadata, &result);
+        self.observer
+            .observe(node_data, start_time.elapsed(), op_name(op), &result);
 
         result
     }
 
-    fn find_next_node(&self) -> Node<T::NodeData> {
+    fn find_next_node(&self) -> (CoordinatorConnection, T::NodeData) {
         // Constraints:
         // - Each next request should go to a different operator.
         // - Find an available (i.e. connected) node of the next operator, filtering out
@@ -206,7 +194,8 @@ where
             // Iterate over all of the operators to find one with a connected node.
             let result = operators.find_next_operator(|operator| {
                 operator.find_next_node(|node| {
-                    (!node.coordinator_conn.is_closed()).then(|| node.clone())
+                    (!node.coordinator_conn.is_closed())
+                        .then(|| (node.coordinator_conn.clone(), node.data.clone()))
                 })
             });
 
@@ -216,7 +205,9 @@ where
             } else {
                 // If the above failed, return the next node in hopes that the connection will
                 // be established during the request.
-                operators.next().next_node().clone()
+                let node = operators.next().next_node();
+
+                (node.coordinator_conn.clone(), node.data.clone())
             }
         })
     }

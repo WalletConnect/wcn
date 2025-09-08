@@ -378,15 +378,6 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct RequestMetadata<D = ()> {
-    pub operator_id: NodeOperatorId,
-    pub node_id: PeerId,
-    pub node_data: D,
-    pub operation: OperationName,
-    pub duration: Duration,
-}
-
 #[derive(Debug, Clone, Copy, Ordinalize)]
 pub enum OperationName {
     Get,
@@ -412,7 +403,9 @@ pub trait RequestObserver {
 
     fn observe(
         &self,
-        metadata: RequestMetadata<Self::NodeData>,
+        node: &Self::NodeData,
+        duration: Duration,
+        operation: OperationName,
         result: &Result<OperationOutput, Error>,
     );
 }
@@ -424,7 +417,14 @@ impl NodeData for () {
 impl RequestObserver for () {
     type NodeData = ();
 
-    fn observe(&self, _: RequestMetadata<Self::NodeData>, _: &Result<OperationOutput, Error>) {}
+    fn observe(
+        &self,
+        _: &Self::NodeData,
+        _: Duration,
+        _: OperationName,
+        _: &Result<OperationOutput, Error>,
+    ) {
+    }
 }
 
 impl metrics::Enum for OperationName {
