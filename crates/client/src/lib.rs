@@ -39,7 +39,7 @@ mod client;
 mod cluster;
 mod encryption;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
 pub enum Error {
     #[error("No available nodes")]
     NoAvailableNodes,
@@ -75,6 +75,10 @@ pub enum Error {
 impl Error {
     pub fn internal(err: impl ToString) -> Self {
         Self::Internal(err.to_string())
+    }
+
+    pub fn code(&self) -> &'static str {
+        self.into()
     }
 }
 
