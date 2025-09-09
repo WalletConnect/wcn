@@ -1,9 +1,10 @@
 use {
-    crate::{Error, PeerAddr},
+    crate::{Error, NodeData, PeerAddr},
     arc_swap::ArcSwap,
     derive_more::derive::AsRef,
+    derive_where::derive_where,
     futures::{Stream, StreamExt as _, TryStreamExt as _, future::Either, stream},
-    std::{sync::Arc, time::Duration},
+    std::{marker::PhantomData, sync::Arc, time::Duration},
     tokio::sync::oneshot,
     wc::future::FutureExt,
     wcn_cluster::{
@@ -23,31 +24,51 @@ use {
 };
 
 #[derive(Clone)]
-pub struct Node {
-    pub operator_id: node_operator::Id,
-    pub node: wcn_cluster::Node,
+pub struct Node<D> {
+    pub peer_id: PeerId,
     pub cluster_conn: ClusterConnection,
     pub coordinator_conn: CoordinatorConnection,
+    pub data: D,
 }
 
-impl AsRef<PeerId> for Node {
+impl<D> AsRef<PeerId> for Node<D> {
     fn as_ref(&self) -> &PeerId {
-        &self.node.peer_id
+        &self.peer_id
     }
 }
 
-#[derive(Clone, AsRef)]
-pub(crate) struct Config {
+#[derive(AsRef)]
+#[derive_where(Clone)]
+pub(super) struct Config<D> {
     #[as_ref]
-    pub(crate) encryption_key: EncryptionKey,
-    pub(crate) cluster_api: ClusterClient,
-    pub(crate) coordinator_api: CoordinatorClient,
+    encryption_key: EncryptionKey,
+    cluster_api: ClusterClient,
+    coordinator_api: CoordinatorClient,
+    _marker: PhantomData<D>,
 }
 
-impl wcn_cluster::Config for Config {
-    type SmartContract = SmartContract;
+impl<D> Config<D> {
+    pub fn new(
+        encryption_key: EncryptionKey,
+        cluster_api: ClusterClient,
+        coordinator_api: CoordinatorClient,
+    ) -> Self {
+        Self {
+            encryption_key,
+            cluster_api,
+            coordinator_api,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<D> wcn_cluster::Config for Config<D>
+where
+    D: NodeData + Send + Sync + 'static,
+{
+    type SmartContract = SmartContract<D>;
     type KeyspaceShards = ();
-    type Node = Node;
+    type Node = Node<D>;
 
     fn new_node(&self, operator_id: node_operator::Id, node: wcn_cluster::Node) -> Self::Node {
         let cluster_conn =
@@ -58,15 +79,18 @@ impl wcn_cluster::Config for Config {
                 .new_connection(node.primary_socket_addr(), &node.peer_id, ());
 
         Node {
-            operator_id,
-            node,
+            peer_id: node.peer_id,
             cluster_conn,
             coordinator_conn,
+            data: D::new(&operator_id, &node),
         }
     }
 }
 
-async fn select_open_connection(cluster: &ArcSwap<View>) -> ClusterConnection {
+async fn select_open_connection<D>(cluster: &ArcSwap<View<D>>) -> ClusterConnection
+where
+    D: NodeData,
+{
     loop {
         let conn = cluster
             .load()
@@ -96,16 +120,19 @@ async fn select_open_connection(cluster: &ArcSwap<View>) -> ClusterConnection {
 // is that [`wcn_cluster::View`] is also parametrized over this config, and we
 // need them to be compatible.
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum SmartContract {
+pub(crate) enum SmartContract<D: NodeData> {
     Static(ClusterView),
-    Dynamic(Arc<ArcSwap<View>>),
+    Dynamic(Arc<ArcSwap<View<D>>>),
 }
 
 #[derive(Debug, thiserror::Error)]
 #[error("Method is not available")]
 struct MethodNotAvailable;
 
-impl Read for SmartContract {
+impl<D> Read for SmartContract<D>
+where
+    D: NodeData,
+{
     fn address(&self) -> ReadResult<Address> {
         Err(ReadError::Other(MethodNotAvailable.to_string()))
     }
@@ -124,7 +151,7 @@ impl Read for SmartContract {
 
     async fn events(
         &self,
-    ) -> ReadResult<impl Stream<Item = ReadResult<wcn_cluster::Event>> + Send + use<>> {
+    ) -> ReadResult<impl Stream<Item = ReadResult<wcn_cluster::Event>> + Send + use<D>> {
         match self {
             Self::Static(_) => Ok(Either::Left(stream::pending())),
 
@@ -147,14 +174,16 @@ fn transport_err(err: impl ToString) -> ReadError {
     ReadError::Transport(err.to_string())
 }
 
-pub(crate) type Cluster = wcn_cluster::Cluster<Config>;
-pub(crate) type View = wcn_cluster::View<Config>;
+pub(crate) type Cluster<D> = wcn_cluster::Cluster<Config<D>>;
+pub(crate) type View<D> = wcn_cluster::View<Config<D>>;
 
-pub(crate) async fn update_task(
+pub(crate) async fn update_task<D>(
     shutdown_rx: oneshot::Receiver<()>,
-    cluster: Cluster,
-    view: Arc<ArcSwap<View>>,
-) {
+    cluster: Cluster<D>,
+    view: Arc<ArcSwap<View<D>>>,
+) where
+    D: NodeData,
+{
     let cluster_update_fut = async {
         let mut updates = cluster.updates();
 

@@ -102,7 +102,7 @@ impl Key {
     }
 }
 
-pub(super) fn decrypt_output(output: &mut op::Output, key: &Key) -> Result<(), Error> {
+pub fn decrypt_output(output: &mut op::Output, key: &Key) -> Result<(), Error> {
     match output {
         op::Output::Record(Some(rec)) => {
             let decrypted = key.open_in_place(&mut rec.value)?.into();
@@ -122,7 +122,7 @@ pub(super) fn decrypt_output(output: &mut op::Output, key: &Key) -> Result<(), E
     Ok(())
 }
 
-pub(super) trait Encrypt {
+pub trait Encrypt {
     type Output;
 
     fn encrypt(self, key: &Key) -> Result<Self::Output, Error>;

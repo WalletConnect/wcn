@@ -23,6 +23,7 @@ thiserror = { workspace = true }
 arc-swap = { workspace = true }
 tap = { workspace = true }
 rand = { workspace = true }
+strum = { workspace = true }
 
 # Async
 futures = { workspace = true }
