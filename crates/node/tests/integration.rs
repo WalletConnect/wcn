@@ -14,7 +14,7 @@ use {
     },
     tap::Pipe as _,
     tracing_subscriber::EnvFilter,
-    wcn_client::{ClientBuilder, Namespace, PeerAddr},
+    wcn_client::{Builder, Namespace, PeerAddr},
     wcn_cluster::{
         node_operator,
         smart_contract::{
@@ -106,7 +106,7 @@ async fn test_suite() {
         .parse()
         .unwrap();
 
-    let client = ClientBuilder::new(wcn_client::Config {
+    let client = Builder::new(wcn_client::Config {
         keypair: operators[0].clients[0].keypair.clone(),
         cluster_key: encryption_key,
         connection_timeout: Duration::from_secs(1),
@@ -145,7 +145,7 @@ async fn test_encryption(
     ns: Namespace,
 ) {
     let create_client = || {
-        ClientBuilder::new(wcn_client::Config {
+        Builder::new(wcn_client::Config {
             keypair: keypair.clone(),
             cluster_key,
             connection_timeout: Duration::from_secs(1),

@@ -82,7 +82,7 @@ where
             peer_id: node.peer_id,
             cluster_conn,
             coordinator_conn,
-            data: D::init(&operator_id, &node),
+            data: D::new(&operator_id, &node),
         }
     }
 }

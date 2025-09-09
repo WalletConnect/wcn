@@ -114,13 +114,13 @@ pub struct PeerAddr {
     pub addr: SocketAddrV4,
 }
 
-pub struct ClientBuilder<T> {
+pub struct Builder<T> {
     config: Config,
     observer: T,
     encryption_key: Option<EncryptionKey>,
 }
 
-impl ClientBuilder<()> {
+impl Builder<()> {
     pub fn new(config: Config) -> Self {
         Self {
             config,
@@ -130,12 +130,12 @@ impl ClientBuilder<()> {
     }
 }
 
-impl<T> ClientBuilder<T> {
-    pub fn with_observer<O>(self, observer: O) -> ClientBuilder<O>
+impl<T> Builder<T> {
+    pub fn with_observer<O>(self, observer: O) -> Builder<O>
     where
         O: RequestObserver,
     {
-        ClientBuilder {
+        Builder {
             config: self.config,
             observer,
             encryption_key: self.encryption_key,
@@ -148,7 +148,7 @@ impl<T> ClientBuilder<T> {
     }
 }
 
-impl<T> ClientBuilder<T>
+impl<T> Builder<T>
 where
     T: RequestObserver,
 {
@@ -167,8 +167,8 @@ pub struct Client<T: RequestObserver = ()> {
 }
 
 impl Client<()> {
-    pub fn builder(config: Config) -> ClientBuilder<()> {
-        ClientBuilder::new(config)
+    pub fn builder(config: Config) -> Builder<()> {
+        Builder::new(config)
     }
 }
 
@@ -395,7 +395,7 @@ pub enum OperationName {
 }
 
 pub trait NodeData: Send + Sync + Clone + 'static {
-    fn init(operator_id: &NodeOperatorId, node: &Node) -> Self;
+    fn new(operator_id: &NodeOperatorId, node: &Node) -> Self;
 }
 
 pub trait RequestObserver {
@@ -411,7 +411,7 @@ pub trait RequestObserver {
 }
 
 impl NodeData for () {
-    fn init(_: &NodeOperatorId, _: &Node) -> Self {}
+    fn new(_: &NodeOperatorId, _: &Node) -> Self {}
 }
 
 impl RequestObserver for () {
