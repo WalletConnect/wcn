@@ -125,7 +125,7 @@ pub(crate) enum SmartContract<D: NodeData> {
     Dynamic(Arc<ArcSwap<View<D>>>),
 }
 
-impl Read for SmartContract {
+impl<D: NodeData> Read for SmartContract<D> {
     async fn cluster_view(&self) -> ReadResult<ClusterView> {
         match self {
             Self::Static(view) => Ok(view.clone()),
@@ -138,7 +138,7 @@ impl Read for SmartContract {
         }
     }
 
-    async fn events(&self) -> ReadResult<impl Stream<Item = ReadResult<Event>> + Send + use<>> {
+    async fn events(&self) -> ReadResult<impl Stream<Item = ReadResult<Event>> + Send + use<D>> {
         match self {
             Self::Static(_) => Ok(Either::Left(stream::pending())),
 

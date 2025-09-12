@@ -4,7 +4,7 @@ use {
         time::Duration,
     },
     tracing_subscriber::EnvFilter,
-    wcn_client::{ClientBuilder, PeerAddr},
+    wcn_client::PeerAddr,
     wcn_testing::TestCluster,
 };
 
@@ -41,8 +41,8 @@ async fn test_client_encryption(cluster: &TestCluster) {
     let ns = client.authorized_namespace();
     let operator = cluster.node_operator(client.operator_id()).unwrap();
 
-    let create_client = || async {
-        wcn_client::Client::new(wcn_client::Config {
+    let create_client = || {
+        wcn_client::Builder::new(wcn_client::Config {
             keypair: client.keypair().clone(),
             cluster_key: wcn_cluster::testing::encryption_key(),
             connection_timeout: Duration::from_secs(1),
@@ -58,23 +58,23 @@ async fn test_client_encryption(cluster: &TestCluster) {
                     addr: SocketAddrV4::new(Ipv4Addr::LOCALHOST, node.primary_rpc_server_port()),
                 })
                 .collect(),
-            metrics_tag: "mainnet",
+            max_retries: 3,
         })
-        .await
-        .unwrap()
     };
 
     let client1 = create_client()
-        .await
         .with_encryption(wcn_client::EncryptionKey::new(b"12345").unwrap())
-        .build();
+        .build()
+        .await
+        .unwrap();
 
     let client2 = create_client()
-        .await
         .with_encryption(wcn_client::EncryptionKey::new(b"23456").unwrap())
-        .build();
+        .build()
+        .await
+        .unwrap();
 
-    let unencrypted_client = create_client().await.build();
+    let unencrypted_client = create_client().build().await.unwrap();
 
     let ttl = Duration::from_secs(60);
 

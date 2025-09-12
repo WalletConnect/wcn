@@ -15,7 +15,7 @@ use {
         time::Duration,
     },
     tap::Pipe,
-    wcn_client::{ClientBuilder, PeerId, ReplicaClient},
+    wcn_client::{Client as WcnClient, PeerId},
     wcn_cluster::{
         Cluster,
         EncryptionKey,
@@ -262,8 +262,6 @@ pub struct Client {
     inner: Option<WcnClient>,
 }
 
-type WcnClient = ReplicaClient<wcn_client::WithRetries<wcn_client::WithEncryption>>;
-
 impl Client {
     pub fn operator_id(&self) -> node_operator::Id {
         self.operator_id
@@ -299,7 +297,7 @@ impl Client {
 
         let encryption_secret: [u8; 32] = std::array::from_fn(|idx| idx as u8);
 
-        self.inner = wcn_client::Client::new(wcn_client::Config {
+        self.inner = wcn_client::Builder::new(wcn_client::Config {
             keypair: self.keypair.clone(),
             cluster_key: wcn_cluster::testing::encryption_key(),
             connection_timeout: Duration::from_secs(1),
@@ -308,13 +306,12 @@ impl Client {
             max_concurrent_rpcs: 5000,
             max_idle_connection_timeout: Duration::from_secs(5),
             nodes,
-            metrics_tag: "integration_tests",
+            max_retries: 3,
         })
+        .with_encryption(wcn_client::EncryptionKey::new(&encryption_secret).unwrap())
+        .build()
         .await
         .unwrap()
-        .with_encryption(wcn_client::EncryptionKey::new(&encryption_secret).unwrap())
-        .with_retries(3)
-        .build()
         .pipe(Some);
     }
 }
