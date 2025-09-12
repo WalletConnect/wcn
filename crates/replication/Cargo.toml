@@ -39,5 +39,7 @@ wcn_cluster = { workspace = true, features = ["testing"] }
 
 derive_more = { workspace = true, features = ["as_ref"] }
 
+libp2p-identity = { workspace = true, features = ["rand"] }
+
 [lints]
 workspace = true

@@ -11,7 +11,6 @@ use {
         settings,
         smart_contract,
         Config,
-        Event,
         Keyspace,
         Maintenance,
         Migration,
@@ -21,10 +20,10 @@ use {
         Settings,
     },
     derive_where::derive_where,
-    futures::future::OptionFuture,
     itertools::Itertools,
     std::sync::Arc,
     tap::Pipe as _,
+    time::OffsetDateTime,
 };
 
 /// Read-only view of a WCN cluster.
@@ -36,7 +35,10 @@ pub struct View<C: Config> {
     pub(super) settings: Settings,
 
     pub(super) keyspace: Arc<Keyspace<C::KeyspaceShards>>,
-    pub(super) migration: Option<Migration<C::KeyspaceShards>>,
+    pub(super) keyspace_version: keyspace::Version,
+
+    pub(super) migration: Migration<C::KeyspaceShards>,
+
     pub(super) maintenance: Option<Maintenance>,
 
     pub(super) cluster_version: cluster::Version,
@@ -56,10 +58,14 @@ impl<C: Config<KeyspaceShards = keyspace::Shards>> View<C> {
         &self,
         key: u64,
     ) -> Option<keyspace::ReplicaSet<&NodeOperator<C::Node>>> {
+        if !self.is_secondary_keyspace_shadowing_on() {
+            return None;
+        }
+
         // NOTE(unwrap): we use `Keyspace::validate` every time it enters the system,
         // therefore guaranteeing that every `NodeOperatorIdx` is valid.
-        self.migration()?
-            .keyspace()
+        self.migration
+            .keyspace()?
             .shard(key)
             .replica_set
             .map(|idx| self.node_operators.get_by_idx(idx).unwrap())
@@ -86,10 +92,14 @@ impl<C: Config<KeyspaceShards = keyspace::Shards>> View<C> {
         &self,
     ) -> Option<impl Iterator<Item = (keyspace::ShardId, keyspace::Shard<&NodeOperator<C::Node>>)>>
     {
+        if !self.is_secondary_keyspace_shadowing_on() {
+            return None;
+        }
+
         // NOTE(unwrap): we use `Keyspace::validate` every time it enters the system,
         // therefore guaranteeing that every `NodeOperatorIdx` is valid.
-        self.migration()?
-            .keyspace()
+        self.migration
+            .keyspace()?
             .shards()
             .map(|(id, shard)| {
                 (id, keyspace::Shard {
@@ -106,7 +116,7 @@ impl<C: Config<KeyspaceShards = keyspace::Shards>> View<C> {
     pub fn is_pulling(&self, operator_id: &node_operator::Id) -> bool {
         self.node_operators()
             .get_idx(operator_id)
-            .and_then(|operator_idx| self.migration().map(|mig| mig.is_pulling(operator_idx)))
+            .map(|operator_idx| self.migration.is_pulling(operator_idx))
             .unwrap_or_default()
     }
 }
@@ -129,7 +139,11 @@ impl<C: Config> View<C> {
 
     /// Returns the ongoing [`Migration`] of the WCN cluster.
     pub fn migration(&self) -> Option<&Migration<C::KeyspaceShards>> {
-        self.migration.as_ref()
+        if self.migration.is_in_progress() {
+            Some(&self.migration)
+        } else {
+            None
+        }
     }
 
     /// Returns the ongoing [`Maintenance`] of the WCN cluster.
@@ -142,24 +156,97 @@ impl<C: Config> View<C> {
         &self.node_operators
     }
 
-    /// Returns the highest [`keyspace`] version of this [`Cluster`].
-    pub fn keyspace_version(&self) -> u64 {
-        if let Some(migration) = self.migration() {
-            migration.keyspace().version()
-        } else {
-            self.keyspace().version()
+    /// Indicates whether storage writes should be shadowed into the secondary
+    /// keyspace at this moment.
+    pub(crate) fn is_secondary_keyspace_shadowing_on(&self) -> bool {
+        if !self.migration.is_in_progress() {
+            return false;
+        }
+
+        self.settings
+            .has_event_propagated(self.migration.started_at)
+    }
+
+    /// Returns [`OffsetDateTime`] after which WCN Nodes are supposed to start
+    /// pulling data during a [`Migration`] process.
+    pub fn data_pull_scheduled_after(&self) -> Option<OffsetDateTime> {
+        let migration = self.migration()?;
+
+        let time = migration.started_at
+            + self.settings.event_propagation_latency
+            + migration::PULL_DATA_LEEWAY_TIME;
+
+        Some(time)
+    }
+
+    /// Returns the effective [`keyspace::Version`] of this [`Cluster`].
+    pub fn keyspace_version(&self) -> keyspace::Version {
+        let migration = &self.migration;
+        let settings = self.settings();
+
+        match migration.state {
+            migration::State::Started { .. }
+                if settings.has_event_propagated(migration.started_at) =>
+            {
+                self.keyspace_version
+            }
+            migration::State::Started { .. } => self.keyspace_version - 1,
+
+            migration::State::Aborted { at } if settings.has_event_propagated(at) => {
+                self.keyspace_version
+            }
+            migration::State::Aborted { .. } => self.keyspace_version + 1,
+
+            migration::State::Completed => self.keyspace_version,
         }
     }
 
-    /// Checks whether the provided [`keyspace`] version is compatible with
-    /// current state of the cluster.
-    pub fn validate_keyspace_version(&self, version: u64) -> bool {
-        self.keyspace_version() == version
+    /// Checks whether a storage operation with the specified
+    /// [`keyspace::Version`] can be executed at this moment.
+    pub fn validate_storage_operation(&self, keyspace_version: keyspace::Version) -> bool {
+        let settings = self.settings();
+
+        let ver = self.keyspace_version;
+
+        let (old, new, transition_time) = match self.migration.state {
+            migration::State::Started { .. } => (ver - 1, ver, self.migration.started_at),
+            migration::State::Aborted { at } => (ver + 1, ver, at),
+            migration::State::Completed => return keyspace_version == ver,
+        };
+
+        let now = OffsetDateTime::now_utc();
+        let transition_time = settings.event_propagation_time(transition_time);
+        let transition_time_frame = settings.clock_skew_time_frame(transition_time);
+
+        if now < *transition_time_frame.start() {
+            return keyspace_version == old;
+        }
+
+        if now <= *transition_time_frame.end() {
+            return [old, new].contains(&keyspace_version);
+        }
+
+        keyspace_version == new
+    }
+
+    /// Checks whether a data pull with the specified [`keyspace::Version`] can
+    /// be executed at this moment.
+    pub fn validate_data_pull(&self, keyspace_version: keyspace::Version) -> bool {
+        if !self.migration.is_in_progress() {
+            return false;
+        }
+
+        let allowed_after = self.migration.started_at
+            + self.settings.event_propagation_latency
+            + self.settings.clock_skew
+            + migration::PULL_DATA_LEEWAY_TIME;
+
+        OffsetDateTime::now_utc() >= allowed_after && self.keyspace_version == keyspace_version
     }
 
     pub(super) fn require_no_migration(&self) -> Result<(), migration::InProgressError> {
-        if let Some(migration) = self.migration() {
-            return Err(migration::InProgressError(migration.id()));
+        if self.migration.is_in_progress() {
+            return Err(migration::InProgressError(self.migration.id()));
         }
 
         Ok(())
@@ -176,18 +263,24 @@ impl<C: Config> View<C> {
     pub(super) fn require_migration(
         &self,
     ) -> Result<&Migration<C::KeyspaceShards>, migration::NotFoundError> {
-        self.migration.as_ref().ok_or(migration::NotFoundError)
+        if !self.migration.is_in_progress() {
+            return Err(migration::NotFoundError);
+        }
+
+        Ok(&self.migration)
     }
 
     pub(super) fn require_maintenance(&self) -> Result<&Maintenance, maintenance::NotFoundError> {
         self.maintenance.as_ref().ok_or(maintenance::NotFoundError)
     }
 
-    /// Applies the provided [`Event`] to this [`View`].
-    pub async fn apply_event(mut self, cfg: &C, event: Event) -> Result<Self, Error>
+    /// Applies the provided [`smart_contract::Event`] to this [`View`].
+    pub async fn apply_event(mut self, cfg: &C, event: smart_contract::Event) -> Result<Self, Error>
     where
         Keyspace: keyspace::sealed::Calculate<C::KeyspaceShards>,
     {
+        use smart_contract::Event;
+
         let new_version = event.cluster_version();
 
         if new_version != self.cluster_version + 1 {
@@ -217,83 +310,114 @@ impl<C: Config> View<C> {
 }
 
 impl<C: Config> View<C> {
-    pub(super) async fn from_sc(
-        cfg: &C,
+    pub(super) async fn try_from_sc(
         view: smart_contract::ClusterView,
-    ) -> Result<Self, CreationError>
+        cfg: &C,
+    ) -> Result<Self, TryFromSmartContractError>
     where
         Keyspace: keyspace::sealed::Calculate<C::KeyspaceShards>,
     {
-        let (keyspace, migration) = tokio::join!(
-            view.keyspace.calculate(),
-            OptionFuture::from(view.migration.map(Migration::calculate_keyspace))
-        );
-
         let node_operators = view
             .node_operators
             .into_iter()
-            .map(|slot| slot.map(|operator| operator.deserialize(cfg)).transpose())
+            .map(|slot| {
+                slot.map(|operator| NodeOperator::try_from_sc(operator, cfg))
+                    .transpose()
+            })
             .try_collect::<_, Vec<_>, _>()?
             .pipe(NodeOperators::from_slots)?;
 
+        let ownership = Ownership::new(view.owner);
+        let settings = view.settings.try_into()?;
+
+        let is_migration_in_progress = !view.migration.pulling_operators.is_empty();
+
+        let primary_keyspace_version = if is_migration_in_progress {
+            view.keyspace_version
+                .checked_sub(1)
+                .ok_or_else(|| TryFromSmartContractError::InvalidKeyspaceVersion)?
+        } else {
+            view.keyspace_version
+        };
+
+        let [keyspace0, keyspace1] = view.keyspaces;
+
+        let (primary_keyspace, secondary_keyspace) = if primary_keyspace_version % 2 == 0 {
+            (keyspace0, keyspace1)
+        } else {
+            (keyspace1, keyspace0)
+        };
+
+        let keyspace: Keyspace = primary_keyspace.try_into()?;
         keyspace.validate(&node_operators)?;
 
-        migration
-            .as_ref()
-            .map(|migration| migration.keyspace().validate(&node_operators))
-            .transpose()?;
+        let migration = Migration::try_from_sc(view.migration, secondary_keyspace)?;
+        if let Some(keyspace) = migration.keyspace() {
+            keyspace.validate(&node_operators)?;
+        }
+
+        let (keyspace, migration) =
+            tokio::join!(keyspace.calculate(), migration.calculate_keyspace());
+
+        let maintenance = view.maintenance.slot.map(|slot| Maintenance::new(slot));
 
         Ok(View {
             node_operators,
-            ownership: view.ownership,
-            settings: view.settings,
+            ownership,
+            settings,
             keyspace: Arc::new(keyspace),
+            keyspace_version: view.keyspace_version,
             migration,
-            maintenance: view.maintenance,
+            maintenance,
             cluster_version: view.cluster_version,
         })
     }
 }
 
-impl migration::Started {
+impl smart_contract::event::MigrationStarted {
     async fn apply<C: Config>(self, view: &mut View<C>) -> Result<()>
     where
         Keyspace: keyspace::sealed::Calculate<C::KeyspaceShards>,
     {
         view.require_no_migration()?;
         view.require_no_maintenance()?;
-        view.keyspace().require_diff(&self.new_keyspace)?;
 
-        self.new_keyspace.validate(view.node_operators())?;
+        let new_keyspace: Keyspace = self.new_keyspace.try_into()?;
+        new_keyspace.validate(view.node_operators())?;
 
-        let pulling: Vec<_> = self.new_keyspace.operators().collect();
+        view.keyspace().require_diff(&new_keyspace)?;
 
-        view.migration = Some(Migration::new(
-            self.migration_id,
-            self.new_keyspace.calculate().await,
-            pulling,
-        ));
+        let new_keyspace = new_keyspace.calculate().await;
+
+        view.migration = Migration {
+            id: self.migration_id,
+            started_at: migration::parse_timestamp(self.at)?,
+            state: migration::State::Started {
+                pulling_operators: new_keyspace.operators().collect(),
+                keyspace: Arc::new(new_keyspace),
+            },
+        };
+
+        view.keyspace_version += 1;
 
         Ok(())
     }
 }
 
-impl migration::DataPullCompleted {
+impl smart_contract::event::MigrationDataPullCompleted {
     pub(super) fn apply<A: Config>(self, view: &mut View<A>) -> Result<()> {
         let idx = view.node_operators.require_idx(&self.operator_id)?;
         view.require_migration()?
             .require_id(self.migration_id)?
             .require_pulling(idx)?;
 
-        if let Some(migration) = view.migration.as_mut() {
-            migration.complete_pull(idx);
-        }
+        view.migration.complete_pull(idx);
 
         Ok(())
     }
 }
 
-impl migration::Completed {
+impl smart_contract::event::MigrationCompleted {
     pub(super) fn apply<C: Config>(self, view: &mut View<C>) -> Result<()> {
         let idx = view.node_operators.require_idx(&self.operator_id)?;
         view.require_migration()?
@@ -301,22 +425,26 @@ impl migration::Completed {
             .require_pulling(idx)?
             .require_pulling_count(1)?;
 
-        view.keyspace = view.migration.take().unwrap().into_keyspace();
+        // NOTE(unwrap): We just checked that migration exists.
+        view.keyspace = view.migration.complete().unwrap();
 
         Ok(())
     }
 }
 
-impl migration::Aborted {
+impl smart_contract::event::MigrationAborted {
     pub(super) fn apply<C: Config>(self, view: &mut View<C>) -> Result<()> {
         view.require_migration()?.require_id(self.migration_id)?;
-        view.migration = None;
+        view.migration.state = migration::State::Aborted {
+            at: migration::parse_timestamp(self.at)?,
+        };
+        view.keyspace_version -= 1;
 
         Ok(())
     }
 }
 
-impl maintenance::Started {
+impl smart_contract::event::MaintenanceStarted {
     pub(super) fn apply<C: Config>(self, view: &mut View<C>) -> Result<()> {
         view.require_no_migration()?;
         view.require_no_maintenance()?;
@@ -327,7 +455,7 @@ impl maintenance::Started {
     }
 }
 
-impl maintenance::Finished {
+impl smart_contract::event::MaintenanceFinished {
     pub(super) fn apply<C: Config>(self, view: &mut View<C>) -> Result<()> {
         view.require_maintenance()?;
         view.maintenance = None;
@@ -336,30 +464,32 @@ impl maintenance::Finished {
     }
 }
 
-impl node_operator::Added {
+impl smart_contract::event::NodeOperatorAdded {
     pub(super) fn apply<C: Config>(self, cfg: &C, view: &mut View<C>) -> Result<()> {
         view.node_operators()
             .require_not_exists(&self.operator.id)?
             .require_free_slot(self.idx)?;
 
-        view.node_operators
-            .set(self.idx, Some(self.operator.deserialize(cfg)?));
+        view.node_operators.set(
+            self.idx,
+            Some(NodeOperator::try_from_sc(self.operator, cfg)?),
+        );
 
         Ok(())
     }
 }
 
-impl node_operator::Updated {
+impl smart_contract::event::NodeOperatorUpdated {
     pub(super) fn apply<C: Config>(self, cfg: &C, view: &mut View<C>) -> Result<()> {
         let idx = view.node_operators.require_idx(&self.operator.id)?;
         view.node_operators
-            .set(idx, Some(self.operator.deserialize(cfg)?));
+            .set(idx, Some(NodeOperator::try_from_sc(self.operator, cfg)?));
 
         Ok(())
     }
 }
 
-impl node_operator::Removed {
+impl smart_contract::event::NodeOperatorRemoved {
     pub(super) fn apply<C: Config>(self, view: &mut View<C>) -> Result<()> {
         let idx = view.node_operators.require_idx(&self.id)?;
         view.node_operators.set(idx, None);
@@ -368,9 +498,9 @@ impl node_operator::Removed {
     }
 }
 
-impl settings::Updated {
+impl smart_contract::event::SettingsUpdated {
     pub(super) fn apply<C: Config>(self, view: &mut View<C>) -> Result<()> {
-        view.settings = self.settings;
+        view.settings = self.settings.try_into()?;
 
         Ok(())
     }
@@ -420,19 +550,40 @@ pub enum Error {
     OperatorSlotOccupied(#[from] node_operators::SlotOccupiedError),
 
     #[error(transparent)]
-    NodeOperatorDataDeserialization(#[from] node_operator::DataDeserializationError),
+    InvalidNodeOperator(#[from] node_operator::TryFromSmartContractError),
+
+    #[error(transparent)]
+    InvalidSettings(#[from] settings::TryFromSmartContractError),
+
+    #[error(transparent)]
+    InvalidKeyspace(#[from] keyspace::TryFromSmartContractError),
+
+    #[error(transparent)]
+    InvalidMigration(#[from] migration::TryFromSmartContractError),
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum CreationError {
-    #[error(transparent)]
-    DataDeserialization(#[from] node_operator::DataDeserializationError),
-
-    #[error(transparent)]
-    NodeOperators(#[from] node_operators::CreationError),
+pub enum TryFromSmartContractError {
+    #[error("Invalid keyspace version")]
+    InvalidKeyspaceVersion,
 
     #[error(transparent)]
     KeyspaceUnknownOperator(#[from] keyspace::UnknownNodeOperator),
+
+    #[error(transparent)]
+    NodeOperatorsCreation(#[from] node_operators::CreationError),
+
+    #[error(transparent)]
+    InvalidSettings(#[from] settings::TryFromSmartContractError),
+
+    #[error(transparent)]
+    InvalidNodeOperator(#[from] node_operator::TryFromSmartContractError),
+
+    #[error(transparent)]
+    InvalidKeyspace(#[from] keyspace::TryFromSmartContractError),
+
+    #[error(transparent)]
+    InvalidMigration(#[from] migration::TryFromSmartContractError),
 }
 
 /// Result of [`View::apply_event`].

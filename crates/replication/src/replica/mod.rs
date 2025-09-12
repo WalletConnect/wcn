@@ -82,7 +82,7 @@ impl<C: Config> StorageApi for InboundConnection<C> {
         self.replica.cluster.using_view(|view| {
             operation
                 .keyspace_version()
-                .filter(|&version| view.validate_keyspace_version(version))
+                .filter(|&version| view.validate_storage_operation(version))
                 .ok_or_else(Error::keyspace_version_mismatch)
         })?;
 
@@ -102,7 +102,7 @@ impl<C: Config> StorageApi for InboundConnection<C> {
         keyspace_version: u64,
     ) -> storage_api::Result<impl Stream<Item = storage_api::Result<DataItem>> + Send> {
         self.replica.cluster.using_view(|view| {
-            if !view.validate_keyspace_version(keyspace_version) {
+            if !view.validate_data_pull(keyspace_version) {
                 return Err(Error::keyspace_version_mismatch());
             }
 

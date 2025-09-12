@@ -16,17 +16,13 @@ impl wcn_rpc::client::Api for ClusterApi {
 }
 
 impl crate::ClusterApi for Connection<ClusterApi> {
-    async fn address(&self) -> crate::Result<Address> {
-        Ok(GetAddress::send_request(self, &()).await??.into_inner())
-    }
-
     async fn cluster_view(&self) -> crate::Result<ClusterView> {
         Ok(GetClusterView::send_request(self, &()).await??.into_inner())
     }
 
     async fn events(
         &self,
-    ) -> crate::Result<impl Stream<Item = crate::Result<wcn_cluster::Event>> + Send + use<>> {
+    ) -> crate::Result<impl Stream<Item = crate::Result<Event>> + Send + use<>> {
         Ok(GetEventStream::send(self, |rpc: Outbound<_, _>| async {
             let mut stream = rpc.response_stream;
 
@@ -35,7 +31,7 @@ impl crate::ClusterApi for Connection<ClusterApi> {
             }
 
             Ok(Ok(stream
-                .map_downcast::<Result<wcn_cluster::Event>>()
+                .map_downcast::<Result<Event>>()
                 .map(|res| res?.map_err(Into::into))))
         })
         .await??)

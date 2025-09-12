@@ -365,6 +365,8 @@ async fn accept_connections<R: sealed::ConnectionRouter>(
             }
         };
     }
+
+    tracing::warn!("quinn::Endpoint closed")
 }
 
 fn accept_connection<R: sealed::ConnectionRouter>(

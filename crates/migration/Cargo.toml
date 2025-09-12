@@ -17,6 +17,7 @@ derive-where = { workspace = true }
 anyhow = { workspace = true }
 backoff = { workspace = true }
 tap = { workspace = true }
+time = { workspace = true }
 
 # Async
 futures = { workspace = true }

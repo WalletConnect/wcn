@@ -123,7 +123,7 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
     let smart_contract_signer = env
         .smart_contract_signer_private_key
         .as_ref()
-        .map(|key| smart_contract::Signer::try_from_private_key(key))
+        .map(|key| smart_contract::evm::Signer::try_from_private_key(key))
         .transpose()
         .context("SMART_CONTRACT_SIGNER_PRIVATE_KEY")?;
 

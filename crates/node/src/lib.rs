@@ -75,7 +75,7 @@ pub struct Config {
     ///
     /// Only one node within node operator infrastructure is supposed to have
     /// this set.
-    pub smart_contract_signer: Option<smart_contract::Signer>,
+    pub smart_contract_signer: Option<smart_contract::evm::Signer>,
 
     /// [`EncryptioKey`] used to encrypt/decrypt on-chain data.
     ///
@@ -324,8 +324,8 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         keypair: config.keypair.clone(),
         connection_timeout: Duration::from_secs(2),
         max_connections: 100,
-        max_connections_per_ip: 10,
-        max_connection_rate_per_ip: 10,
+        max_connections_per_ip: 50,
+        max_connection_rate_per_ip: 50,
         max_concurrent_rpcs: 1000,
         max_idle_connection_timeout: config.max_idle_connection_timeout,
         shutdown_signal: config.shutdown_signal.clone(),

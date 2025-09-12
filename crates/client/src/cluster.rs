@@ -13,9 +13,9 @@ use {
         smart_contract::{ReadError, ReadResult},
     },
     wcn_cluster_api::{
-        Address,
         ClusterApi,
         ClusterView,
+        Event,
         Read,
         rpc::client::{Cluster as ClusterClient, ClusterConnection},
     },
@@ -101,15 +101,7 @@ pub(crate) enum SmartContract {
     Dynamic(Arc<ArcSwap<View>>),
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("Method is not available")]
-struct MethodNotAvailable;
-
 impl Read for SmartContract {
-    fn address(&self) -> ReadResult<Address> {
-        Err(ReadError::Other(MethodNotAvailable.to_string()))
-    }
-
     async fn cluster_view(&self) -> ReadResult<ClusterView> {
         match self {
             Self::Static(view) => Ok(view.clone()),
@@ -122,9 +114,7 @@ impl Read for SmartContract {
         }
     }
 
-    async fn events(
-        &self,
-    ) -> ReadResult<impl Stream<Item = ReadResult<wcn_cluster::Event>> + Send + use<>> {
+    async fn events(&self) -> ReadResult<impl Stream<Item = ReadResult<Event>> + Send + use<>> {
         match self {
             Self::Static(_) => Ok(Either::Left(stream::pending())),
 

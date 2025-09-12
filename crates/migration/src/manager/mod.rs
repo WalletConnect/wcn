@@ -11,6 +11,7 @@ use {
         time::Duration,
     },
     tap::{Pipe as _, TapFallible},
+    time::OffsetDateTime,
     wcn_cluster::{
         self as cluster,
         keyspace,
@@ -76,10 +77,7 @@ impl<C: Config> Manager<C> {
         cluster: Cluster<C>,
         database: C::OutboundDatabaseConnection,
     ) -> Option<Self> {
-        let node_operator_id = cluster
-            .smart_contract()
-            .signer()
-            .map(|signer| *signer.address())?;
+        let node_operator_id = *cluster.smart_contract().signer()?;
 
         Some(Self {
             node_operator_id,
@@ -100,7 +98,6 @@ impl<C: Config> Manager<C> {
     ) -> impl Future<Output = ()> + Send {
         Task {
             manager: self.clone(),
-            state: State::Idle,
         }
         .run(shutdown_fut)
     }
@@ -108,7 +105,6 @@ impl<C: Config> Manager<C> {
 
 struct Task<C: Config> {
     manager: Manager<C>,
-    state: State,
 }
 
 impl<C> Task<C>
@@ -131,7 +127,7 @@ where
                 .race()
                 .await
             {
-                Event::ClusterUpdate => self.sync_state(),
+                Event::ClusterUpdate => self.sync_state(state),
                 Event::StateTransition(state) => Some(state),
 
                 // OK to shutdown right now.
@@ -145,7 +141,7 @@ where
             };
 
             if let Some(new_state) = new_state {
-                tracing::info!(" -> {new_state:?}");
+                tracing::info!("{state:?} -> {new_state:?}");
 
                 if is_shutting_down && state.can_shutdown() {
                     return;
@@ -157,8 +153,8 @@ where
         }
     }
 
-    fn sync_state(&self) -> Option<State> {
-        let local_migration_id = self.state.migration_id();
+    fn sync_state(&self, current: State) -> Option<State> {
+        let local_migration_id = current.migration_id();
         let cluster_migration_id = self.cluster().view().migration().map(|mig| mig.id());
 
         match (local_migration_id, cluster_migration_id) {
@@ -201,11 +197,21 @@ where
 
     async fn transfer_data(&self, migration_id: migration::Id) -> Result<State> {
         let cluster_view = self.cluster().view();
-        let keyspace_version = cluster_view
-            .migration()
-            .ok_or_else(|| anyhow!("Missing migration"))?
-            .keyspace()
-            .version();
+        let keyspace_version = cluster_view.keyspace_version();
+
+        let start_at = cluster_view
+            .data_pull_scheduled_after()
+            .context("Missing migration")?;
+
+        let now = OffsetDateTime::now_utc();
+
+        if now < start_at {
+            let duration = start_at - now;
+            let duration_ms = duration.whole_milliseconds();
+
+            tracing::info!("Data transfer scheduled at {}ms from now", duration_ms);
+            tokio::time::sleep(duration.unsigned_abs()).await;
+        }
 
         let primary_shards = cluster_view.primary_keyspace_shards();
         let secondary_shards = cluster_view

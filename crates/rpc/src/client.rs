@@ -438,6 +438,8 @@ impl<API: Api> Connection<API> {
                         return;
                     }
                     Err(err) => {
+                        tracing::debug!(?err, remote_addr = %this.remote_addr, remote_peer_id = %this.remote_peer_id, "Connection error");
+
                         metrics::counter!(
                             "wcn_rpc_client_connection_errors",
                             StringLabel<"remote_addr", SocketAddrV4> => &this.remote_addr,

@@ -1,12 +1,10 @@
 use {
+    super::Event,
     derive_more::derive::{TryFrom, TryInto},
     serde::{Deserialize, Serialize, de::DeserializeOwned},
     std::time::Duration,
     strum::IntoStaticStr,
-    wcn_cluster::{
-        Event,
-        smart_contract::{Address, ClusterView},
-    },
+    wcn_cluster::smart_contract::ClusterView,
     wcn_rpc::{
         ApiName,
         BorrowedMessage,
@@ -26,9 +24,8 @@ pub mod server;
 #[try_from(repr)]
 #[repr(u8)]
 pub enum Id {
-    GetAddress = 0,
-    GetClusterView = 1,
-    GetEventStream = 2,
+    GetClusterView = 0,
+    GetEventStream = 1,
 }
 
 impl From<Id> for u8 {
@@ -73,15 +70,13 @@ where
 
     fn rpc_timeout(&self, rpc_id: Id) -> Option<Duration> {
         match rpc_id {
-            Id::GetAddress | Id::GetClusterView => self.rpc_timeout,
+            Id::GetClusterView => self.rpc_timeout,
             Id::GetEventStream => None,
         }
     }
 }
 
 type Rpc<const ID: u8, Req, Resp> = RpcImpl<ID, Req, Resp, JsonCodec>;
-
-type GetAddress = Rpc<{ Id::GetAddress as u8 }, (), Result<MessageWrapper<Address>>>;
 
 type GetClusterView = Rpc<{ Id::GetClusterView as u8 }, (), Result<MessageWrapper<ClusterView>>>;
 

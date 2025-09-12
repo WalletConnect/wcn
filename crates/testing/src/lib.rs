@@ -9,6 +9,7 @@ use {
     libp2p_identity::Keypair,
     metrics_exporter_prometheus::PrometheusRecorder,
     std::{
+        collections::HashSet,
         net::{Ipv4Addr, SocketAddrV4, TcpListener},
         thread,
         time::Duration,
@@ -19,12 +20,12 @@ use {
         Cluster,
         EncryptionKey,
         Settings,
+        keyspace::ReplicationStrategy,
+        migration,
         node_operator,
         smart_contract::{
             self,
-            Read,
-            Signer,
-            evm::{self, RpcProvider},
+            evm::{self, RpcProvider, Signer},
         },
     },
     wcn_rpc::server::ShutdownSignal,
@@ -32,6 +33,8 @@ use {
 };
 
 mod load_simulator;
+
+const OPERATORS_COUNT: u8 = 8;
 
 #[derive(AsRef, Clone, Copy)]
 struct DeploymentConfig {
@@ -52,8 +55,22 @@ impl wcn_cluster::Config for DeploymentConfig {
 pub struct TestCluster {
     operators: Vec<NodeOperator>,
 
-    _cluster: Cluster<DeploymentConfig>,
-    _anvil: AnvilInstance,
+    cluster: Cluster<DeploymentConfig>,
+    anvil: AnvilInstance,
+
+    next_operator_id: u8,
+}
+
+impl Drop for TestCluster {
+    fn drop(&mut self) {
+        for operator in &self.operators {
+            operator.database.shutdown_signal.emit();
+
+            for node in &operator.nodes {
+                node.shutdown_signal.emit();
+            }
+        }
+    }
 }
 
 impl TestCluster {
@@ -62,12 +79,17 @@ impl TestCluster {
         let anvil = Anvil::new()
             .block_time(1)
             .chain_id(31337)
+            .args(["--accounts", "100"])
             .try_spawn()
             .unwrap();
 
         let settings = Settings {
             max_node_operator_data_bytes: 4096,
+            event_propagation_latency: Duration::from_secs(1),
+            clock_skew: Duration::from_millis(100),
         };
+
+        tracing::info!(port = %anvil.port(), "Anvil launched");
 
         // Use Anvil's first key for deployment - convert PrivateKeySigner to our Signer
         let private_key_signer: PrivateKeySigner = anvil.keys().last().unwrap().clone().into();
@@ -76,7 +98,14 @@ impl TestCluster {
 
         let provider = provider(signer, &anvil).await;
 
-        let mut operators: Vec<_> = (1..=5).map(|n| NodeOperator::new(n, &anvil)).collect();
+        // dummy value, we don't know the address at this point yet
+        let contract_address = "0xF85FA2ce74D0b65756E14377f0359BB13E229ECE"
+            .parse()
+            .unwrap();
+
+        let mut operators: Vec<_> = (1..=OPERATORS_COUNT)
+            .map(|n| NodeOperator::new(n, &anvil, contract_address))
+            .collect();
         let operators_on_chain = operators.iter().map(NodeOperator::on_chain).collect();
 
         let encryption_key = wcn_cluster::testing::encryption_key();
@@ -86,7 +115,7 @@ impl TestCluster {
             .await
             .unwrap();
 
-        let contract_address = cluster.smart_contract().address().unwrap();
+        let contract_address = cluster.smart_contract().address();
 
         operators
             .iter_mut()
@@ -94,13 +123,14 @@ impl TestCluster {
             .for_each(|node| node.config.smart_contract_address = contract_address);
 
         stream::iter(&mut operators)
-            .for_each_concurrent(8, NodeOperator::deploy)
+            .for_each_concurrent(OPERATORS_COUNT as usize, NodeOperator::deploy)
             .await;
 
         Self {
             operators,
-            _cluster: cluster,
-            _anvil: anvil,
+            cluster,
+            anvil,
+            next_operator_id: OPERATORS_COUNT + 1,
         }
     }
 
@@ -137,8 +167,53 @@ impl TestCluster {
     }
 
     pub async fn replace_all_node_operators_except_namespace_owner(&mut self) {
-        for _ in 0..self.operators.len() - 1 {
-            todo!()
+        tracing::info!("Replacing all node operators, except the namespace owner");
+
+        let contract_address = self.cluster.smart_contract().address();
+
+        for idx in 0..self.operators.len() - 1 {
+            let operator_id = *self.operators[idx].signer.address();
+            tracing::info!(%operator_id, "Removing node operator from the cluster");
+
+            let migration_plan = migration::Plan {
+                remove: [operator_id].into_iter().collect(),
+                add: HashSet::default(),
+                replication_strategy: ReplicationStrategy::UniformDistribution,
+            };
+
+            self.cluster.start_migration(migration_plan).await.unwrap();
+            self.wait_no_migration().await;
+
+            self.cluster
+                .remove_node_operator(operator_id)
+                .await
+                .unwrap();
+
+            self.operators[idx].shutdown().await;
+            self.operators.remove(idx);
+
+            let mut operator =
+                NodeOperator::new(self.next_operator_id(), &self.anvil, contract_address);
+
+            let operator_id = *operator.signer.address();
+            tracing::info!(%operator_id, "Adding node operator to the cluster");
+
+            self.cluster
+                .add_node_operator(operator.on_chain())
+                .await
+                .unwrap();
+
+            operator.deploy().await;
+            self.operators.push(operator);
+
+            let migration_plan = migration::Plan {
+                remove: HashSet::default(),
+                add: [operator_id].into_iter().collect(),
+                replication_strategy: ReplicationStrategy::UniformDistribution,
+            };
+
+            self.cluster.start_migration(migration_plan).await.unwrap();
+            self.wait_no_migration().await;
         }
     }
 
@@ -149,10 +224,27 @@ impl TestCluster {
     pub fn node_operator(&self, id: node_operator::Id) -> Option<&NodeOperator> {
         self.operators.iter().find(|op| op.signer.address() == &id)
     }
+
+    fn next_operator_id(&mut self) -> u8 {
+        let id = self.next_operator_id;
+        self.next_operator_id += 1;
+        id
+    }
+
+    async fn wait_no_migration(&self) {
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            if self.cluster.using_view(|view| view.migration().is_none()) {
+                return;
+            }
+
+            interval.tick().await;
+        }
+    }
 }
 
 pub struct NodeOperator {
-    signer: smart_contract::Signer,
+    signer: Signer,
     name: node_operator::Name,
     database: Database,
     nodes: Vec<Node>,
@@ -168,7 +260,7 @@ pub struct Client {
     inner: Option<WcnClient>,
 }
 
-type WcnClient = ReplicaClient<wcn_client::WithRetries<wcn_client::WithEncryption>>;
+type WcnClient = ReplicaClient<wcn_client::WithEncryption>;
 
 impl Client {
     pub fn operator_id(&self) -> node_operator::Id {
@@ -219,31 +311,54 @@ impl Client {
         .await
         .unwrap()
         .with_encryption(wcn_client::EncryptionKey::new(&encryption_secret).unwrap())
-        .with_retries(3)
         .build()
         .pipe(Some);
     }
 }
 
 struct Database {
+    operator_id: node_operator::Id,
     config: wcn_db::Config,
     _prometheus_recorder: PrometheusRecorder,
-    _shutdown_signal: ShutdownSignal,
+    shutdown_signal: ShutdownSignal,
     thread_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl Database {
+    pub fn peer_id(&self) -> PeerId {
+        self.config.keypair.public().to_peer_id()
+    }
+
     fn deploy(&mut self) {
+        let operator_id = self.operator_id;
+        tracing::info!(%operator_id, peer_id = %self.peer_id(), "Deploying database");
+
         let fut = wcn_db::run(clone_database_config(&self.config)).unwrap();
 
         self.thread_handle = Some(thread::spawn(move || {
-            let _guard = tracing::info_span!("database").entered();
+            let _guard = tracing::info_span!("database", %operator_id).entered();
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .unwrap()
                 .block_on(fut);
         }));
+        tracing::info!(%operator_id, peer_id = %self.peer_id(), "Database deployed");
+    }
+
+    async fn shutdown(&mut self) {
+        tracing::info!(operator_id = %self.operator_id, "Shutting down database");
+
+        self.shutdown_signal.emit();
+
+        let thread_handle = self.thread_handle.take().unwrap();
+
+        tokio::task::spawn_blocking(move || thread_handle.join())
+            .await
+            .unwrap()
+            .unwrap();
+
+        tracing::info!(operator_id = %self.operator_id, "Database shut down");
     }
 }
 
@@ -265,9 +380,8 @@ impl Node {
     }
 
     async fn deploy(&mut self) {
-        tracing::info!(operator_id = %self.operator_id, node_id = %self.peer_id(), "Deploying node");
-
         let operator_id = self.operator_id;
+        tracing::info!(%operator_id, peer_id = %self.peer_id(), "Deploying node");
 
         self.shutdown_signal = ShutdownSignal::new();
         let mut cfg = clone_node_config(&self.config);
@@ -289,7 +403,9 @@ impl Node {
                             let _ = tx.send(Ok(()));
                             fut.await
                         }
-                        Err(err) => tx.send(Err(err)).pipe(drop),
+                        Err(err) => {
+                            tx.send(Err(err)).pipe(drop);
+                        }
                     }
                 });
         }));
@@ -333,15 +449,14 @@ impl Node {
 }
 
 impl NodeOperator {
-    fn new(id: u8, anvil: &AnvilInstance) -> NodeOperator {
-        // dummy value, we don't know the address at this point yet
-        let smart_contract_address = "0xF85FA2ce74D0b65756E14377f0359BB13E229ECE"
-            .parse()
-            .unwrap();
-
-        let smart_contract_signer = anvil.keys()[id as usize].to_bytes().pipe(|bytes| {
-            smart_contract::Signer::try_from_private_key(&const_hex::encode(bytes)).unwrap()
-        });
+    fn new(
+        id: u8,
+        anvil: &AnvilInstance,
+        contract_address: smart_contract::Address,
+    ) -> NodeOperator {
+        let smart_contract_signer = anvil.keys()[id as usize]
+            .to_bytes()
+            .pipe(|bytes| Signer::try_from_private_key(&const_hex::encode(bytes)).unwrap());
 
         let operator_id = *smart_contract_signer.address();
 
@@ -366,7 +481,7 @@ impl NodeOperator {
             max_concurrent_rpcs: 20000,
             rocksdb_dir: format!("/tmp/wcn_db/{db_peer_id}").parse().unwrap(),
             rocksdb: Default::default(),
-            shutdown_signal: ShutdownSignal::new(),
+            shutdown_signal: db_shutdown_signal.clone(),
             prometheus_handle: db_prometheus_recorder.handle(),
         };
 
@@ -377,8 +492,9 @@ impl NodeOperator {
         let database = Database {
             config: db_config,
             _prometheus_recorder: db_prometheus_recorder,
-            _shutdown_signal: db_shutdown_signal,
+            shutdown_signal: db_shutdown_signal,
             thread_handle: None,
+            operator_id,
         };
 
         let nodes = (0..=1)
@@ -401,7 +517,7 @@ impl NodeOperator {
                     database_peer_id: db_peer_id,
                     database_primary_rpc_server_port,
                     database_secondary_rpc_server_port,
-                    smart_contract_address,
+                    smart_contract_address: contract_address,
                     smart_contract_signer: (n == 0).then_some(smart_contract_signer.clone()),
                     smart_contract_encryption_key: wcn_cluster::testing::encryption_key(),
                     rpc_provider_url: rpc_provider_url.clone().parse().unwrap(),
@@ -441,6 +557,16 @@ impl NodeOperator {
             .pipe(stream::iter)
             .for_each_concurrent(10, Node::deploy)
             .await;
+    }
+
+    async fn shutdown(&mut self) {
+        self.nodes
+            .iter_mut()
+            .pipe(stream::iter)
+            .for_each_concurrent(10, Node::shutdown)
+            .await;
+
+        self.database.shutdown().await;
     }
 
     async fn initialize_clients(&mut self) {
