@@ -443,7 +443,7 @@ impl Namespace {
     async fn set_exp(&self, key: u32, exp: RecordExpiration) {
         self.client
             .set_exp(self.namespace, expand_key(key), exp)
-            .pipe(|fut| self.stats.record(fut, "get_exp"))
+            .pipe(|fut| self.stats.record(fut, "set_exp"))
             .await
             .unwrap();
     }
