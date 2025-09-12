@@ -211,6 +211,7 @@ impl<C: Config> StorageApi for InboundConnection<C> {
         }
         .unwrap_or_else(|| {
             metrics::counter!("wcn_replication_coordinator_inconsistent_results").increment(1);
+            // TODO: Fix Debug impl printing all value bytes
             tracing::warn!(?responses, "Inconsistent results");
             const { &Err(Error::new(ErrorKind::Internal)) }
         });

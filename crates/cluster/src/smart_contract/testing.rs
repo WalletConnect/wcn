@@ -227,6 +227,9 @@ impl super::Write for FakeSmartContract {
                 started_at: OffsetDateTime::now_utc().unix_timestamp() as u64,
                 aborted_at: None,
             };
+            this.sc_view.keyspace_version += 1;
+            this.sc_view.keyspaces[this.sc_view.keyspace_version as usize % 2] =
+                new_keyspace.clone();
             this.sc_view.cluster_version += 1;
 
             event::MigrationStarted {
@@ -275,6 +278,7 @@ impl super::Write for FakeSmartContract {
             this.sc_view.migration.pulling_operators = HashSet::new();
             this.sc_view.migration.aborted_at =
                 Some(OffsetDateTime::now_utc().unix_timestamp() as u64);
+            this.sc_view.keyspace_version += 1;
             this.sc_view.cluster_version += 1;
 
             event::MigrationAborted {

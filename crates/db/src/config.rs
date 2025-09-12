@@ -38,6 +38,10 @@ pub struct Config {
     pub max_connection_rate_per_ip: u32,
     pub max_concurrent_rpcs: u32,
 
+    /// For how long an inbound connection is allowed to be idle before it
+    /// gets timed out.
+    pub max_idle_connection_timeout: Duration,
+
     pub rocksdb_dir: PathBuf,
     pub rocksdb: RocksdbDatabaseConfig,
 
@@ -75,6 +79,9 @@ impl Config {
         ))
         .context("Failed to bind metrics server socket")?;
 
+        let max_idle_connection_timeout =
+            Duration::from_millis(raw.db_max_idle_connection_timeout_ms.unwrap_or(200) as u64);
+
         Ok(Self {
             keypair: raw.keypair,
             primary_rpc_server_socket,
@@ -88,6 +95,7 @@ impl Config {
             max_connections_per_ip: raw.db_max_connections_per_ip.unwrap_or(50),
             max_connection_rate_per_ip: raw.db_max_connection_rate_per_ip.unwrap_or(50),
             max_concurrent_rpcs: raw.db_max_concurrent_rpcs.unwrap_or(4000),
+            max_idle_connection_timeout,
             rocksdb_dir: raw.rocksdb_dir,
             rocksdb,
             shutdown_signal: ShutdownSignal::new(),
@@ -111,6 +119,7 @@ struct RawConfig {
     db_max_connections_per_ip: Option<u32>,
     db_max_connection_rate_per_ip: Option<u32>,
     db_max_concurrent_rpcs: Option<u32>,
+    db_max_idle_connection_timeout_ms: Option<u32>,
 
     rocksdb_dir: PathBuf,
     rocksdb_num_batch_threads: Option<usize>,

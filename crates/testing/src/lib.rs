@@ -171,7 +171,9 @@ impl TestCluster {
 
         let contract_address = self.cluster.smart_contract().address();
 
-        for idx in 0..self.operators.len() - 1 {
+        for _ in 0..self.operators.len() - 1 {
+            let idx = 1;
+
             let operator_id = *self.operators[idx].signer.address();
             tracing::info!(%operator_id, "Removing node operator from the cluster");
 
@@ -260,7 +262,7 @@ pub struct Client {
     inner: Option<WcnClient>,
 }
 
-type WcnClient = ReplicaClient<wcn_client::WithEncryption>;
+type WcnClient = ReplicaClient<wcn_client::WithRetries<wcn_client::WithEncryption>>;
 
 impl Client {
     pub fn operator_id(&self) -> node_operator::Id {
@@ -311,6 +313,7 @@ impl Client {
         .await
         .unwrap()
         .with_encryption(wcn_client::EncryptionKey::new(&encryption_secret).unwrap())
+        .with_retries(3)
         .build()
         .pipe(Some);
     }
@@ -479,6 +482,7 @@ impl NodeOperator {
             max_connections_per_ip: 100,
             max_connection_rate_per_ip: 100,
             max_concurrent_rpcs: 20000,
+            max_idle_connection_timeout: Duration::from_millis(500),
             rocksdb_dir: format!("/tmp/wcn_db/{db_peer_id}").parse().unwrap(),
             rocksdb: Default::default(),
             shutdown_signal: db_shutdown_signal.clone(),
@@ -640,6 +644,7 @@ fn clone_database_config(cfg: &wcn_db::Config) -> wcn_db::Config {
         max_connections_per_ip: cfg.max_connections_per_ip,
         max_connection_rate_per_ip: cfg.max_connection_rate_per_ip,
         max_concurrent_rpcs: cfg.max_concurrent_rpcs,
+        max_idle_connection_timeout: cfg.max_idle_connection_timeout,
         rocksdb_dir: cfg.rocksdb_dir.clone(),
         rocksdb: cfg.rocksdb.clone(),
         shutdown_signal: cfg.shutdown_signal.clone(),

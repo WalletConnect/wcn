@@ -196,11 +196,9 @@ where
     }
 
     async fn transfer_data(&self, migration_id: migration::Id) -> Result<State> {
-        let cluster_view = self.cluster().view();
-        let keyspace_version = cluster_view.keyspace_version();
-
-        let start_at = cluster_view
-            .data_pull_scheduled_after()
+        let start_at = self
+            .cluster()
+            .using_view(wcn_cluster::View::data_pull_scheduled_after)
             .context("Missing migration")?;
 
         let now = OffsetDateTime::now_utc();
@@ -212,6 +210,9 @@ where
             tracing::info!("Data transfer scheduled at {}ms from now", duration_ms);
             tokio::time::sleep(duration.unsigned_abs()).await;
         }
+
+        let cluster_view = self.cluster().view();
+        let keyspace_version = cluster_view.keyspace_version();
 
         let primary_shards = cluster_view.primary_keyspace_shards();
         let secondary_shards = cluster_view

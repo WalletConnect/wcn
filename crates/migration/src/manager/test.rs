@@ -122,7 +122,9 @@ async fn transfers_data_and_writes_to_smart_contract() {
         })
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let settings = *cluster.view().settings();
+    tokio::time::sleep(settings.event_propagation_latency).await;
 
     let cluster_view = cluster.view();
 
