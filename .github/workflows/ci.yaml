@@ -148,7 +148,7 @@ jobs:
           elif [[ $TEST_KIND == 'unit' ]]; then
             RUST_LOG=info cargo test --all-features --workspace --exclude wcn_testing
           elif [[ $TEST_KIND == 'integration' ]]; then
-            RUST_LOG=info,relay_rocks=warn cargo test -p wcn_testing --all-features
+            RUST_LOG=info,relay_rocks=warn cargo test -p wcn_testing --all-features --release
           else
             echo Unexpected test kind $TEST_KIND
             exit 1
