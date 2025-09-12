@@ -2,6 +2,9 @@
 resolver = "2"
 members = ["crates/*"]
 
+[profile.dev]
+incremental = false
+
 [profile.release]
 lto = "fat"
 
@@ -26,6 +29,7 @@ wcn_migration = { path = "crates/migration", default-features = false }
 wcn_replication = { path = "crates/replication", default-features = false }
 wcn_client = { path = "crates/client", default-features = false }
 wcn_db = { path = "crates/db", default-features = false }
+wcn_node = { path = "crates/node", default-features = false }
 
 # Org
 wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.14.1", default-features = false }
@@ -42,7 +46,7 @@ arc-swap = { version = "1.7", default-features = false }
 anyhow = { version = "1.0", default-features = false, features = ["std"] }
 backoff = { version = "0.4", default-features = false, features = ["tokio"] }
 tap = { version = "1.0", default-features = false }
-time = { version = "0.3", default-features = false }
+time = { version = "0.3", default-features = false, features = ["std"] }
 bytes = { version = "1.0", default-features = false }
 pin-project = { version = "1.0", default-features = false }
 itertools = { version = "0.14", default-features = false, features = ["use_std"] }

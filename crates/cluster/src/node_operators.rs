@@ -160,21 +160,6 @@ impl<N> NodeOperators<N> {
         &self.slots
     }
 
-    #[cfg(feature = "testing")]
-    pub(super) fn free_idx(&self) -> Option<node_operator::Idx> {
-        let opt = self
-            .slots
-            .iter()
-            .enumerate()
-            .find_map(|(idx, slot)| slot.is_none().then_some(idx as u8));
-
-        Some(match opt {
-            Some(idx) => idx,
-            None if self.slots.len() != cluster::MAX_OPERATORS => self.slots.len() as u8,
-            _ => return None,
-        })
-    }
-
     pub(super) fn set(&mut self, idx: node_operator::Idx, mut slot: Option<NodeOperator<N>>) {
         if let Some(id) = self.get_by_idx(idx).map(|op| *op.as_ref()) {
             self.id_to_idx.shift_remove(&id);

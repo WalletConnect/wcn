@@ -1,15 +1,10 @@
 use futures::Stream;
-pub use wcn_cluster::{
-    Event,
-    smart_contract::{Address, ClusterView, Read},
-};
+pub use wcn_cluster::smart_contract::{Address, ClusterView, Event, Read};
 
 #[cfg(any(feature = "rpc_client", feature = "rpc_server"))]
 pub mod rpc;
 
 pub trait ClusterApi: Clone + Send + Sync + 'static {
-    fn address(&self) -> impl Future<Output = Result<Address>> + Send;
-
     fn cluster_view(&self) -> impl Future<Output = Result<ClusterView>> + Send;
 
     fn events(

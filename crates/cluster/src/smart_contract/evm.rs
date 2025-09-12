@@ -1,37 +1,12 @@
 //! EVM implementation of [`SmartContract`](super::SmartContract).
 
 use {
-    super::{
-        ClusterView,
-        ConnectionError,
-        Connector,
-        Deployer,
-        DeploymentError,
-        ReadError,
-        ReadResult,
-        RpcUrl,
-        Signer,
-        SignerKind,
-        WriteError,
-        WriteResult,
-    },
-    crate::{
-        maintenance,
-        migration,
-        node_operator,
-        settings,
-        smart_contract,
-        Event,
-        Keyspace,
-        Maintenance,
-        Migration,
-        Ownership,
-        Settings,
-    },
+    super::*,
+    crate::{migration, node_operator, smart_contract},
     alloy::{
         contract::{CallBuilder, CallDecoder},
         network::EthereumWallet,
-        primitives::U256,
+        primitives::{Address as AlloyAddress, U256},
         providers::{DynProvider, Provider, ProviderBuilder, WsConnect},
         rpc::types::{Filter, Log},
         sol_types::{SolCall, SolEventInterface, SolInterface},
@@ -55,8 +30,6 @@ mod bindings {
         "../../contracts/out/ERC1967Proxy.sol/ERC1967Proxy.json",
     );
 }
-
-pub(crate) type Address = alloy::primitives::Address;
 
 type AlloyContract = bindings::Cluster::ClusterInstance<DynProvider, alloy::network::Ethereum>;
 
@@ -104,11 +77,17 @@ pub struct SmartContract {
     alloy: AlloyContract,
 }
 
+impl SmartContract {
+    pub fn address(&self) -> Address {
+        (*self.alloy.address()).into()
+    }
+}
+
 impl Deployer<SmartContract> for RpcProvider {
     async fn deploy(
         &self,
         initial_settings: Settings,
-        initial_operators: Vec<node_operator::Serialized>,
+        initial_operators: Vec<NodeOperator>,
     ) -> Result<SmartContract, DeploymentError> {
         let settings: bindings::Cluster::Settings = initial_settings.into();
         let operators: Vec<bindings::Cluster::NodeOperator> =
@@ -133,15 +112,14 @@ impl Deployer<SmartContract> for RpcProvider {
 }
 
 impl Connector<SmartContract> for RpcProvider {
-    async fn connect(
-        &self,
-        address: smart_contract::Address,
-    ) -> Result<SmartContract, ConnectionError> {
+    async fn connect(&self, address: Address) -> Result<SmartContract, ConnectionError> {
+        let address = address.into();
+
         let signer = self.signer.clone();
 
         let code = self
             .alloy
-            .get_code_at(address.0)
+            .get_code_at(address)
             .await
             .map_err(|err| ConnectionError::Other(err.to_string()))?;
 
@@ -156,14 +134,14 @@ impl Connector<SmartContract> for RpcProvider {
 
         Ok(SmartContract {
             signer,
-            alloy: bindings::Cluster::new(address.0, self.alloy.clone()),
+            alloy: bindings::Cluster::new(address, self.alloy.clone()),
         })
     }
 }
 
 impl smart_contract::Write for SmartContract {
-    fn signer(&self) -> Option<&Signer> {
-        self.signer.as_ref()
+    fn signer(&self) -> Option<&AccountAddress> {
+        self.signer.as_ref().map(Signer::address)
     }
 
     async fn start_migration(&self, new_keyspace: Keyspace) -> WriteResult<()> {
@@ -187,11 +165,11 @@ impl smart_contract::Write for SmartContract {
         check_receipt(self.alloy.setMaintenance(false)).await
     }
 
-    async fn add_node_operator(&self, operator: node_operator::Serialized) -> WriteResult<()> {
+    async fn add_node_operator(&self, operator: NodeOperator) -> WriteResult<()> {
         check_receipt(self.alloy.addNodeOperator(operator.into())).await
     }
 
-    async fn update_node_operator(&self, operator: node_operator::Serialized) -> WriteResult<()> {
+    async fn update_node_operator(&self, operator: NodeOperator) -> WriteResult<()> {
         let operator: bindings::Cluster::NodeOperator = operator.into();
         check_receipt(
             self.alloy
@@ -201,7 +179,7 @@ impl smart_contract::Write for SmartContract {
     }
 
     async fn remove_node_operator(&self, id: node_operator::Id) -> WriteResult<()> {
-        check_receipt(self.alloy.removeNodeOperator(id.0)).await
+        check_receipt(self.alloy.removeNodeOperator(id.into())).await
     }
 
     async fn update_settings(&self, new_settings: Settings) -> WriteResult<()> {
@@ -228,10 +206,6 @@ where
 }
 
 impl smart_contract::Read for SmartContract {
-    fn address(&self) -> ReadResult<smart_contract::Address> {
-        Ok(smart_contract::Address(*self.alloy.address()))
-    }
-
     async fn cluster_view(&self) -> ReadResult<ClusterView> {
         self.alloy.getView().call().await?.try_into()
     }
@@ -258,12 +232,21 @@ impl Event {
         let evt =
             Event::decode_log(&log.inner).map_err(|err| ReadError::InvalidData(err.to_string()))?;
 
+        let block_timestamp = || {
+            log.block_timestamp
+                .ok_or_else(|| ReadError::Other("Missing block timestamp".into()))
+        };
+
         Ok(Some(match evt.data {
             Event::MaintenanceToggled(evt) => evt.into(),
-            Event::MigrationAborted(evt) => evt.into(),
+            Event::MigrationAborted(evt) => {
+                self::Event::from_migration_aborted(evt, block_timestamp()?)
+            }
             Event::MigrationCompleted(evt) => evt.into(),
             Event::MigrationDataPullCompleted(evt) => evt.into(),
-            Event::MigrationStarted(evt) => evt.try_into()?,
+            Event::MigrationStarted(evt) => {
+                self::Event::from_migration_started(evt, block_timestamp()?)
+            }
             Event::NodeOperatorAdded(evt) => evt.into(),
             Event::NodeOperatorRemoved(evt) => evt.into(),
             Event::NodeOperatorUpdated(evt) => evt.into(),
@@ -277,21 +260,34 @@ impl Event {
     }
 }
 
-impl TryFrom<bindings::Cluster::MigrationStarted> for Event {
-    type Error = ReadError;
-
-    fn try_from(evt: bindings::Cluster::MigrationStarted) -> ReadResult<Self> {
-        Ok(Self::MigrationStarted(migration::Started {
+impl Event {
+    fn from_migration_started(
+        evt: bindings::Cluster::MigrationStarted,
+        block_timestamp: u64,
+    ) -> Self {
+        Self::MigrationStarted(event::MigrationStarted {
             migration_id: evt.id,
-            new_keyspace: Keyspace::try_from_alloy(&evt.newKeyspace, evt.keyspaceVersion)?,
+            new_keyspace: evt.newKeyspace.into(),
+            at: block_timestamp,
             cluster_version: evt.version,
-        }))
+        })
+    }
+
+    fn from_migration_aborted(
+        evt: bindings::Cluster::MigrationAborted,
+        block_timestamp: u64,
+    ) -> Self {
+        Self::MigrationAborted(event::MigrationAborted {
+            migration_id: evt.id,
+            at: block_timestamp,
+            cluster_version: evt.version,
+        })
     }
 }
 
 impl From<bindings::Cluster::MigrationDataPullCompleted> for Event {
     fn from(evt: bindings::Cluster::MigrationDataPullCompleted) -> Self {
-        Self::MigrationDataPullCompleted(migration::DataPullCompleted {
+        Self::MigrationDataPullCompleted(event::MigrationDataPullCompleted {
             migration_id: evt.id,
             operator_id: evt.operator.into(),
             cluster_version: evt.version,
@@ -301,18 +297,9 @@ impl From<bindings::Cluster::MigrationDataPullCompleted> for Event {
 
 impl From<bindings::Cluster::MigrationCompleted> for Event {
     fn from(evt: bindings::Cluster::MigrationCompleted) -> Self {
-        Self::MigrationCompleted(migration::Completed {
+        Self::MigrationCompleted(event::MigrationCompleted {
             migration_id: evt.id,
             operator_id: evt.operator.into(),
-            cluster_version: evt.version,
-        })
-    }
-}
-
-impl From<bindings::Cluster::MigrationAborted> for Event {
-    fn from(evt: bindings::Cluster::MigrationAborted) -> Self {
-        Self::MigrationAborted(migration::Aborted {
-            migration_id: evt.id,
             cluster_version: evt.version,
         })
     }
@@ -321,12 +308,12 @@ impl From<bindings::Cluster::MigrationAborted> for Event {
 impl From<bindings::Cluster::MaintenanceToggled> for Event {
     fn from(evt: bindings::Cluster::MaintenanceToggled) -> Self {
         if evt.active {
-            Self::MaintenanceStarted(maintenance::Started {
+            Self::MaintenanceStarted(event::MaintenanceStarted {
                 by: evt.operator.into(),
                 cluster_version: evt.version,
             })
         } else {
-            Self::MaintenanceFinished(maintenance::Finished {
+            Self::MaintenanceFinished(event::MaintenanceFinished {
                 cluster_version: evt.version,
             })
         }
@@ -340,7 +327,7 @@ impl From<bindings::Cluster::NodeOperatorAdded> for Event {
             data: evt.operatorData,
         };
 
-        Self::NodeOperatorAdded(node_operator::Added {
+        Self::NodeOperatorAdded(event::NodeOperatorAdded {
             idx: evt.slot,
             operator: operator.into(),
             cluster_version: evt.version,
@@ -355,7 +342,7 @@ impl From<bindings::Cluster::NodeOperatorUpdated> for Event {
             data: evt.operatorData,
         };
 
-        Self::NodeOperatorUpdated(node_operator::Updated {
+        Self::NodeOperatorUpdated(event::NodeOperatorUpdated {
             operator: operator.into(),
             cluster_version: evt.version,
         })
@@ -364,7 +351,7 @@ impl From<bindings::Cluster::NodeOperatorUpdated> for Event {
 
 impl From<bindings::Cluster::NodeOperatorRemoved> for Event {
     fn from(evt: bindings::Cluster::NodeOperatorRemoved) -> Self {
-        Self::NodeOperatorRemoved(node_operator::Removed {
+        Self::NodeOperatorRemoved(event::NodeOperatorRemoved {
             id: evt.operator.into(),
             cluster_version: evt.version,
         })
@@ -373,27 +360,27 @@ impl From<bindings::Cluster::NodeOperatorRemoved> for Event {
 
 impl From<bindings::Cluster::SettingsUpdated> for Event {
     fn from(evt: bindings::Cluster::SettingsUpdated) -> Self {
-        Self::SettingsUpdated(settings::Updated {
+        Self::SettingsUpdated(event::SettingsUpdated {
             settings: evt.newSettings.into(),
             cluster_version: evt.version,
         })
     }
 }
 
-impl From<node_operator::Serialized> for bindings::Cluster::NodeOperator {
-    fn from(op: node_operator::Serialized) -> Self {
+impl From<NodeOperator> for bindings::Cluster::NodeOperator {
+    fn from(op: NodeOperator) -> Self {
         Self {
-            addr: op.id.0,
-            data: op.data.0.into(),
+            addr: op.id.into(),
+            data: op.data.into(),
         }
     }
 }
 
-impl From<bindings::Cluster::NodeOperator> for node_operator::Serialized {
+impl From<bindings::Cluster::NodeOperator> for NodeOperator {
     fn from(op: bindings::Cluster::NodeOperator) -> Self {
-        node_operator::Serialized {
-            id: smart_contract::AccountAddress(op.addr),
-            data: node_operator::Data(op.data.into()),
+        NodeOperator {
+            id: op.addr.into(),
+            data: op.data.into(),
         }
     }
 }
@@ -403,7 +390,7 @@ impl From<Settings> for bindings::Cluster::Settings {
         Self {
             maxOperatorDataBytes: settings.max_node_operator_data_bytes,
             minOperators: const { crate::MIN_OPERATORS },
-            extra: alloy::primitives::Bytes::default(),
+            extra: settings.extra.into(),
         }
     }
 }
@@ -412,6 +399,7 @@ impl From<bindings::Cluster::Settings> for Settings {
     fn from(settings: bindings::Cluster::Settings) -> Self {
         Self {
             max_node_operator_data_bytes: settings.maxOperatorDataBytes,
+            extra: settings.extra.into(),
         }
     }
 }
@@ -419,30 +407,40 @@ impl From<bindings::Cluster::Settings> for Settings {
 impl From<Keyspace> for bindings::Cluster::Keyspace {
     fn from(keyspace: Keyspace) -> Self {
         let mut operator_bitmask = U256::default();
-        for idx in keyspace.operators() {
+        for idx in keyspace.operators {
             operator_bitmask.set_bit(idx as usize, true);
         }
 
         Self {
             operatorBitmask: operator_bitmask,
-            replicationStrategy: keyspace.replication_strategy() as u8,
+            replicationStrategy: keyspace.replication_strategy,
         }
     }
 }
 
-impl Keyspace {
-    fn try_from_alloy(
-        keyspace: &bindings::Cluster::Keyspace,
-        version: u64,
-    ) -> Result<Self, ReadError> {
-        let operators = bitmask_to_hashset(keyspace.operatorBitmask);
+impl From<bindings::Cluster::Keyspace> for Keyspace {
+    fn from(keyspace: bindings::Cluster::Keyspace) -> Self {
+        Self {
+            operators: bitmask_to_hashset(keyspace.operatorBitmask),
+            replication_strategy: keyspace.replicationStrategy,
+        }
+    }
+}
 
-        let replication_strategy = keyspace.replicationStrategy.try_into().map_err(|err| {
-            ReadError::InvalidData(format!("Invalid ReplicationStrategy: {err:?}"))
-        })?;
-
-        Self::new(operators, replication_strategy, version)
-            .map_err(|err| ReadError::InvalidData(format!("Invalid Keyspace: {err:?}")))
+impl From<bindings::Cluster::Migration> for Migration {
+    fn from(migration: bindings::Cluster::Migration) -> Self {
+        Self {
+            id: migration.id,
+            pulling_operators: bitmask_to_hashset(migration.pullingOperatorBitmask),
+            started_at: migration.startedAt,
+            aborted_at: if migration.abortedAt >= migration.startedAt
+                && migration.pullingOperatorBitmask == 0
+            {
+                Some(migration.abortedAt)
+            } else {
+                None
+            },
+        }
     }
 }
 
@@ -467,47 +465,21 @@ impl TryFrom<bindings::Cluster::ClusterView> for ClusterView {
             })
             .collect();
 
-        // assert array length
-        let _: &[_; 2] = &view.keyspaces;
-
-        let try_keyspace =
-            |version| Keyspace::try_from_alloy(&view.keyspaces[version as usize % 2], version);
-
-        let (keyspace, migration) = if view.migration.pullingOperatorBitmask.is_zero() {
-            // migration is not in progress
-
-            (try_keyspace(view.keyspaceVersion)?, None)
-        } else {
-            // migration is in progress
-
-            let prev_keyspace_version = view
-                .keyspaceVersion
-                .checked_sub(1)
-                .ok_or_else(|| ReadError::InvalidData("Invalid keyspace::Version".into()))?;
-
-            let keyspace = try_keyspace(prev_keyspace_version)?;
-
-            let migration = Migration::new(
-                view.migration.id,
-                try_keyspace(view.keyspaceVersion)?,
-                bitmask_to_hashset(view.migration.pullingOperatorBitmask),
-            );
-
-            (keyspace, Some(migration))
-        };
-
-        let maintenance = if view.maintenanceSlot.is_zero() {
-            None
-        } else {
-            Some(Maintenance::new(view.maintenanceSlot.into()))
+        let maintenance = Maintenance {
+            slot: if view.maintenanceSlot.is_zero() {
+                None
+            } else {
+                Some(view.maintenanceSlot.into())
+            },
         };
 
         Ok(Self {
-            node_operators,
-            ownership: Ownership::new(view.owner.into()),
+            owner: view.owner.into(),
             settings: view.settings.into(),
-            keyspace,
-            migration,
+            node_operators,
+            keyspaces: view.keyspaces.map(Into::into),
+            keyspace_version: view.keyspaceVersion,
+            migration: view.migration.into(),
             maintenance,
             cluster_version: view.version,
         })
@@ -602,3 +574,51 @@ fn bitmask_to_hashset(bitmask: U256) -> HashSet<u8> {
     }
     set
 }
+
+impl From<AccountAddress> for AlloyAddress {
+    fn from(addr: AccountAddress) -> Self {
+        AlloyAddress::from_slice(&addr.0)
+    }
+}
+
+impl From<AlloyAddress> for AccountAddress {
+    fn from(addr: AlloyAddress) -> Self {
+        AccountAddress(addr.into())
+    }
+}
+
+/// Transaction signer.
+#[derive(Clone)]
+#[derive_where(Debug)]
+pub struct Signer {
+    address: AccountAddress,
+
+    #[derive_where(skip)]
+    kind: SignerKind,
+}
+
+impl Signer {
+    pub fn try_from_private_key(hex: &str) -> Result<Self, InvalidPrivateKeyError> {
+        let private_key = PrivateKeySigner::from_str(hex)
+            .map_err(|err| InvalidPrivateKeyError(format!("{err:?}")))?;
+
+        Ok(Self {
+            address: private_key.address().into(),
+            kind: SignerKind::PrivateKey(private_key),
+        })
+    }
+
+    /// Returns [`AccountAddress`] of this [`Signer`].
+    pub fn address(&self) -> &AccountAddress {
+        &self.address
+    }
+}
+
+#[derive(Clone)]
+enum SignerKind {
+    PrivateKey(PrivateKeySigner),
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid private key: {0:?}")]
+pub struct InvalidPrivateKeyError(String);

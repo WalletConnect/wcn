@@ -1,43 +1,75 @@
 //! Smart-contract managing the state of a WCN cluster.
 
-pub mod evm;
-#[cfg(feature = "testing")]
-pub mod testing;
+pub use event::Event;
 use {
-    crate::{self as cluster, migration, node_operator, Event, Keyspace, Ownership, Settings},
+    crate::{migration, node_operator},
     alloy::{signers::local::PrivateKeySigner, transports::http::reqwest},
-    derive_more::derive::{Display, From},
+    derive_more::From,
     derive_where::derive_where,
     futures::Stream,
     serde::{Deserialize, Serialize},
-    std::{future::Future, str::FromStr},
+    std::{collections::HashSet, fmt, future::Future, str::FromStr},
 };
+
+pub mod event;
+pub mod evm;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 #[allow(unused_imports)] // for doc comments
-use crate::{
-    keyspace,
-    maintenance,
-    settings,
-    Cluster,
-    Maintenance,
-    Migration,
-    NodeOperator,
-    MAX_OPERATORS,
-};
+use crate::{keyspace, keyspace::MAX_OPERATORS, maintenance, settings, Cluster};
 
-/// Snapshot of [`cluster::View`] fetched from a [`SmartContract`] state.
+/// On-chain representation of [`crate::View`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClusterView {
-    pub node_operators: Vec<Option<node_operator::Serialized>>,
-
-    pub ownership: Ownership,
+    pub owner: AccountAddress,
     pub settings: Settings,
 
-    pub keyspace: Keyspace,
-    pub migration: Option<Migration>,
-    pub maintenance: Option<Maintenance>,
+    pub node_operators: Vec<Option<NodeOperator>>,
 
-    pub cluster_version: cluster::Version,
+    pub keyspaces: [Keyspace; 2],
+    pub keyspace_version: u64,
+
+    pub migration: Migration,
+    pub maintenance: Maintenance,
+
+    pub cluster_version: u128,
+}
+
+/// On-chain representation of [`crate::Settings`].
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Settings {
+    pub max_node_operator_data_bytes: u16,
+    pub extra: Vec<u8>,
+}
+
+/// On-chain representation of [`crate::NodeOperator`].
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NodeOperator {
+    pub id: node_operator::Id,
+    pub data: Vec<u8>,
+}
+
+/// On-chain representation of [`crate::Keyspace`].
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Keyspace {
+    pub operators: HashSet<node_operator::Idx>,
+    pub replication_strategy: u8,
+}
+
+/// On-chain representation of [`crate::Migration`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Migration {
+    pub id: u64,
+    pub pulling_operators: HashSet<node_operator::Idx>,
+    pub started_at: u64,
+    pub aborted_at: Option<u64>,
+}
+
+/// On-chain representation of [`crate::Maintenance`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Maintenance {
+    pub slot: Option<AccountAddress>,
 }
 
 /// Deployer of WCN Cluster [`SmartContract`]s.
@@ -46,7 +78,7 @@ pub trait Deployer<SC> {
     fn deploy(
         &self,
         initial_settings: Settings,
-        initial_operators: Vec<node_operator::Serialized>,
+        initial_operators: Vec<NodeOperator>,
     ) -> impl Future<Output = Result<SC, DeploymentError>>;
 }
 
@@ -64,8 +96,9 @@ pub trait SmartContract: Read + Write {}
 /// Logic invariants documented on the methods of this trait MUST be
 /// implemented inside the on-chain implementation of the smart-contract itself.
 pub trait Write {
-    /// Returns the [`Signer`] being used to sign transactions.
-    fn signer(&self) -> Option<&Signer>;
+    /// Returns the [`AccountAddress`] of the signer being used to sign
+    /// transactions.
+    fn signer(&self) -> Option<&AccountAddress>;
 
     /// Starts a new data [`migration`] process using the provided
     /// [`migration::Plan`].
@@ -144,10 +177,7 @@ pub trait Write {
     ///
     /// The implementation MUST emit [`node_operator::Added`] event on
     /// success.
-    fn add_node_operator(
-        &self,
-        operator: node_operator::Serialized,
-    ) -> impl Future<Output = WriteResult<()>>;
+    fn add_node_operator(&self, operator: NodeOperator) -> impl Future<Output = WriteResult<()>>;
 
     /// Updates on-chain data of a [`node::Operator`].
     ///
@@ -158,10 +188,8 @@ pub trait Write {
     ///
     /// The implementation MUST emit [`node_operator::Updated`] event on
     /// success.
-    fn update_node_operator(
-        &self,
-        operator: node_operator::Serialized,
-    ) -> impl Future<Output = WriteResult<()>>;
+    fn update_node_operator(&self, operator: NodeOperator)
+        -> impl Future<Output = WriteResult<()>>;
 
     /// Removes a [`NodeOperator`] from the [`Cluster`].
     ///
@@ -189,9 +217,6 @@ pub trait Write {
 
 /// Read [`SmartContract`] calls.
 pub trait Read: Sized + Send + Sync + 'static {
-    /// Returns [`Address`] of this [`SmartContract`].
-    fn address(&self) -> ReadResult<Address>;
-
     /// Returns the current [`cluster::View`].
     fn cluster_view(&self) -> impl Future<Output = ReadResult<ClusterView>> + Send;
 
@@ -204,22 +229,22 @@ pub trait Read: Sized + Send + Sync + 'static {
 }
 
 /// [`SmartContract`] address.
-#[derive(Clone, Copy, Debug, Display, From, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Address(evm::Address);
+pub type Address = AccountAddress;
 
 /// Account address on the chain hosting WCN cluster [`SmartContract`].
-#[derive(Clone, Copy, Debug, Display, From, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[from(forward)]
-pub struct AccountAddress(evm::Address);
+#[derive(Clone, Copy, From, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AccountAddress([u8; 20]);
 
-/// Transaction signer.
-#[derive(Clone)]
-#[derive_where(Debug)]
-pub struct Signer {
-    address: AccountAddress,
+impl fmt::Debug for AccountAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", const_hex::encode(self.0))
+    }
+}
 
-    #[derive_where(skip)]
-    kind: SignerKind,
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", const_hex::encode(self.0))
+    }
 }
 
 /// RPC provider URL.
@@ -277,42 +302,12 @@ pub type WriteResult<T> = std::result::Result<T, WriteError>;
 /// [`Read`] result.
 pub type ReadResult<T> = std::result::Result<T, ReadError>;
 
-impl Signer {
-    pub fn try_from_private_key(hex: &str) -> Result<Self, InvalidPrivateKeyError> {
-        let private_key = PrivateKeySigner::from_str(hex)
-            .map_err(|err| InvalidPrivateKeyError(format!("{err:?}")))?;
-
-        Ok(Self {
-            address: AccountAddress(private_key.address()),
-            kind: SignerKind::PrivateKey(private_key),
-        })
-    }
-
-    /// Returns [`AccountAddress`] of this [`Signer`].
-    pub fn address(&self) -> &AccountAddress {
-        &self.address
-    }
-}
-
-#[derive(Clone)]
-enum SignerKind {
-    PrivateKey(PrivateKeySigner),
-}
-
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid RPC URL: {0:?}")]
 pub struct InvalidRpcUrlError(String);
 
 #[derive(Debug, thiserror::Error)]
-#[error("Invalid private key: {0:?}")]
-pub struct InvalidPrivateKeyError(String);
-
-#[derive(Debug, thiserror::Error)]
-#[error("Invalid account address: {0:?}")]
-pub struct InvalidAccountAddressError(String);
-
-#[derive(Debug, thiserror::Error)]
-#[error("Invalid smart-contract address: {0:?}")]
+#[error("Invalid address: {0:?}")]
 pub struct InvalidAddressError(String);
 
 impl FromStr for RpcUrl {
@@ -326,21 +321,11 @@ impl FromStr for RpcUrl {
 }
 
 impl FromStr for AccountAddress {
-    type Err = InvalidAccountAddressError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        alloy::primitives::Address::from_str(s)
-            .map(AccountAddress)
-            .map_err(|err| InvalidAccountAddressError(err.to_string()))
-    }
-}
-
-impl FromStr for Address {
     type Err = InvalidAddressError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        alloy::primitives::Address::from_str(s)
-            .map(Address)
+        const_hex::decode_to_array(s)
+            .map(Self)
             .map_err(|err| InvalidAddressError(err.to_string()))
     }
 }

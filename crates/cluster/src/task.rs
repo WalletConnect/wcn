@@ -4,13 +4,13 @@ use {
         smart_contract::{self, Read as _},
         view,
         Config,
-        Event,
         Inner,
         Keyspace,
     },
     futures::{Stream, StreamExt},
     std::{pin::pin, sync::Arc, time::Duration},
     tokio::sync::watch,
+    tracing::Instrument,
 };
 
 pub(super) struct Task<C: Config, Events> {
@@ -30,11 +30,11 @@ impl Drop for Guard {
 
 impl<C: Config, Events> Task<C, Events>
 where
-    Events: Stream<Item = smart_contract::ReadResult<Event>> + Send + 'static,
+    Events: Stream<Item = smart_contract::ReadResult<smart_contract::Event>> + Send + 'static,
     Keyspace: keyspace::sealed::Calculate<C::KeyspaceShards>,
 {
     pub(super) fn spawn(self) -> Guard {
-        let guard = Guard(tokio::spawn(self.run()));
+        let guard = Guard(tokio::spawn(self.run().in_current_span()));
         tracing::info!("spawned");
         guard
     }
@@ -66,7 +66,7 @@ where
 
         let new_view = self.inner.smart_contract.cluster_view().await?;
         if self.inner.view.load().cluster_version != new_view.cluster_version {
-            let new_view = Arc::new(crate::View::from_sc(&self.inner.config, new_view).await?);
+            let new_view = Arc::new(crate::View::try_from_sc(new_view, &self.inner.config).await?);
             self.inner.view.store(new_view);
             let _ = self.watch.send(());
         }
@@ -77,7 +77,7 @@ where
     #[allow(clippy::needless_pass_by_ref_mut)] // otherwise `Steam` is required to be `Sync`
     async fn apply_events(
         &mut self,
-        events: impl Stream<Item = smart_contract::ReadResult<Event>>,
+        events: impl Stream<Item = smart_contract::ReadResult<smart_contract::Event>>,
     ) -> Result<()> {
         let mut events = pin!(events);
 
@@ -102,7 +102,7 @@ enum Error {
     ApplyEvent(#[from] view::Error),
 
     #[error(transparent)]
-    View(#[from] view::CreationError),
+    InvalidClusterView(#[from] view::TryFromSmartContractError),
 
     #[error(transparent)]
     SmartContractRead(#[from] smart_contract::ReadError),

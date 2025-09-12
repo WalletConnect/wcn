@@ -1,18 +1,8 @@
 //! Entity operating a set of nodes within a WCN cluster.
 
 use {
-    crate::{
-        self as cluster,
-        client,
-        node,
-        smart_contract,
-        Client,
-        Config,
-        EncryptionKey,
-        Node,
-        Version as ClusterVersion,
-    },
-    derive_more::derive::{AsRef, Into},
+    crate::{self as cluster, client, node, smart_contract, Client, Config, EncryptionKey, Node},
+    derive_more::derive::AsRef,
     serde::{Deserialize, Serialize},
     std::sync::{
         atomic::{self, AtomicUsize},
@@ -56,10 +46,6 @@ impl Name {
         &self.0
     }
 }
-
-/// [`NodeOperator`] data serialized for on-chain storage.
-#[derive(Clone, Debug, Into, Serialize, Deserialize)]
-pub struct Data(pub(crate) Vec<u8>);
 
 /// Entity operating a set of [`Node`]s within a WCN cluster.
 #[derive(AsRef, Clone, Debug)]
@@ -171,57 +157,12 @@ impl<N> NodeOperator<N> {
     }
 }
 
-/// [`NodeOperator`] with serialized [`Data`].
-#[derive(AsRef, Clone, Debug, Serialize, Deserialize)]
-pub struct Serialized {
-    /// ID of this [`NodeOperator`].
-    #[as_ref]
-    pub id: Id,
-
-    /// Serialized [`Data`].
-    pub data: Data,
-}
-
-/// Event of a new [`NodeOperator`] being added to a WCN cluster.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Added {
-    /// [`Idx`] in the [`NodeOperators`] slot map the [`NodeOperator`] is being
-    /// placed to.
-    pub idx: Idx,
-
-    /// [`NodeOperator`] being added.
-    pub operator: Serialized,
-
-    /// Updated [`ClusterVersion`].
-    pub cluster_version: ClusterVersion,
-}
-
-/// Event of a [`NodeOperator`] being updated.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Updated {
-    /// Updated [`NodeOperator`].
-    pub operator: Serialized,
-
-    /// Updated [`ClusterVersion`].
-    pub cluster_version: ClusterVersion,
-}
-
-/// Event of a [`NodeOperator`] being removed from a WCN cluster.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Removed {
-    /// [`Id`] of the [`NodeOperator`] being removed.
-    pub id: Id,
-
-    /// Updated [`ClusterVersion`].
-    pub cluster_version: ClusterVersion,
-}
-
 impl NodeOperator {
-    pub(super) fn serialize(
+    pub(super) fn try_into_sc(
         self,
         key: &EncryptionKey,
-    ) -> Result<Serialized, DataSerializationError> {
-        use DataSerializationError as Error;
+    ) -> Result<smart_contract::NodeOperator, TryIntoSmartContractError> {
+        use TryIntoSmartContractError as Error;
 
         let nodes = self
             .nodes
@@ -241,24 +182,24 @@ impl NodeOperator {
         let mut buf = vec![0; size + 1];
         buf[0] = 0; // current schema version
         postcard::to_slice(&data, &mut buf[1..]).map_err(Error::from_postcard)?;
-        Ok(Serialized {
+        Ok(smart_contract::NodeOperator {
             id: self.id,
-            data: Data(buf),
+            data: buf,
         })
     }
 }
 
-impl Serialized {
-    pub(super) fn deserialize<C: Config>(
-        self,
+impl<C: Config> NodeOperator<C> {
+    pub(super) fn try_from_sc(
+        operator: smart_contract::NodeOperator,
         cfg: &C,
-    ) -> Result<NodeOperator<C::Node>, DataDeserializationError> {
-        use DataDeserializationError as Error;
+    ) -> Result<NodeOperator<C::Node>, TryFromSmartContractError> {
+        use TryFromSmartContractError as Error;
 
-        let data_bytes = self.data.0;
+        let data_bytes = operator.data;
 
         if data_bytes.is_empty() {
-            return Err(DataDeserializationError::EmptyBuffer);
+            return Err(TryFromSmartContractError::EmptyBuffer);
         }
 
         let schema_version = data_bytes[0];
@@ -274,12 +215,12 @@ impl Serialized {
             .nodes
             .into_iter()
             .map(|v0| Node::from(v0).tap_mut(|node| node.decrypt(cfg.as_ref())))
-            .map(|node| cfg.new_node(self.id, node))
+            .map(|node| cfg.new_node(operator.id, node))
             .collect();
 
         let clients = data.clients.into_iter().map(Into::into).collect();
 
-        Ok(NodeOperator::new(self.id, data.name, nodes, clients)?)
+        Ok(NodeOperator::new(operator.id, data.name, nodes, clients)?)
     }
 }
 
@@ -294,19 +235,19 @@ struct DataV0 {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum DataSerializationError {
+pub enum TryIntoSmartContractError {
     #[error("Codec: {0}")]
     Codec(String),
 }
 
-impl DataSerializationError {
+impl TryIntoSmartContractError {
     fn from_postcard(err: postcard::Error) -> Self {
         Self::Codec(format!("{err:?}"))
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum DataDeserializationError {
+pub enum TryFromSmartContractError {
     #[error("Empty data buffer")]
     EmptyBuffer,
 
@@ -320,25 +261,26 @@ pub enum DataDeserializationError {
     Constructor(#[from] CreationError),
 }
 
-impl DataDeserializationError {
+impl TryFromSmartContractError {
     fn from_postcard(err: postcard::Error) -> Self {
         Self::Codec(format!("{err:?}"))
     }
 }
 
-impl Data {
-    /// Validates that [`SerializedData`] size doesn't exceed
-    /// [`cluster::Settings::max_node_operator_data_bytes`].
-    pub(super) fn validate(&self, settings: &cluster::Settings) -> Result<(), DataTooLargeError> {
-        let value = self.0.len();
-        let limit = settings.max_node_operator_data_bytes as usize;
+/// Validates that on-chain data size doesn't exceed
+/// [`cluster::Settings::max_node_operator_data_bytes`].
+pub(super) fn validate_data(
+    data: &[u8],
+    settings: &cluster::Settings,
+) -> Result<(), DataTooLargeError> {
+    let value = data.len();
+    let limit = settings.max_node_operator_data_bytes as usize;
 
-        if value > limit {
-            return Err(DataTooLargeError { value, limit });
-        }
-
-        Ok(())
+    if value > limit {
+        return Err(DataTooLargeError { value, limit });
     }
+
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error)]

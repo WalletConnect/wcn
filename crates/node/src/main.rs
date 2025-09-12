@@ -1,12 +1,16 @@
 use {
     anyhow::Context,
     base64::Engine as _,
-    futures::FutureExt as _,
+    futures::FutureExt,
     futures_concurrency::future::Race as _,
     libp2p_identity::Keypair,
     metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle},
     serde::Deserialize,
-    std::{pin::pin, time::Duration},
+    std::{
+        net::{Ipv4Addr, SocketAddrV4, TcpListener},
+        pin::pin,
+        time::Duration,
+    },
     wcn_cluster::smart_contract,
     wcn_node::Config,
     wcn_rpc::server::ShutdownSignal,
@@ -94,6 +98,20 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
 
     let keypair = Keypair::ed25519_from_bytes(secret_key).context("SECRET_KEY")?;
 
+    let primary_rpc_server_socket =
+        wcn_rpc::server::Socket::new_high_priority(env.primary_rpc_server_port)
+            .context("Failed to bind primary rpc server socket")?;
+
+    let secondary_rpc_server_socket =
+        wcn_rpc::server::Socket::new_low_priority(env.secondary_rpc_server_port)
+            .context("Failed to bind secondary rpc server socket")?;
+
+    let metrics_server_socket = TcpListener::bind(SocketAddrV4::new(
+        Ipv4Addr::UNSPECIFIED,
+        env.metrics_server_port,
+    ))
+    .context("Failed to bind metrics server socket")?;
+
     let max_idle_connection_timeout =
         Duration::from_millis(env.max_idle_connection_timeout_ms.unwrap_or(500) as u64);
 
@@ -105,7 +123,7 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
     let smart_contract_signer = env
         .smart_contract_signer_private_key
         .as_ref()
-        .map(|key| smart_contract::Signer::try_from_private_key(key))
+        .map(|key| smart_contract::evm::Signer::try_from_private_key(key))
         .transpose()
         .context("SMART_CONTRACT_SIGNER_PRIVATE_KEY")?;
 
@@ -125,9 +143,9 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
 
     Ok(Config {
         keypair,
-        primary_rpc_server_port: env.primary_rpc_server_port,
-        secondary_rpc_server_port: env.secondary_rpc_server_port,
-        metrics_server_port: env.metrics_server_port,
+        primary_rpc_server_socket,
+        secondary_rpc_server_socket,
+        metrics_server_socket,
         max_idle_connection_timeout,
         smart_contract_address,
         smart_contract_signer,

@@ -108,11 +108,10 @@ impl<API: Api> Client<API> {
         );
         let socket_addr = SocketAddr::new(std::net::Ipv4Addr::new(0, 0, 0, 0).into(), 0);
         let endpoint = quic::new_quinn_endpoint(
-            socket_addr,
+            quic::new_udp_socket(socket_addr, cfg.priority).map_err(Error::io)?,
             &cfg.keypair,
             transport_config,
             None,
-            cfg.priority,
         )
         .map_err(Error::new)?;
 
@@ -439,6 +438,8 @@ impl<API: Api> Connection<API> {
                         return;
                     }
                     Err(err) => {
+                        tracing::debug!(?err, remote_addr = %this.remote_addr, remote_peer_id = %this.remote_peer_id, "Connection error");
+
                         metrics::counter!(
                             "wcn_rpc_client_connection_errors",
                             StringLabel<"remote_addr", SocketAddrV4> => &this.remote_addr,

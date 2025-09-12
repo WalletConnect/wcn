@@ -1,38 +1,32 @@
 use {
-    crate::Error,
-    futures::FutureExt as _,
     metrics_exporter_prometheus::PrometheusHandle,
     std::{
-        net::SocketAddr,
+        future::Future,
+        io,
+        net::TcpListener,
         path::{Path, PathBuf},
         time::Duration,
     },
     sysinfo::{Disks, Networks},
     tap::{TapFallible, TapOptional},
-    tokio::sync::oneshot,
     wcn_rocks::RocksBackend,
+    wcn_rpc::server::ShutdownSignal,
 };
 
-pub struct Config {
+pub struct ServerConfig {
+    pub socket: TcpListener,
     pub rocksdb_dir: PathBuf,
     pub rocksdb: Option<RocksBackend>,
+    pub prometheus: PrometheusHandle,
+    pub shutdown_signal: ShutdownSignal,
 }
 
-pub fn run_update_loop(cfg: Config) -> oneshot::Sender<()> {
-    let (tx, rx) = oneshot::channel();
-    tokio::task::spawn(update_loop(rx, cfg));
-    tx
-}
+pub(super) fn serve(config: ServerConfig) -> io::Result<impl Future<Output = ()>> {
+    let shutdown_signal = config.shutdown_signal.clone();
+    let prometheus = config.prometheus.clone();
+    let socket = config.socket.try_clone()?;
 
-pub async fn serve(addr: SocketAddr, prometheus: PrometheusHandle) -> Result<(), Error> {
-    let (_tx, rx) = oneshot::channel::<()>();
-
-    tracing::info!(?addr, "starting metrics server");
-
-    tokio::task::spawn_blocking({
-        let prometheus = prometheus.clone();
-        move || prometheus_upkeep_loop(rx, prometheus)
-    });
+    tokio::task::spawn_blocking(move || update_loop(config));
 
     let svc = axum::Router::new()
         .route(
@@ -41,24 +35,18 @@ pub async fn serve(addr: SocketAddr, prometheus: PrometheusHandle) -> Result<(),
         )
         .into_make_service();
 
-    async {
-        let listener = tokio::net::TcpListener::bind(addr).await?;
-        axum::serve(listener, svc).await
-    }
-    .await
-    .map_err(Error::MetricsServer)
+    socket.set_nonblocking(true)?;
+    let listener = tokio::net::TcpListener::from_std(socket)?;
+
+    Ok(async {
+        let _ = axum::serve(listener, svc)
+            .with_graceful_shutdown(async move { shutdown_signal.wait().await })
+            .await;
+    })
 }
 
-fn prometheus_upkeep_loop(mut cancel: oneshot::Receiver<()>, prometheus: PrometheusHandle) {
-    while let Err(oneshot::error::TryRecvError::Empty) = cancel.try_recv() {
-        prometheus.run_upkeep();
-        std::thread::sleep(Duration::from_secs(15));
-    }
-}
-
-async fn update_loop(cancel: oneshot::Receiver<()>, cfg: Config) {
+fn update_loop(cfg: ServerConfig) {
     let mut sys = sysinfo::System::new_all();
-    let mut cancel_fut = std::pin::pin!(cancel.fuse());
 
     // Try to detect the closest mount point. Fallback to the parent directory.
     let storage_mount_point = find_storage_mount_point(cfg.rocksdb_dir.as_path())
@@ -72,6 +60,10 @@ async fn update_loop(cancel: oneshot::Receiver<()>, cfg: Config) {
         .unwrap_or(&cfg.rocksdb_dir);
 
     loop {
+        if cfg.shutdown_signal.is_emitted() {
+            return;
+        }
+
         if let Err(err) = wc::alloc::stats::update_jemalloc_metrics() {
             tracing::warn!(?err, "failed to get jemalloc allocation stats");
         }
@@ -116,10 +108,8 @@ async fn update_loop(cancel: oneshot::Receiver<()>, cfg: Config) {
             update_rocksdb_metrics(db);
         }
 
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(15)) => {},
-            _ = &mut cancel_fut => return,
-        }
+        cfg.prometheus.run_upkeep();
+        std::thread::sleep(Duration::from_secs(15));
     }
 }
 

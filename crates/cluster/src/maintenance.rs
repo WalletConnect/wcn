@@ -1,5 +1,5 @@
 use {
-    crate::{node_operator, smart_contract, Version as ClusterVersion},
+    crate::{node_operator, smart_contract},
     serde::{Deserialize, Serialize},
 };
 
@@ -29,24 +29,6 @@ impl Maintenance {
     pub fn slot(&self) -> &smart_contract::AccountAddress {
         &self.slot
     }
-}
-
-/// [`Maintenance`] has started.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Started {
-    /// [`smart_contract::AccountAddress`] of the account that
-    /// started the [`Maintenance`].
-    pub by: smart_contract::AccountAddress,
-
-    /// Updated [`ClusterVersion`].
-    pub cluster_version: ClusterVersion,
-}
-
-/// [`Maintenance`] has been finished.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Finished {
-    /// Updated [`ClusterVersion`].
-    pub cluster_version: ClusterVersion,
 }
 
 #[derive(Debug, thiserror::Error)]
