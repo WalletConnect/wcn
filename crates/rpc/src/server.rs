@@ -117,8 +117,7 @@ impl Socket {
     }
 
     /// Creates a new [`Socket`] with [`transport::Priority::Low`].
-    pub fn new_low_priority(port: u16) -> io::Result<Self> {
-        Self::new(port, transport::Priority::High)
+        Self::new(port, transport::Priority::Low)
     }
 
     /// Creates a new [`Socket`].
