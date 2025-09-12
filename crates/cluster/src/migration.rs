@@ -237,5 +237,5 @@ pub(super) fn parse_timestamp(ts: u64) -> Result<OffsetDateTime, TryFromSmartCon
     i64::try_from(ts)
         .ok()
         .and_then(|ts| OffsetDateTime::from_unix_timestamp(ts).ok())
-        .ok_or_else(|| TryFromSmartContractError::InvalidTimestamp(ts))
+        .ok_or(TryFromSmartContractError::InvalidTimestamp(ts))
 }

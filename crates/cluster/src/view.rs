@@ -335,7 +335,7 @@ impl<C: Config> View<C> {
         let primary_keyspace_version = if is_migration_in_progress {
             view.keyspace_version
                 .checked_sub(1)
-                .ok_or_else(|| TryFromSmartContractError::InvalidKeyspaceVersion)?
+                .ok_or(TryFromSmartContractError::InvalidKeyspaceVersion)?
         } else {
             view.keyspace_version
         };
@@ -359,7 +359,7 @@ impl<C: Config> View<C> {
         let (keyspace, migration) =
             tokio::join!(keyspace.calculate(), migration.calculate_keyspace());
 
-        let maintenance = view.maintenance.slot.map(|slot| Maintenance::new(slot));
+        let maintenance = view.maintenance.slot.map(Maintenance::new);
 
         Ok(View {
             node_operators,

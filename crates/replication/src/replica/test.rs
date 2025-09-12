@@ -89,7 +89,7 @@ impl Context {
     }
 
     async fn start_migration(&self) {
-        let new_operator = wcn_cluster::testing::node_operator(100 as u8);
+        let new_operator = wcn_cluster::testing::node_operator(100_u8);
 
         self.replica
             .cluster

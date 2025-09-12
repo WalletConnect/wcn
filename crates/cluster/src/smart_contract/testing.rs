@@ -103,7 +103,7 @@ impl super::Deployer<FakeSmartContract> for Deployer {
             .insert(contract_address, contract.clone());
 
         Ok(FakeSmartContract {
-            signer: self.signer.clone(),
+            signer: self.signer,
             inner: contract,
         })
     }
@@ -125,7 +125,7 @@ impl super::Connector<FakeSmartContract> for Connector {
             .ok_or(ConnectionError::UnknownContract)?;
 
         Ok(FakeSmartContract {
-            signer: self.signer.clone(),
+            signer: self.signer,
             inner: contract,
         })
     }

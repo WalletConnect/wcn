@@ -246,7 +246,7 @@ impl TryFrom<smart_contract::Keyspace> for Keyspace {
                 TryFromSmartContractError::InvalidReplicationStrategy(keyspace.replication_strategy)
             })?;
 
-        Self::new(keyspace.operators.clone(), replication_strategy).map_err(Into::into)
+        Self::new(keyspace.operators, replication_strategy).map_err(Into::into)
     }
 }
 
