@@ -615,7 +615,7 @@ fn clone_node_config(cfg: &wcn_node::Config) -> wcn_node::Config {
         keypair: cfg.keypair.clone(),
         primary_rpc_server_socket: cfg.primary_rpc_server_socket.try_clone().unwrap(),
         secondary_rpc_server_socket: cfg.secondary_rpc_server_socket.try_clone().unwrap(),
-        max_idle_connection_timeout: Duration::from_secs(5),
+        max_idle_connection_timeout: cfg.max_idle_connection_timeout,
         metrics_server_socket: cfg.metrics_server_socket.try_clone().unwrap(),
         database_rpc_server_address: cfg.database_rpc_server_address,
         database_peer_id: cfg.database_peer_id,
