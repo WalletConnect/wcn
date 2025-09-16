@@ -104,7 +104,7 @@ struct Namespace {
 }
 
 impl Namespace {
-    async fn populate(&mut self) {
+    async fn populate(&self) {
         let count = &AtomicUsize::new(0);
         let progress_logger = || async {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
