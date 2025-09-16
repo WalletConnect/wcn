@@ -238,7 +238,7 @@ impl Namespace {
 
     async fn execute_random_get(&self) {
         let (key, expected_record) = self.kv_storage.get_random_entry().await;
-        self.execute_get(key, &*expected_record).await
+        self.execute_get(key, &expected_record).await
     }
 
     async fn execute_get(&self, key: u32, expected_record: &TestRecord) {
@@ -260,7 +260,7 @@ impl Namespace {
 
         let got_ttl = self.get_exp(key).await;
 
-        assert_exp("get_exp", &*expected_record, got_ttl);
+        assert_exp("get_exp", &expected_record, got_ttl);
     }
 
     #[allow(dead_code)]
@@ -299,7 +299,7 @@ impl Namespace {
             "hget",
             key,
             Some(field),
-            &expected_record,
+            expected_record,
             got_record.as_ref(),
         );
     }
@@ -365,7 +365,7 @@ impl Namespace {
 
     async fn execute_random_hscan(&self) {
         let (key, map) = self.map_storage.get_random_map().await;
-        self.execute_hscan(key, &*map).await
+        self.execute_hscan(key, &map).await
     }
 
     async fn execute_hscan(&self, key: u32, map: &Map) {
@@ -655,7 +655,7 @@ impl OperationStats {
 fn random_record(ns: u8, key: u32, field: u8) -> Record {
     Record {
         value: iter::once(ns)
-            .chain(key.to_be_bytes().into_iter())
+            .chain(key.to_be_bytes())
             .chain(iter::once(field))
             .chain(iter::once(rand::random()))
             .collect(),
@@ -677,10 +677,6 @@ struct TestRecord {
 impl TestRecord {
     fn definetely_exists(&self) -> bool {
         self.expires_at() > now() + 5
-    }
-
-    fn definetely_expired(&self) -> bool {
-        self.expires_at() < now() - 5
     }
 
     fn maybe_exists(&self) -> bool {
@@ -864,7 +860,7 @@ fn expand_field(field: u8) -> Vec<u8> {
 
 fn expand_value(ns: u8, key: u32, field: u8, value: u8) -> Vec<u8> {
     iter::once(ns)
-        .chain(key.to_be_bytes().into_iter())
+        .chain(key.to_be_bytes())
         .chain(iter::once(field))
         .chain(iter::repeat(value))
         .take(VALUE_SIZE)

@@ -233,7 +233,7 @@ impl fmt::Debug for Record {
 impl<'a> fmt::Debug for RecordBorrowed<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RecordBorrowed")
-            .field("value", &DebugValueCompact(&self.value))
+            .field("value", &DebugValueCompact(self.value))
             .field("expiration", &self.expiration)
             .field("version", &self.version)
             .finish()

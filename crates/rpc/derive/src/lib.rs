@@ -137,7 +137,7 @@ fn parse_message_options(input: &DeriveInput) -> MessageOptions {
             if meta.path.is_ident("owned_derives") {
                 let mut derives = Vec::new();
                 meta.parse_nested_meta(|inner| {
-                    derives.push(inner.path.clone());
+                    derives.push(inner.path);
                     Ok(())
                 })?;
                 opts.owned_derives = Some(derives);
