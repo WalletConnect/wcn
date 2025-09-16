@@ -250,7 +250,6 @@ where
             .pipe(stream::iter)
             .for_each_concurrent(Some(self.manager.config.concurrency()), |(shard_id, source)| {
                 retry(move || {
-                    // TODO: This log may spam in case of an outage, figure out how to rate limit it.
                     self.transfer_shard(shard_id, source, keyspace_version)
                         .map_err(move |err| tracing::warn!(?err, %shard_id, source = %source.id, "Failed to transfer shard"))
                 })

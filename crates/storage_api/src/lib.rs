@@ -3,7 +3,15 @@
 use {
     futures::{stream, Stream},
     serde::{Deserialize, Serialize},
-    std::{array, borrow::Cow, future::Future, ops::RangeInclusive, str::FromStr, time::Duration},
+    std::{
+        array,
+        borrow::Cow,
+        fmt,
+        future::Future,
+        ops::RangeInclusive,
+        str::FromStr,
+        time::Duration,
+    },
     strum::IntoStaticStr,
     time::OffsetDateTime as DateTime,
     wc::metrics::{self, enum_ordinalize::Ordinalize},
@@ -199,7 +207,8 @@ pub enum DataType {
 ///
 /// A [`Record`] can not be overwritten by another [`Record`] with a lesser
 /// [version][`Record::version`].
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Message)]
+#[derive(Clone, Copy, Eq, PartialEq, Serialize, Message)]
+#[message(owned_derives(Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Message))]
 pub struct RecordBorrowed<'a> {
     /// Value of this [`Record`].
     pub value: &'a [u8],
@@ -209,6 +218,26 @@ pub struct RecordBorrowed<'a> {
 
     /// Version of this [`Record`].
     pub version: RecordVersion,
+}
+
+impl fmt::Debug for Record {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Record")
+            .field("value", &DebugValueCompact(&self.value))
+            .field("expiration", &self.expiration)
+            .field("version", &self.version)
+            .finish()
+    }
+}
+
+impl<'a> fmt::Debug for RecordBorrowed<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RecordBorrowed")
+            .field("value", &DebugValueCompact(&self.value))
+            .field("expiration", &self.expiration)
+            .field("version", &self.version)
+            .finish()
+    }
 }
 
 impl<'a> RecordBorrowed<'a> {
@@ -474,4 +503,19 @@ fn namespace_from_str() {
     assert!(ns("14Cb1e6fb683A83455cA283e10f4959740A49ed7/255").is_ok());
     assert!(ns("14Cb1e6fb683A83455cA283e10f4959740A49ed7/256").is_err());
     assert!(ns("4Cb1e6fb683A83455cA283e10f4959740A49ed7/1").is_err());
+}
+
+struct DebugValueCompact<'a>(&'a [u8]);
+
+impl<'a> fmt::Debug for DebugValueCompact<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.is_empty() {
+            write!(f, "[]")
+        } else {
+            let first = self.0[0];
+            let last = self.0.last().unwrap();
+            let len = self.0.len();
+            write!(f, "[{first}, ..., {last}] (len: {len})")
+        }
+    }
 }

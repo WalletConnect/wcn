@@ -1,11 +1,13 @@
 use {
     crate::WcnClient,
-    futures::{FutureExt as _, StreamExt as _, stream},
+    futures::{StreamExt, stream},
     futures_concurrency::future::Race as _,
     rand::seq::IndexedRandom,
     std::{
-        cmp,
+        array,
         collections::{BTreeMap, HashMap},
+        fmt,
+        iter,
         ops::RangeInclusive,
         sync::{
             Arc,
@@ -16,48 +18,79 @@ use {
     tap::Pipe as _,
     time::OffsetDateTime,
     tokio::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    tracing::Instrument,
     wcn_client::MapPage,
+    wcn_rpc::server::ShutdownSignal,
     wcn_storage_api::{Record, RecordExpiration, RecordVersion},
 };
 
-const KV_KEYS: u32 = 5_000;
-const MAP_KEYS: u32 = 50;
+const KV_KEYS: u32 = 50_000;
+const MAP_KEYS: u32 = 500;
 
 const KEY_SIZE: usize = 32;
 const FIELD_SIZE: usize = 32;
 const VALUE_SIZE: usize = 1024;
 
-pub(super) async fn run(client: WcnClient, namespaces: &[wcn_client::Namespace]) {
-    let stats = Stats::default();
+pub(super) struct LoadSimulator {
+    namespaces: Vec<Namespace>,
+    stats: Stats,
+}
 
-    let mut namespaces: Vec<_> = namespaces
-        .iter()
-        .copied()
-        .map(|ns| Namespace {
-            namespace: ns,
-            client: client.clone(),
-            kv_storage: KvStorage::default(),
-            map_storage: MapStorage::default(),
-            stats: stats.clone(),
-        })
-        .collect();
+impl LoadSimulator {
+    pub(super) fn new(client: WcnClient, namespaces: &[wcn_client::Namespace]) -> Self {
+        let stats = Stats::default();
 
-    stream::iter(namespaces.iter_mut())
-        .for_each_concurrent(5, Namespace::populate)
-        .await;
+        Self {
+            namespaces: namespaces
+                .iter()
+                .copied()
+                .map(|ns| Namespace {
+                    namespace: ns,
+                    client: client.clone(),
+                    kv_storage: KvStorage::new(),
+                    map_storage: MapStorage::new(),
+                    stats: stats.clone(),
+                })
+                .collect(),
+            stats,
+        }
+    }
 
-    let fut = async move {
-        stream::iter(std::iter::repeat(()))
-            .for_each_concurrent(10, |_| {
-                namespaces
-                    .choose(&mut rand::rng())
-                    .unwrap()
-                    .execute_random_operation()
+    pub(super) async fn populate_namespaces(&mut self) {
+        stream::iter(self.namespaces.iter_mut())
+            .for_each_concurrent(5, |ns| {
+                let idx = ns.namespace.idx();
+                ns.populate()
+                    .instrument(tracing::info_span!("namespace", %idx))
             })
             .await;
-    };
+    }
 
-    (fut, stats.logger()).race().await;
+    pub(super) async fn run(&self, shutdown: ShutdownSignal) {
+        let fut = async move {
+            stream::iter(std::iter::repeat(()))
+                .take_until(async move { shutdown.wait().await })
+                .for_each_concurrent(10, |_| {
+                    self.namespaces
+                        .choose(&mut rand::rng())
+                        .unwrap()
+                        .execute_random_operation()
+                })
+                .await;
+        };
+
+        (fut, self.stats.clone().logger()).race().await;
+    }
+
+    pub(super) async fn validate_namespaces(&self) {
+        stream::iter(self.namespaces.iter())
+            .for_each_concurrent(5, |ns| {
+                let idx = ns.namespace.idx();
+                ns.validate()
+                    .instrument(tracing::info_span!("namespace", %idx))
+            })
+            .await;
+    }
 }
 
 struct Namespace {
@@ -72,9 +105,6 @@ struct Namespace {
 
 impl Namespace {
     async fn populate(&mut self) {
-        let namespace = self.namespace;
-        let client = &self.client;
-
         let count = &AtomicUsize::new(0);
         let progress_logger = || async {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
@@ -85,64 +115,64 @@ impl Namespace {
             }
         };
 
-        let populate_kv_fut = stream::iter(0..KV_KEYS)
-            .map(|key| async move {
-                let record = random_record();
+        let populate_kv_fut = stream::iter(0..(KV_KEYS / 2)).for_each_concurrent(100, |_| async {
+            self.execute_random_set().await;
+            count.fetch_add(1, atomic::Ordering::Relaxed);
+        });
 
-                client
-                    .set(
-                        namespace,
-                        expand_key(key),
-                        expand_value(record.value[0]),
-                        record.expiration,
-                    )
-                    .await
-                    .unwrap();
-
-                count.fetch_add(1, atomic::Ordering::Relaxed);
-
-                (key, RwLock::new(Some(record)))
-            })
-            .buffer_unordered(100)
-            .collect();
-
-        self.kv_storage.entries = (populate_kv_fut, progress_logger()).race().await;
-
-        let populate_map_fut = stream::iter(0..MAP_KEYS)
-            .map(|key| async move {
-                let max_field: u8 = rand::random();
-
-                let entries = stream::iter(0..=max_field)
-                    .map(|field| async move {
-                        let record = random_record();
-
-                        client
-                            .hset(
-                                namespace,
-                                expand_key(key),
-                                expand_field(field),
-                                expand_value(record.value[0]),
-                                record.expiration,
-                            )
-                            .await
-                            .unwrap();
-
-                        (field, record)
-                    })
-                    .buffer_unordered(max_field as usize + 1)
-                    .collect()
-                    .await;
-
-                count.fetch_add(1, atomic::Ordering::Relaxed);
-
-                (key, RwLock::new(Map { entries }))
-            })
-            .buffer_unordered(1)
-            .collect();
+        (populate_kv_fut, progress_logger())
+            .race()
+            .instrument(tracing::info_span!("KV"))
+            .await;
 
         count.store(0, atomic::Ordering::Relaxed);
-        let logger_fut = progress_logger().map(|_| unreachable!());
-        self.map_storage.entries = (populate_map_fut, logger_fut).race().await;
+
+        let populate_map_fut =
+            stream::iter(0..(MAP_KEYS * 256 / 2)).for_each_concurrent(100, |_| async {
+                self.execute_random_hset().await;
+                count.fetch_add(1, atomic::Ordering::Relaxed);
+            });
+
+        (populate_map_fut, progress_logger())
+            .race()
+            .instrument(tracing::info_span!("Map"))
+            .await;
+    }
+
+    async fn validate(&self) {
+        let count = &AtomicUsize::new(0);
+        let progress_logger = || async {
+            let mut interval = tokio::time::interval(Duration::from_secs(5));
+
+            loop {
+                interval.tick().await;
+                tracing::info!("Validated {} keys", count.load(atomic::Ordering::Relaxed));
+            }
+        };
+
+        let validate_kv_fut = stream::iter(self.kv_storage.entries.iter()).for_each_concurrent(
+            10,
+            |(key, record)| async {
+                self.execute_get(*key, &*record.read().await).await;
+                count.fetch_add(1, atomic::Ordering::Relaxed);
+            },
+        );
+
+        (validate_kv_fut, progress_logger())
+            .race()
+            .instrument(tracing::info_span!("KV"))
+            .await;
+
+        let validate_map_fut =
+            stream::iter(self.map_storage.entries.iter()).for_each(|(key, map)| async {
+                self.execute_hscan(*key, &*map.read().await).await;
+                count.fetch_add(1, atomic::Ordering::Relaxed);
+            });
+
+        (validate_map_fut, progress_logger())
+            .race()
+            .instrument(tracing::info_span!("Map"))
+            .await;
     }
 
     async fn execute_random_operation(&self) {
@@ -208,19 +238,21 @@ impl Namespace {
 
     async fn execute_random_get(&self) {
         let (key, expected_record) = self.kv_storage.get_random_entry().await;
+        self.execute_get(key, &*expected_record).await
+    }
 
+    async fn execute_get(&self, key: u32, expected_record: &TestRecord) {
         let got_record = self.get(key).await;
-
-        assert_record("get", expected_record.as_ref(), got_record.as_ref());
+        assert_record("get", key, None, expected_record, got_record.as_ref());
     }
 
     async fn execute_random_set(&self) {
         let (key, mut record) = self.kv_storage.get_random_entry_mut().await;
 
-        let new_record = random_record();
+        let new_record = random_record(self.namespace.idx(), key, 0);
         self.set(key, &new_record).await;
 
-        *record = Some(new_record);
+        record.set(new_record);
     }
 
     async fn execute_random_get_exp(&self) {
@@ -228,25 +260,25 @@ impl Namespace {
 
         let got_ttl = self.get_exp(key).await;
 
-        assert_exp("get_exp", expected_record.as_ref(), got_ttl);
+        assert_exp("get_exp", &*expected_record, got_ttl);
     }
 
     #[allow(dead_code)]
     async fn execute_random_set_exp(&self) {
-        let (key, mut record) = self.kv_storage.get_random_entry_mut().await;
+        // let (key, mut record) = self.kv_storage.get_random_entry_mut().await;
 
-        if let Some(rec) = record.as_ref()
-            && is_expired_or_about_to_expire(rec)
-        {
-            return;
-        }
+        // if let Some(rec) = &record.inner
+        //     && is_expired_or_about_to_expire(&record)
+        // {
+        //     return;
+        // }
 
-        let new_exp = random_record_expiration();
-        self.set_exp(key, new_exp).await;
+        // let new_exp = random_record_expiration();
+        // self.set_exp(key, new_exp).await;
 
-        if let Some(rec) = record.as_mut() {
-            rec.expiration = new_exp;
-        }
+        // if let Some(rec) = record.as_mut() {
+        //     rec.expiration = new_exp;
+        // }
     }
 
     async fn execute_random_del(&self) {
@@ -254,7 +286,7 @@ impl Namespace {
 
         self.del(key).await;
 
-        *record = None;
+        record.del();
     }
 
     async fn execute_random_hget(&self) {
@@ -263,17 +295,23 @@ impl Namespace {
 
         let got_record = self.hget(key, field).await;
 
-        assert_record("hget", expected_record, got_record.as_ref());
+        assert_record(
+            "hget",
+            key,
+            Some(field),
+            &expected_record,
+            got_record.as_ref(),
+        );
     }
 
     async fn execute_random_hset(&self) {
         let (key, mut map) = self.map_storage.get_random_map_mut().await;
-        let field = rand::random();
+        let (field, record) = map.get_random_entry_mut();
 
-        let new_record = random_record();
+        let new_record = random_record(self.namespace.idx(), key, field);
         self.hset(key, field, &new_record).await;
 
-        let _ = map.entries.insert(field, new_record);
+        record.set(new_record);
     }
 
     async fn execute_random_hget_exp(&self) {
@@ -287,21 +325,21 @@ impl Namespace {
 
     #[allow(dead_code)]
     async fn execute_random_hset_exp(&self) {
-        let (key, mut map) = self.map_storage.get_random_map_mut().await;
-        let (field, record) = map.get_random_entry_mut();
+        // let (key, mut map) = self.map_storage.get_random_map_mut().await;
+        // let (field, record) = map.get_random_entry_mut();
 
-        if let Some(rec) = &record
-            && is_expired_or_about_to_expire(rec)
-        {
-            return;
-        }
+        // if let Some(rec) = &record
+        //     && is_expired_or_about_to_expire(rec)
+        // {
+        //     return;
+        // }
 
-        let new_exp = random_record_expiration();
-        self.hset_exp(key, field, new_exp).await;
+        // let new_exp = random_record_expiration();
+        // self.hset_exp(key, field, new_exp).await;
 
-        if let Some(rec) = record {
-            rec.expiration = new_exp;
-        }
+        // if let Some(rec) = record {
+        //     rec.expiration = new_exp;
+        // }
     }
 
     async fn execute_random_hdel(&self) {
@@ -310,7 +348,7 @@ impl Namespace {
 
         self.hdel(key, field).await;
 
-        let _ = map.entries.remove(&field);
+        map.entries.get_mut(&field).unwrap().del();
     }
 
     async fn execute_random_hcard(&self) {
@@ -327,11 +365,22 @@ impl Namespace {
 
     async fn execute_random_hscan(&self) {
         let (key, map) = self.map_storage.get_random_map().await;
+        self.execute_hscan(key, &*map).await
+    }
 
+    async fn execute_hscan(&self, key: u32, map: &Map) {
         let count = (rand::random::<u8>() as u32) + 1;
         let cursor = rand::random::<bool>().then(rand::random);
 
         let page = self.hscan(key, count, cursor).await;
+
+        let mut guard = HScanTestCaseGuard {
+            count,
+            cursor,
+            map,
+            page: &page,
+            disarmed: false,
+        };
 
         let mut start_at = 0;
         if let Some(cur) = &cursor {
@@ -339,66 +388,75 @@ impl Namespace {
                 start_at = at;
             } else {
                 // cursor is 255 (the end of the keyspace), no data should be present
-                assert_eq!(page.entries, vec![]);
+                assert!(page.entries.is_empty(), "map should be empty");
+
+                guard.disarmed = true;
                 return;
             }
         };
 
+        let got_count = page.entries.len() as u32;
+
+        if page.has_next {
+            assert_eq!(
+                count, got_count,
+                "has_next is present, but counts do not match"
+            )
+        }
+
         let mut got_iter = page.entries.iter().peekable();
-        let mut expected_iter = map.entries.range(start_at..);
+        let mut expected_iter = map
+            .entries
+            .range(start_at..)
+            .filter(|(_, rec)| rec.maybe_exists());
 
         let mut actual_count = 0;
-
-        let now = OffsetDateTime::now_utc().unix_timestamp();
 
         loop {
             let Some(got) = got_iter.peek() else {
                 if actual_count < count {
-                    let next =
-                        expected_iter.find(|(_, record)| !is_expired_or_about_to_expire(record));
-
-                    assert_eq!(
-                        next, None,
-                        "count: {count}, actual_count: {actual_count}, cursor: {cursor:?}, map: \
-                         {map:?}, page: {page:?}, now: {now}"
+                    let next = expected_iter.find(|(_, record)| record.definetely_exists());
+                    assert!(
+                        next.is_none(),
+                        "MapPage incomplete, expected next: {next:?}"
                     );
                 }
 
+                guard.disarmed = true;
                 return;
             };
 
             let (expected_field, expected_record) = expected_iter.next().unwrap_or_else(|| {
-                panic!("Missing record | count: {count}, cursor: {cursor:?}, map: {map:?}")
+                panic!("Map missing record");
             });
+
             let expected_field = vec![*expected_field];
 
-            let got = match got.field.cmp(&expected_field) {
-                cmp::Ordering::Less => panic!("hscan out of order"),
-                cmp::Ordering::Equal => got_iter.next().unwrap(),
-                cmp::Ordering::Greater if is_expired_or_about_to_expire(expected_record) => {
-                    continue;
-                }
-                cmp::Ordering::Greater => panic!(
-                    "MapPage missing {expected_field:?}->{expected_record:?} | count: {count}, \
-                     cursor: {cursor:?}, map: {map:?}"
-                ),
-            };
+            if got.field > expected_field && expected_record.maybe_expired() {
+                continue;
+            }
+
+            let got = got_iter.next().unwrap();
+
+            assert_eq!(
+                expected_field, got.field,
+                "Expected: {expected_record:?}, got: {:?}",
+                got.record
+            );
 
             actual_count += 1;
             assert!(
                 actual_count <= count,
-                "hscan returned more records than requested(count: {count}, actual_count: {})",
-                actual_count
+                "hscan returned more records than requested",
             );
 
-            assert_eq!(
-                got.field, expected_field,
-                "count: {count}, cursor: {cursor:?}, got_record: {:?}, expected_record: \
-                 {expected_record:?}, map: {map:?}, page: {page:?}",
-                got.record,
+            assert_record(
+                "hscan",
+                key,
+                Some(expected_field[0]),
+                expected_record,
+                Some(&got.record),
             );
-
-            assert_record("hscan", Some(expected_record), Some(&got.record));
         }
     }
 
@@ -416,7 +474,7 @@ impl Namespace {
             .set(
                 self.namespace,
                 expand_key(key),
-                expand_value(record.value[0]),
+                expand_value(self.namespace.idx(), key, 0, *record.value.last().unwrap()),
                 record.expiration,
             )
             .pipe(|fut| self.stats.record(fut, "set"))
@@ -440,6 +498,7 @@ impl Namespace {
             .unwrap()
     }
 
+    #[allow(dead_code)]
     async fn set_exp(&self, key: u32, exp: RecordExpiration) {
         self.client
             .set_exp(self.namespace, expand_key(key), exp)
@@ -463,7 +522,12 @@ impl Namespace {
                 self.namespace,
                 expand_key(key),
                 expand_field(field),
-                expand_value(record.value[0]),
+                expand_value(
+                    self.namespace.idx(),
+                    key,
+                    field,
+                    *record.value.last().unwrap(),
+                ),
                 record.expiration,
             )
             .pipe(|fut| self.stats.record(fut, "hset"))
@@ -487,6 +551,7 @@ impl Namespace {
             .unwrap()
     }
 
+    #[allow(dead_code)]
     async fn hset_exp(&self, key: u32, field: u8, exp: RecordExpiration) {
         self.client
             .hset_exp(self.namespace, expand_key(key), expand_field(field), exp)
@@ -587,9 +652,13 @@ impl OperationStats {
     }
 }
 
-fn random_record() -> Record {
+fn random_record(ns: u8, key: u32, field: u8) -> Record {
     Record {
-        value: vec![rand::random()],
+        value: iter::once(ns)
+            .chain(key.to_be_bytes().into_iter())
+            .chain(iter::once(field))
+            .chain(iter::once(rand::random()))
+            .collect(),
         expiration: random_record_expiration(),
         version: RecordVersion::now(),
     }
@@ -599,44 +668,128 @@ fn random_record_expiration() -> RecordExpiration {
     Duration::from_secs(rand::random_range(30..300)).into()
 }
 
-fn is_expired(record: &Record) -> bool {
-    Duration::from(record.expiration).is_zero()
+#[derive(Debug, Default)]
+struct TestRecord {
+    inner: Option<Record>,
+    change_log: Vec<RecordChange>,
 }
 
-fn is_expired_or_about_to_expire(record: &Record) -> bool {
-    is_expired(record) | is_almost_now(record.expiration)
+impl TestRecord {
+    fn definetely_exists(&self) -> bool {
+        self.expires_at() > now() + 5
+    }
+
+    fn definetely_expired(&self) -> bool {
+        self.expires_at() < now() - 5
+    }
+
+    fn maybe_exists(&self) -> bool {
+        self.expires_at() >= now() - 5
+    }
+
+    fn maybe_expired(&self) -> bool {
+        self.expires_at() <= now() + 5
+    }
+
+    fn expires_at(&self) -> u64 {
+        self.inner
+            .as_ref()
+            .map(|rec| rec.expiration.to_unix_timestamp_secs())
+            .unwrap_or_default()
+    }
+
+    fn push_change(&mut self, change: RecordChange) {
+        if self.change_log.len() == 5 {
+            self.change_log.remove(0);
+        }
+
+        self.change_log.push(change);
+    }
+
+    fn set(&mut self, record: Record) {
+        self.inner = Some(record.clone());
+        self.push_change(RecordChange::Set(record));
+    }
+
+    fn del(&mut self) {
+        self.inner = None;
+        self.push_change(RecordChange::Del);
+    }
 }
 
-fn is_almost_now(expiration: RecordExpiration) -> bool {
-    let expires_at = expiration.to_unix_timestamp_secs();
-    let now = OffsetDateTime::now_utc().unix_timestamp() as u64;
-
-    expires_at.abs_diff(now) <= 5
+impl From<Record> for TestRecord {
+    fn from(rec: Record) -> Self {
+        Self {
+            inner: Some(rec.clone()),
+            change_log: vec![RecordChange::Set(rec)],
+        }
+    }
 }
 
-#[derive(Default)]
+enum RecordChange {
+    #[allow(dead_code)]
+    Set(Record),
+    Del,
+}
+
+impl fmt::Debug for RecordChange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Set(rec) => f.debug_tuple("Set").field(&DebugRecord(rec)).finish(),
+            Self::Del => write!(f, "Del"),
+        }
+    }
+}
+
+struct DebugRecord<'a>(&'a Record);
+
+impl<'a> fmt::Debug for DebugRecord<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Record")
+            .field(self.0.value.last().unwrap())
+            .field(&self.0.expiration.to_unix_timestamp_secs())
+            .field(&(self.0.version.to_unix_timestamp_micros() / 1_000_000))
+            .finish()
+    }
+}
+
 struct KvStorage {
-    entries: HashMap<u32, RwLock<Option<Record>>>,
+    entries: HashMap<u32, RwLock<TestRecord>>,
 }
 
 impl KvStorage {
-    async fn get_random_entry(&self) -> (u32, RwLockReadGuard<'_, Option<Record>>) {
+    fn new() -> Self {
+        Self {
+            entries: (0..KV_KEYS)
+                .map(|key| (key, RwLock::new(TestRecord::default())))
+                .collect(),
+        }
+    }
+
+    async fn get_random_entry(&self) -> (u32, RwLockReadGuard<'_, TestRecord>) {
         let key = rand::random_range(0..KV_KEYS);
         (key, self.entries.get(&key).unwrap().read().await)
     }
 
-    async fn get_random_entry_mut(&self) -> (u32, RwLockWriteGuard<'_, Option<Record>>) {
+    async fn get_random_entry_mut(&self) -> (u32, RwLockWriteGuard<'_, TestRecord>) {
         let key = rand::random_range(0..KV_KEYS);
         (key, self.entries.get(&key).unwrap().write().await)
     }
 }
 
-#[derive(Default)]
 struct MapStorage {
     entries: HashMap<u32, RwLock<Map>>,
 }
 
 impl MapStorage {
+    fn new() -> Self {
+        Self {
+            entries: (0..MAP_KEYS)
+                .map(|key| (key, RwLock::new(Map::new())))
+                .collect(),
+        }
+    }
+
     async fn get_random_map(&self) -> (u32, RwLockReadGuard<'_, Map>) {
         let key = rand::random_range(0..MAP_KEYS);
         (key, self.entries.get(&key).unwrap().read().await)
@@ -650,18 +803,26 @@ impl MapStorage {
 
 #[derive(Debug)]
 struct Map {
-    entries: BTreeMap<u8, Record>,
+    entries: BTreeMap<u8, TestRecord>,
 }
 
 impl Map {
-    fn get_random_entry(&self) -> (u8, Option<&Record>) {
-        let field = rand::random();
-        (field, self.entries.get(&field))
+    fn new() -> Self {
+        Self {
+            entries: (0..=u8::MAX)
+                .map(|field| (field, TestRecord::default()))
+                .collect(),
+        }
     }
 
-    fn get_random_entry_mut(&mut self) -> (u8, Option<&mut Record>) {
+    fn get_random_entry(&self) -> (u8, &TestRecord) {
         let field = rand::random();
-        (field, self.entries.get_mut(&field))
+        (field, self.entries.get(&field).unwrap())
+    }
+
+    fn get_random_entry_mut(&mut self) -> (u8, &mut TestRecord) {
+        let field = rand::random();
+        (field, self.entries.get_mut(&field).unwrap())
     }
 
     fn expected_count(&self) -> RangeInclusive<u64> {
@@ -670,12 +831,15 @@ impl Map {
             .fold(
                 (0u64, 0u64),
                 |(mut count, mut uncertain_count), (_, rec)| {
-                    if !is_expired(rec) {
-                        count += 1;
-                    }
+                    if let Some(rec) = &rec.inner {
+                        let now = now();
+                        let expires_at = rec.expiration.to_unix_timestamp_secs();
 
-                    if is_almost_now(rec.expiration) {
-                        uncertain_count += 1;
+                        if expires_at > now + 5 {
+                            count += 1
+                        } else if now.abs_diff(expires_at) <= 5 {
+                            uncertain_count += 1
+                        }
                     }
 
                     (count, uncertain_count)
@@ -698,8 +862,13 @@ fn expand_field(field: u8) -> Vec<u8> {
     std::iter::repeat_n(field, FIELD_SIZE).collect()
 }
 
-fn expand_value(value: u8) -> Vec<u8> {
-    std::iter::repeat_n(value, VALUE_SIZE).collect()
+fn expand_value(ns: u8, key: u32, field: u8, value: u8) -> Vec<u8> {
+    iter::once(ns)
+        .chain(key.to_be_bytes().into_iter())
+        .chain(iter::once(field))
+        .chain(iter::repeat(value))
+        .take(VALUE_SIZE)
+        .collect()
 }
 
 fn shrink_field(mut field: Vec<u8>) -> Vec<u8> {
@@ -716,11 +885,13 @@ fn shrink_field(mut field: Vec<u8>) -> Vec<u8> {
 fn shrink_value(mut value: Vec<u8>) -> Vec<u8> {
     assert_eq!(value.len(), VALUE_SIZE);
 
-    for &byte in &value {
-        assert_eq!(byte, value[0])
+    let last = *value.last().unwrap();
+
+    for &byte in value.iter().skip(6) {
+        assert_eq!(byte, last)
     }
 
-    value.truncate(1);
+    value.truncate(7);
     value
 }
 
@@ -743,21 +914,27 @@ fn shrink_record(mut record: Record) -> Record {
     record
 }
 
-fn assert_record(operation: &'static str, expected: Option<&Record>, got: Option<&Record>) {
+fn assert_record(
+    operation: &'static str,
+    key: u32,
+    field: Option<u8>,
+    expected: &TestRecord,
+    got: Option<&Record>,
+) {
     let got = got.as_ref();
 
-    let fail = || panic!("Expected: {expected:?}, got: {got:?} ({operation})");
+    let fail = || panic!("{key}:{field:?} | Expected: {expected:?}, got: {got:?} ({operation})");
 
-    let (expected, got) = match (expected, got) {
+    let (expected, got) = match (&expected.inner, got) {
         (Some(a), Some(b)) => (a, b),
-        (Some(expected), None) if is_expired_or_about_to_expire(expected) => {
+        (Some(_), None) if expected.maybe_expired() => {
             return;
         }
         (None, None) => return,
         _ => fail(),
     };
 
-    let values_eq = expected.value == got.value;
+    let values_eq = expected.value[0] == got.value[0];
     let expirations_eq = expected
         .expiration
         .to_unix_timestamp_secs()
@@ -769,12 +946,12 @@ fn assert_record(operation: &'static str, expected: Option<&Record>, got: Option
     }
 }
 
-fn assert_exp(operation: &'static str, expected: Option<&Record>, got: Option<Duration>) {
+fn assert_exp(operation: &'static str, expected: &TestRecord, got: Option<Duration>) {
     let fail = || panic!("Expected: {expected:?}, got: {got:?} ({operation})");
 
-    let (expected, got) = match (expected, got) {
+    let (expected, got) = match (&expected.inner, got) {
         (Some(a), Some(b)) => (a, b),
-        (Some(expected), None) if is_expired_or_about_to_expire(expected) => {
+        (Some(_), None) if expected.maybe_expired() => {
             return;
         }
         (None, None) => return,
@@ -783,5 +960,48 @@ fn assert_exp(operation: &'static str, expected: Option<&Record>, got: Option<Du
 
     if Duration::from(expected.expiration).abs_diff(got) > Duration::from_secs(5) {
         fail();
+    }
+}
+
+fn now() -> u64 {
+    OffsetDateTime::now_utc().unix_timestamp() as u64
+}
+
+struct HScanTestCaseGuard<'a> {
+    count: u32,
+    cursor: Option<u8>,
+    map: &'a Map,
+    page: &'a MapPage,
+
+    disarmed: bool,
+}
+
+impl<'a> Drop for HScanTestCaseGuard<'a> {
+    fn drop(&mut self) {
+        if self.disarmed {
+            return;
+        }
+
+        dbg!(
+            self.count,
+            self.cursor,
+            self.page.entries.len(),
+            self.page.has_next,
+            now()
+        );
+
+        let mut rows: [(&TestRecord, Option<&Record>); 256] =
+            array::from_fn(|idx| (self.map.entries.get(&(idx as u8)).unwrap(), None));
+
+        for entry in &self.page.entries {
+            rows[entry.field[0] as usize].1 = Some(&entry.record);
+        }
+
+        for (idx, row) in rows.iter().enumerate() {
+            let expected = row.0.inner.as_ref().map(DebugRecord);
+            let got = row.1.map(DebugRecord);
+
+            eprintln!("{idx} | {expected:?} | {got:?} | {:?}", &row.0.change_log);
+        }
     }
 }

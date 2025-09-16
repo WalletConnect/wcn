@@ -1,4 +1,5 @@
 use {
+    crate::load_simulator::LoadSimulator,
     alloy::{
         node_bindings::{Anvil, AnvilInstance},
         signers::local::PrivateKeySigner,
@@ -11,6 +12,7 @@ use {
     std::{
         collections::HashSet,
         net::{Ipv4Addr, SocketAddrV4, TcpListener},
+        pin::pin,
         thread,
         time::Duration,
     },
@@ -141,9 +143,22 @@ impl TestCluster {
         let client = operator.clients[0].inner.clone().unwrap();
         let namespaces = [operator.namespace(0), operator.namespace(1)];
 
-        (load_simulator::run(client, &namespaces), f(self))
-            .race()
-            .await
+        let mut simulator = LoadSimulator::new(client, &namespaces);
+
+        simulator.populate_namespaces().await;
+
+        let shutdown = ShutdownSignal::new();
+        let mut simulator_fut = pin!(simulator.run(shutdown.clone()));
+
+        (&mut simulator_fut, f(self)).race().await;
+
+        shutdown.emit();
+
+        // NOTE: Make sure that all operations have finished. Otherwise there will be
+        // subtle inconsistencies.
+        simulator_fut.await;
+
+        simulator.validate_namespaces().await;
     }
 
     pub async fn shutdown_one_node_per_node_operator(&mut self) {

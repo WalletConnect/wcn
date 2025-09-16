@@ -23,8 +23,6 @@ async fn test_suite() {
 
     cluster
         .under_load(async |cluster| {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-
             cluster.shutdown_one_node_per_node_operator().await;
 
             cluster.redeploy_all_offline_nodes().await;
