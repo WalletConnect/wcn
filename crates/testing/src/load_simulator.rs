@@ -220,7 +220,7 @@ impl Namespace {
     async fn execute_random_kv_write(&self) {
         match rand::random_range(0..2) {
             0 => self.execute_random_set().await,
-            // TODO: Still causes inconsistencies during migrations
+            // TODO: Fix
             // 1 => self.execute_random_set_exp().await,
             1 => self.execute_random_del().await,
             _ => unreachable!(),
@@ -230,6 +230,7 @@ impl Namespace {
     async fn execute_random_map_write(&self) {
         match rand::random_range(0..2) {
             0 => self.execute_random_hset().await,
+            // TODO: Fix
             // 1 => self.execute_random_hset_exp().await,
             1 => self.execute_random_hdel().await,
             _ => unreachable!(),
@@ -265,20 +266,16 @@ impl Namespace {
 
     #[allow(dead_code)]
     async fn execute_random_set_exp(&self) {
-        // let (key, mut record) = self.kv_storage.get_random_entry_mut().await;
+        let (key, mut record) = self.kv_storage.get_random_entry_mut().await;
 
-        // if let Some(rec) = &record.inner
-        //     && is_expired_or_about_to_expire(&record)
-        // {
-        //     return;
-        // }
+        if !record.definetely_exists() {
+            return;
+        }
 
-        // let new_exp = random_record_expiration();
-        // self.set_exp(key, new_exp).await;
+        let new_exp = random_record_expiration();
+        self.set_exp(key, new_exp).await;
 
-        // if let Some(rec) = record.as_mut() {
-        //     rec.expiration = new_exp;
-        // }
+        record.set_exp(new_exp);
     }
 
     async fn execute_random_del(&self) {
@@ -325,21 +322,17 @@ impl Namespace {
 
     #[allow(dead_code)]
     async fn execute_random_hset_exp(&self) {
-        // let (key, mut map) = self.map_storage.get_random_map_mut().await;
-        // let (field, record) = map.get_random_entry_mut();
+        let (key, mut map) = self.map_storage.get_random_map_mut().await;
+        let (field, record) = map.get_random_entry_mut();
 
-        // if let Some(rec) = &record
-        //     && is_expired_or_about_to_expire(rec)
-        // {
-        //     return;
-        // }
+        if !record.definetely_exists() {
+            return;
+        }
 
-        // let new_exp = random_record_expiration();
-        // self.hset_exp(key, field, new_exp).await;
+        let new_exp = random_record_expiration();
+        self.hset_exp(key, field, new_exp).await;
 
-        // if let Some(rec) = record {
-        //     rec.expiration = new_exp;
-        // }
+        record.set_exp(new_exp);
     }
 
     async fn execute_random_hdel(&self) {
@@ -707,6 +700,11 @@ impl TestRecord {
         self.push_change(RecordChange::Set(record));
     }
 
+    fn set_exp(&mut self, expiration: RecordExpiration) {
+        self.inner.as_mut().unwrap().expiration = expiration;
+        self.push_change(RecordChange::SetExp(expiration));
+    }
+
     fn del(&mut self) {
         self.inner = None;
         self.push_change(RecordChange::Del);
@@ -722,9 +720,10 @@ impl From<Record> for TestRecord {
     }
 }
 
+#[allow(dead_code)]
 enum RecordChange {
-    #[allow(dead_code)]
     Set(Record),
+    SetExp(RecordExpiration),
     Del,
 }
 
@@ -732,6 +731,10 @@ impl fmt::Debug for RecordChange {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Set(rec) => f.debug_tuple("Set").field(&DebugRecord(rec)).finish(),
+            Self::SetExp(exp) => f
+                .debug_tuple("SetExp")
+                .field(&exp.to_unix_timestamp_secs())
+                .finish(),
             Self::Del => write!(f, "Del"),
         }
     }

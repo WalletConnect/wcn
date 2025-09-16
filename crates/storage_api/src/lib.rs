@@ -474,6 +474,17 @@ impl Error {
     pub fn kind(&self) -> ErrorKind {
         self.kind
     }
+
+    /// Indicates whether this [`Error`] is transient and can be retried.
+    pub fn is_transient(&self) -> bool {
+        match self.kind {
+            ErrorKind::Unauthorized | ErrorKind::Unknown => false,
+            ErrorKind::KeyspaceVersionMismatch
+            | ErrorKind::Timeout
+            | ErrorKind::Internal
+            | ErrorKind::Transport => true,
+        }
+    }
 }
 
 impl From<ErrorKind> for Error {

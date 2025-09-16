@@ -1,7 +1,6 @@
 use {
     crate::{
         Config,
-        CoordinatorErrorKind,
         EncryptionKey,
         Error,
         OperationName,
@@ -123,13 +122,7 @@ where
                     Ok(data) => return Ok(data),
 
                     Err(err) => match err {
-                        Error::CoordinatorApi(err)
-                            if err.kind() == CoordinatorErrorKind::Timeout
-                                || err.kind() == CoordinatorErrorKind::Transport =>
-                        {
-                            attempt += 1
-                        }
-
+                        Error::CoordinatorApi(err) if err.is_transient() => attempt += 1,
                         err => return Err(err),
                     },
                 }
