@@ -65,7 +65,7 @@ impl<S> wcn_rpc::Api for ClusterApi<S>
 where
     S: Clone + Send + Sync + 'static,
 {
-    const NAME: ApiName = ApiName::new("Cluster");
+    const NAME: ApiName = ApiName::new("Cluster2");
     type RpcId = Id;
 
     fn rpc_timeout(&self, rpc_id: Id) -> Option<Duration> {
