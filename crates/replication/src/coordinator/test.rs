@@ -85,9 +85,11 @@ impl Context {
         let cluster = Cluster::deploy(
             cfg.clone(),
             &cfg.smart_contract_registry
-                .deployer(smart_contract::testing::signer(42)),
+                .deployer(smart_contract::testing::account_address(42)),
             wcn_cluster::Settings {
                 max_node_operator_data_bytes: 1024,
+                event_propagation_latency: Duration::from_secs(3),
+                clock_skew: Duration::from_secs(1),
             },
             (0..8)
                 .map(|idx| {
@@ -166,11 +168,23 @@ impl Context {
             .await
             .unwrap();
 
-        // wait for the cluster view to be updated in the background
-        // (including keyspace re-calculation)
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        self.wait_migration().await;
 
         self.cluster_view = self.coordinator.cluster.view();
+    }
+
+    async fn wait_migration(&self) {
+        tokio::time::timeout(Duration::from_millis(500), async {
+            loop {
+                if self.coordinator.cluster.view().migration().is_some() {
+                    return;
+                }
+
+                tokio::time::sleep(Duration::from_millis(100)).await
+            }
+        })
+        .await
+        .unwrap()
     }
 }
 
@@ -439,9 +453,44 @@ async fn tolerates_up_to_2_inconsistent_responses() {
 }
 
 #[tokio::test]
-async fn replicates_to_both_replica_sets_during_migrations() {
+async fn does_not_replicate_to_secondary_replica_set_immediately_after_migration_start() {
     let mut ctx = Context::new().await;
     ctx.replace_all_operators().await;
+
+    assert_eq!(ctx.coordinator.cluster.view().keyspace_version(), 0);
+
+    let set = set_test_case("a", "1");
+
+    let resp = ctx.conn.execute_ref(&set.operation).await;
+    assert_eq!(resp, set.expected_response);
+
+    let resp = ctx.conn.execute_ref(&set.validate.operation).await;
+    assert_eq!(&resp, &set.validate.expected_response);
+
+    let replica_set = ctx.primary_replica_set("a");
+    for operator in ctx.cluster_view.node_operators().slots().iter().flatten() {
+        let resp = ctx
+            .storage(operator.id)
+            .execute_ref(&set.validate.operation)
+            .await;
+
+        if replica_set.iter().any(|op| op.id == operator.id) {
+            assert_eq!(&resp, &set.validate.expected_response);
+        } else {
+            assert_eq!(resp, Ok(operation::Output::Record(None)));
+        }
+    }
+}
+
+#[tokio::test]
+async fn replicates_to_both_replica_sets_during_migrations_after_event_propagation_delay() {
+    let mut ctx = Context::new().await;
+    ctx.replace_all_operators().await;
+
+    let settings = *ctx.coordinator.cluster.view().settings();
+    tokio::time::sleep(settings.event_propagation_latency).await;
+
+    assert_eq!(ctx.coordinator.cluster.view().keyspace_version(), 1);
 
     let set = set_test_case("a", "1");
 
@@ -476,6 +525,9 @@ async fn tolerates_up_to_2_broken_replicas_in_each_replica_set() {
 
     let mut ctx = Context::new().await;
     ctx.replace_all_operators().await;
+
+    let settings = *ctx.coordinator.cluster.view().settings();
+    tokio::time::sleep(settings.event_propagation_latency).await;
 
     let primary_replica_set = ctx.primary_replica_set("a");
     ctx.storage(primary_replica_set[0].id).break_();

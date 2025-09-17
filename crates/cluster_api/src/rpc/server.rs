@@ -1,6 +1,6 @@
 use {
     super::{ClusterApi, Error, GetEventStreamItem},
-    crate::rpc::{GetAddress, GetClusterView, GetEventStream, Id as RpcId, MessageWrapper},
+    crate::rpc::{GetClusterView, GetEventStream, Id as RpcId, MessageWrapper},
     futures::{FutureExt as _, SinkExt as _, StreamExt as _},
     futures_concurrency::future::Race as _,
     tap::Pipe as _,
@@ -24,7 +24,6 @@ where
 
         conn.handle(|rpc| async move {
             match rpc.id() {
-                RpcId::GetAddress => rpc.handle_request::<GetAddress>(Self::get_address).await,
                 RpcId::GetClusterView => {
                     rpc.handle_request::<GetClusterView>(Self::get_cluster_view)
                         .await
@@ -39,13 +38,6 @@ where
 impl<S: smart_contract::Read> ClusterApi<S> {
     fn smart_contract(&self) -> &S {
         &self.state
-    }
-
-    async fn get_address(self, _: Request<GetAddress>) -> Response<GetAddress> {
-        self.smart_contract()
-            .address()
-            .map(MessageWrapper)
-            .map_err(Error::internal)
     }
 
     async fn get_cluster_view(self, _: Request<GetClusterView>) -> Response<GetClusterView> {

@@ -20,7 +20,7 @@ use {
         error::Error as StdError,
         future::Future,
         io,
-        net::IpAddr,
+        net::{IpAddr, UdpSocket},
         pin::{pin, Pin},
         sync::Arc,
         task::{self, ready, Poll},
@@ -70,13 +70,13 @@ pub trait Api: super::Api {
 }
 
 /// RPC server config.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Config {
     /// Name of the server. For metrics purposes only.
     pub name: &'static str,
 
-    /// [`Multiaddr`] to bind the server to.
-    pub port: u16,
+    /// [`Socket`] to bind the server to.
+    pub socket: Socket,
 
     /// [`identity::Keypair`] of the server.
     pub keypair: libp2p_identity::Keypair,
@@ -100,11 +100,42 @@ pub struct Config {
     /// gets timed out.
     pub max_idle_connection_timeout: Duration,
 
-    /// [`transport::Priority`] of the server.
-    pub priority: transport::Priority,
-
     /// [`ShutdownSignal`] to use.
     pub shutdown_signal: ShutdownSignal,
+}
+
+/// Network socket to bind the [`Server`] to.
+#[derive(Debug)]
+pub struct Socket {
+    inner: UdpSocket,
+}
+
+impl Socket {
+    /// Creates a new [`Socket`] with [`transport::Priority::High`].
+    pub fn new_high_priority(port: u16) -> io::Result<Self> {
+        Self::new(port, transport::Priority::High)
+    }
+
+    /// Creates a new [`Socket`] with [`transport::Priority::Low`].
+    pub fn new_low_priority(port: u16) -> io::Result<Self> {
+        Self::new(port, transport::Priority::Low)
+    }
+
+    /// Creates a new [`Socket`].
+    pub fn new(port: u16, priority: transport::Priority) -> io::Result<Self> {
+        let inner = quic::new_udp_socket(([0, 0, 0, 0], port).into(), priority)?;
+        Ok(Self { inner })
+    }
+
+    /// Returns port of this [`Socket`].
+    pub fn port(&self) -> io::Result<u16> {
+        Ok(self.inner.local_addr()?.port())
+    }
+
+    /// Creates a new independently owned handle to the underlying socket.
+    pub fn try_clone(&self) -> io::Result<Self> {
+        self.inner.try_clone().map(|inner| Self { inner })
+    }
 }
 
 /// Creates a new RPC [`Api`] server.
@@ -138,12 +169,13 @@ where
         server_config.transport = transport_config.clone();
         server_config.migration(false);
 
+        let port = cfg.socket.port().map_err(Error::io)?;
+
         let endpoint = quic::new_quinn_endpoint(
-            ([0, 0, 0, 0], cfg.port).into(),
+            cfg.socket.try_clone().map_err(Error::io)?.inner,
             &cfg.keypair,
             transport_config,
             Some(server_config),
-            cfg.priority,
         )
         .map_err(Error::new)?;
 
@@ -156,10 +188,13 @@ where
 
         let rpc_semaphore = Arc::new(Semaphore::new(cfg.max_concurrent_rpcs as usize));
 
-        tracing::info!(port = cfg.port, server_name = cfg.name, "Serving");
+        tracing::info!(port, server_name = cfg.name, "Serving");
+
+        let shutdown_signal = cfg.shutdown_signal.clone();
+        let server_name = cfg.name;
 
         let accept_conn_fut = accept_connections(
-            cfg.clone(),
+            cfg,
             endpoint.clone(),
             connection_filter,
             rpc_semaphore,
@@ -167,13 +202,13 @@ where
         );
 
         Ok(async move {
-            (accept_conn_fut, cfg.shutdown_signal.wait()).race().await;
+            (accept_conn_fut, shutdown_signal.wait()).race().await;
 
-            tracing::info!(port = cfg.port, server_name = cfg.name, "Shutting down");
+            tracing::info!(port, server_name, "Shutting down");
 
             endpoint.wait_idle().await;
 
-            tracing::info!(port = cfg.port, server_name = cfg.name, "Shut down");
+            tracing::info!(port, server_name, "Shut down");
         })
     }
 }
@@ -330,6 +365,8 @@ async fn accept_connections<R: sealed::ConnectionRouter>(
             }
         };
     }
+
+    tracing::warn!("quinn::Endpoint closed")
 }
 
 fn accept_connection<R: sealed::ConnectionRouter>(

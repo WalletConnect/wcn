@@ -1,7 +1,6 @@
 use {
     crate::{
         Config,
-        CoordinatorErrorKind,
         EncryptionKey,
         Error,
         OperationName,
@@ -109,6 +108,33 @@ where
     }
 
     pub async fn execute(&self, op: op::Operation<'_>) -> Result<op::Output, Error> {
+        let op = if let Some(key) = &self.encryption_key {
+            op.encrypt(key)?
+        } else {
+            op
+        };
+
+        if self.max_attempts > 1 {
+            let mut attempt = 0;
+
+            while attempt < self.max_attempts {
+                match self.execute_internal(&op).await {
+                    Ok(data) => return Ok(data),
+
+                    Err(err) => match err {
+                        Error::CoordinatorApi(err) if err.is_transient() => attempt += 1,
+                        err => return Err(err),
+                    },
+                }
+            }
+
+            Err(Error::RetriesExhausted)
+        } else {
+            self.execute_internal(&op).await
+        }
+    }
+
+    async fn execute_internal(&self, op: &op::Operation<'_>) -> Result<op::Output, Error> {
         let (conn, node_data) = self.find_next_node();
 
         let is_connected = conn
@@ -124,44 +150,6 @@ where
             return Err(Error::NoAvailableNodes);
         }
 
-        let op = if let Some(key) = &self.encryption_key {
-            op.encrypt(key)?
-        } else {
-            op
-        };
-
-        if self.max_attempts > 1 {
-            let mut attempt = 0;
-
-            while attempt < self.max_attempts {
-                match self.execute_internal(&conn, &op, &node_data).await {
-                    Ok(data) => return Ok(data),
-
-                    Err(err) => match err {
-                        Error::CoordinatorApi(err)
-                            if err.kind() == CoordinatorErrorKind::Timeout
-                                || err.kind() == CoordinatorErrorKind::Transport =>
-                        {
-                            attempt += 1
-                        }
-
-                        err => return Err(err),
-                    },
-                }
-            }
-
-            Err(Error::RetriesExhausted)
-        } else {
-            self.execute_internal(&conn, &op, &node_data).await
-        }
-    }
-
-    async fn execute_internal(
-        &self,
-        conn: &CoordinatorConnection,
-        op: &op::Operation<'_>,
-        node_data: &T::NodeData,
-    ) -> Result<op::Output, Error> {
         let start_time = Instant::now();
 
         let result = async {
@@ -176,7 +164,7 @@ where
         .await;
 
         self.observer
-            .observe(node_data, start_time.elapsed(), op_name(op), &result);
+            .observe(&node_data, start_time.elapsed(), op_name(op), &result);
 
         result
     }

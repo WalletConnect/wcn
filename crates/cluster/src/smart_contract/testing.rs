@@ -1,38 +1,16 @@
 use {
-    super::{
-        evm,
-        AccountAddress,
-        Address,
-        ClusterView,
-        ConnectionError,
-        DeploymentError,
-        ReadError,
-        ReadResult,
-        Signer,
-        WriteError,
-        WriteResult,
-    },
-    crate::{
-        keyspace,
-        maintenance,
-        migration,
-        node_operator,
-        settings,
-        EncryptionKey,
-        Event,
-        Keyspace,
-        Node,
-        Ownership,
-        Settings,
-        View,
-    },
+    super::*,
+    crate::{self as cluster, migration, node_operator, EncryptionKey, Node, View},
     derive_more::derive::AsRef,
     futures::{Stream, TryStreamExt as _},
+    itertools::Itertools,
     std::{
-        collections::HashMap,
+        array,
+        collections::{HashMap, HashSet},
         sync::{Arc, Mutex, MutexGuard},
     },
     tap::Pipe as _,
+    time::OffsetDateTime,
     tokio::sync::broadcast,
     tokio_stream::wrappers::BroadcastStream,
 };
@@ -49,14 +27,14 @@ struct RegistryInner {
 }
 
 impl FakeRegistry {
-    pub fn deployer(&self, signer: Signer) -> Deployer {
+    pub fn deployer(&self, signer: AccountAddress) -> Deployer {
         Deployer {
             signer,
             registry: self.clone(),
         }
     }
 
-    pub fn connector(&self, signer: Signer) -> Connector {
+    pub fn connector(&self, signer: AccountAddress) -> Connector {
         Connector {
             signer,
             registry: self.clone(),
@@ -69,7 +47,7 @@ impl FakeRegistry {
 }
 
 pub struct Deployer {
-    signer: Signer,
+    signer: AccountAddress,
     registry: FakeRegistry,
 }
 
@@ -77,45 +55,44 @@ impl super::Deployer<FakeSmartContract> for Deployer {
     async fn deploy(
         &self,
         initial_settings: Settings,
-        initial_operators: Vec<node_operator::Serialized>,
+        initial_operators: Vec<NodeOperator>,
     ) -> Result<FakeSmartContract, DeploymentError> {
-        let operator_indexes = (0..initial_operators.len()).map(|idx| idx as u8).collect();
+        let operator_indexes: HashSet<_> =
+            (0..initial_operators.len()).map(|idx| idx as u8).collect();
 
-        let keyspace = Keyspace::new(
-            operator_indexes,
-            keyspace::ReplicationStrategy::UniformDistribution,
-            0,
-        )
-        .map_err(|err| DeploymentError(err.to_string()))?;
+        let primary_keyspace = Keyspace {
+            operators: operator_indexes,
+            replication_strategy: 0,
+        };
 
-        let node_operators = initial_operators
-            .clone()
-            .into_iter()
-            .map(|op| (op.id, op))
-            .collect();
-
-        let view = ClusterView {
+        let sc_view = ClusterView {
+            owner: self.signer,
+            settings: initial_settings.clone(),
             node_operators: initial_operators.into_iter().map(Some).collect(),
-            ownership: Ownership::new(self.signer.address),
-            settings: initial_settings,
-            keyspace,
-            migration: None,
-            maintenance: None,
+            keyspaces: [primary_keyspace, Keyspace::default()],
+            keyspace_version: 0,
+            migration: Migration {
+                id: 0,
+                pulling_operators: HashSet::default(),
+                started_at: 0,
+                aborted_at: None,
+            },
+            maintenance: Maintenance { slot: None },
             cluster_version: 0,
         };
 
-        let view = View::from_sc(&Config::dummy(), view)
+        let view = View::try_from_sc(sc_view.clone(), &Config::dummy())
             .await
             .map_err(|err| DeploymentError(err.to_string()))?;
 
         let mut registry = self.registry.inner();
         registry.next_contract_id += 1;
 
-        let contract_address = Address(evm::Address::repeat_byte(registry.next_contract_id));
+        let contract_address = AccountAddress(array::from_fn(|_| registry.next_contract_id));
 
         let contract = Arc::new(Mutex::new(Inner {
             address: contract_address,
-            node_operators,
+            sc_view,
             view,
             next_migration_id: 1,
             events: broadcast::channel(100).0,
@@ -126,14 +103,14 @@ impl super::Deployer<FakeSmartContract> for Deployer {
             .insert(contract_address, contract.clone());
 
         Ok(FakeSmartContract {
-            signer: self.signer.clone(),
+            signer: self.signer,
             inner: contract,
         })
     }
 }
 
 pub struct Connector {
-    signer: Signer,
+    signer: AccountAddress,
     registry: FakeRegistry,
 }
 
@@ -148,7 +125,7 @@ impl super::Connector<FakeSmartContract> for Connector {
             .ok_or(ConnectionError::UnknownContract)?;
 
         Ok(FakeSmartContract {
-            signer: self.signer.clone(),
+            signer: self.signer,
             inner: contract,
         })
     }
@@ -180,11 +157,15 @@ impl crate::Config for Config {
 
 #[derive(Clone)]
 pub struct FakeSmartContract {
-    signer: Signer,
+    signer: AccountAddress,
     inner: Arc<Mutex<Inner>>,
 }
 
 impl FakeSmartContract {
+    pub fn address(&self) -> Address {
+        self.inner.lock().unwrap().address
+    }
+
     fn inner(&self) -> MutexGuard<'_, Inner> {
         self.inner.lock().unwrap()
     }
@@ -212,27 +193,13 @@ impl FakeSmartContract {
 
         Ok(())
     }
-
-    fn insert_node_operator(&self, operator: node_operator::Serialized) {
-        let _ = self
-            .inner
-            .lock()
-            .unwrap()
-            .node_operators
-            .insert(operator.id, operator);
-    }
-
-    fn remove_node_operator(&self, id: node_operator::Id) {
-        let _ = self.inner.lock().unwrap().node_operators.remove(&id);
-    }
 }
 
 struct Inner {
     address: Address,
 
-    node_operators: HashMap<node_operator::Id, node_operator::Serialized>,
-
-    view: View<Config>,
+    sc_view: ClusterView,
+    view: cluster::View<Config>,
 
     next_migration_id: migration::Id,
 
@@ -248,36 +215,58 @@ impl Inner {
 }
 
 impl super::Write for FakeSmartContract {
-    fn signer(&self) -> Option<&Signer> {
+    fn signer(&self) -> Option<&AccountAddress> {
         Some(&self.signer)
     }
 
     async fn start_migration(&self, new_keyspace: Keyspace) -> WriteResult<()> {
-        self.write(|this| migration::Started {
-            migration_id: this.next_migration_id(),
-            new_keyspace,
-            cluster_version: this.view.cluster_version + 1,
+        self.write(|this| {
+            this.sc_view.migration = Migration {
+                id: this.next_migration_id(),
+                pulling_operators: new_keyspace.operators.clone(),
+                started_at: OffsetDateTime::now_utc().unix_timestamp() as u64,
+                aborted_at: None,
+            };
+            this.sc_view.keyspace_version += 1;
+            this.sc_view.keyspaces[this.sc_view.keyspace_version as usize % 2] =
+                new_keyspace.clone();
+            this.sc_view.cluster_version += 1;
+
+            event::MigrationStarted {
+                migration_id: this.sc_view.migration.id,
+                new_keyspace,
+                at: this.sc_view.migration.started_at,
+                cluster_version: this.view.cluster_version + 1,
+            }
         })
         .await
     }
 
     async fn complete_migration(&self, id: migration::Id) -> WriteResult<()> {
         self.write(|this| {
-            let event: Event = if this.view.migration().unwrap().pulling_count() > 1 {
-                migration::DataPullCompleted {
+            let operator_idx = this.view.node_operators().get_idx(&self.signer).unwrap();
+            this.sc_view
+                .migration
+                .pulling_operators
+                .remove(&operator_idx);
+
+            let event: Event = if this.view.migration.pulling_count() > 1 {
+                event::MigrationDataPullCompleted {
                     migration_id: id,
-                    operator_id: self.signer.address,
+                    operator_id: self.signer,
                     cluster_version: this.view.cluster_version + 1,
                 }
                 .into()
             } else {
-                migration::Completed {
+                event::MigrationCompleted {
                     migration_id: id,
-                    operator_id: self.signer.address,
+                    operator_id: self.signer,
                     cluster_version: this.view.cluster_version + 1,
                 }
                 .into()
             };
+
+            this.sc_view.cluster_version += 1;
 
             event
         })
@@ -285,95 +274,128 @@ impl super::Write for FakeSmartContract {
     }
 
     async fn abort_migration(&self, id: migration::Id) -> WriteResult<()> {
-        self.write(|this| migration::Aborted {
-            migration_id: id,
-            cluster_version: this.view.cluster_version + 1,
+        self.write(|this| {
+            this.sc_view.migration.pulling_operators = HashSet::new();
+            this.sc_view.migration.aborted_at =
+                Some(OffsetDateTime::now_utc().unix_timestamp() as u64);
+            this.sc_view.keyspace_version += 1;
+            this.sc_view.cluster_version += 1;
+
+            event::MigrationAborted {
+                migration_id: id,
+                at: this.sc_view.migration.aborted_at.unwrap(),
+                cluster_version: this.view.cluster_version + 1,
+            }
         })
         .await
     }
 
     async fn start_maintenance(&self) -> WriteResult<()> {
-        self.write(|this| maintenance::Started {
-            by: self.signer.address,
-            cluster_version: this.view.cluster_version + 1,
+        self.write(|this| {
+            this.sc_view.maintenance.slot = Some(self.signer);
+            this.sc_view.cluster_version += 1;
+
+            event::MaintenanceStarted {
+                by: self.signer,
+                cluster_version: this.view.cluster_version + 1,
+            }
         })
         .await
     }
 
     async fn finish_maintenance(&self) -> WriteResult<()> {
-        self.write(|this| maintenance::Finished {
-            cluster_version: this.view.cluster_version + 1,
+        self.write(|this| {
+            this.sc_view.maintenance.slot = None;
+            this.sc_view.cluster_version += 1;
+
+            event::MaintenanceFinished {
+                cluster_version: this.view.cluster_version + 1,
+            }
         })
         .await
     }
 
-    async fn add_node_operator(&self, operator: node_operator::Serialized) -> WriteResult<()> {
-        self.insert_node_operator(operator.clone());
+    async fn add_node_operator(&self, operator: NodeOperator) -> WriteResult<()> {
+        self.write(|this| {
+            let operators = &mut this.sc_view.node_operators;
 
-        self.write(|this| node_operator::Added {
-            idx: this.view.node_operators().free_idx().unwrap(),
-            operator,
-            cluster_version: this.view.cluster_version + 1,
+            let idx = if let Some((idx, _)) = operators.iter().find_position(|slot| slot.is_none())
+            {
+                operators[idx] = Some(operator.clone());
+                idx
+            } else {
+                operators.push(Some(operator.clone()));
+                operators.len() - 1
+            };
+
+            this.sc_view.cluster_version += 1;
+
+            event::NodeOperatorAdded {
+                idx: idx as u8,
+                operator,
+                cluster_version: this.view.cluster_version + 1,
+            }
         })
         .await
     }
 
-    async fn update_node_operator(&self, operator: node_operator::Serialized) -> WriteResult<()> {
-        self.insert_node_operator(operator.clone());
+    async fn update_node_operator(&self, operator: NodeOperator) -> WriteResult<()> {
+        self.write(|this| {
+            let operators = &mut this.sc_view.node_operators;
 
-        self.write(|this| node_operator::Added {
-            idx: this.view.node_operators().get_idx(&operator.id).unwrap(),
-            operator,
-            cluster_version: this.view.cluster_version + 1,
+            let (idx, _) = operators
+                .iter()
+                .find_position(|slot| slot.is_none())
+                .unwrap();
+
+            operators[idx] = Some(operator.clone());
+            this.sc_view.cluster_version += 1;
+
+            event::NodeOperatorUpdated {
+                operator,
+                cluster_version: this.view.cluster_version + 1,
+            }
         })
         .await
     }
 
     async fn remove_node_operator(&self, id: node_operator::Id) -> WriteResult<()> {
-        self.remove_node_operator(id);
+        self.write(|this| {
+            let operators = &mut this.sc_view.node_operators;
 
-        self.write(|this| node_operator::Removed {
-            id,
-            cluster_version: this.view.cluster_version + 1,
+            let (idx, _) = operators
+                .iter()
+                .find_position(|slot| slot.is_none())
+                .unwrap();
+
+            operators[idx] = None;
+            this.sc_view.cluster_version += 1;
+
+            event::NodeOperatorRemoved {
+                id,
+                cluster_version: this.view.cluster_version + 1,
+            }
         })
         .await
     }
 
     async fn update_settings(&self, new_settings: Settings) -> WriteResult<()> {
-        self.write(|this| settings::Updated {
-            settings: new_settings,
-            cluster_version: this.view.cluster_version + 1,
+        self.write(|this| {
+            this.sc_view.settings = new_settings.clone();
+            this.sc_view.cluster_version += 1;
+
+            event::SettingsUpdated {
+                settings: new_settings,
+                cluster_version: this.view.cluster_version + 1,
+            }
         })
         .await
     }
 }
 
 impl super::Read for FakeSmartContract {
-    fn address(&self) -> ReadResult<Address> {
-        Ok(self.inner().address)
-    }
-
     async fn cluster_view(&self) -> ReadResult<ClusterView> {
-        let this = self.inner();
-
-        Ok(ClusterView {
-            node_operators: this
-                .view
-                .node_operators
-                .slots()
-                .iter()
-                .map(|slot| {
-                    slot.as_ref()
-                        .map(|op| this.node_operators.get(&op.id).unwrap().clone())
-                })
-                .collect(),
-            ownership: this.view.ownership.clone(),
-            settings: this.view.settings.clone(),
-            keyspace: (*this.view.keyspace).clone(),
-            migration: this.view.migration.clone(),
-            maintenance: this.view.maintenance.clone(),
-            cluster_version: this.view.cluster_version,
-        })
+        Ok(self.inner().sc_view.clone())
     }
 
     async fn events(
@@ -385,13 +407,6 @@ impl super::Read for FakeSmartContract {
     }
 }
 
-pub fn signer(n: u8) -> Signer {
-    let mut buf = [1; 32];
-    buf[31] = n;
-
-    Signer::try_from_private_key(&const_hex::encode(buf)).unwrap()
-}
-
 pub fn account_address(n: u8) -> AccountAddress {
-    signer(n).address
+    AccountAddress(array::from_fn(|_| n))
 }

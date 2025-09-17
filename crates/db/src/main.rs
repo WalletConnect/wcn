@@ -4,7 +4,6 @@ use {
     metrics_exporter_prometheus::PrometheusBuilder,
     std::pin,
     wcn_db::{config, Error},
-    wcn_rpc::server::ShutdownSignal,
 };
 
 #[global_allocator]
@@ -30,21 +29,17 @@ fn main() -> anyhow::Result<()> {
         .unwrap_or_default();
     wc::metrics::gauge!("wcn_db_version").set(version);
 
-    let cfg = config::Config::from_env().context("failed to parse config")?;
+    let cfg = config::Config::from_env(prometheus).context("failed to parse config")?;
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap()
         .block_on(async move {
-            let shutdown_signal = ShutdownSignal::new();
+            let shutdown_signal = cfg.shutdown_signal.clone();
             let mut shutdown_fut = pin::pin!(tokio::signal::ctrl_c().fuse());
 
-            let metrics_srv_fut =
-                wcn_db::metrics::serve(([0, 0, 0, 0], cfg.metrics_server_port).into(), prometheus);
-            let mut metrics_srv_fut = pin::pin!(tokio::spawn(metrics_srv_fut).fuse());
-
-            let db_srv_fut = wcn_db::run(shutdown_signal.clone(), cfg)?;
+            let db_srv_fut = wcn_db::run(cfg)?;
             let mut db_srv_fut = pin::pin!(db_srv_fut.fuse());
 
             loop {
@@ -53,10 +48,6 @@ fn main() -> anyhow::Result<()> {
 
                     _ = &mut shutdown_fut, if !shutdown_fut.is_terminated() => {
                         shutdown_signal.emit();
-                    }
-
-                    _ = &mut metrics_srv_fut, if !metrics_srv_fut.is_terminated() => {
-                        tracing::warn!("metrics server unexpectedly finished");
                     }
 
                     _ = &mut db_srv_fut => {

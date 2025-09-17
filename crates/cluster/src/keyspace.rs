@@ -1,6 +1,7 @@
 use {
     crate::{
         node_operator::{self},
+        smart_contract,
         NodeOperators,
     },
     derive_more::TryFrom,
@@ -29,8 +30,6 @@ pub struct Keyspace<S = ()> {
     shards: S,
 
     replication_strategy: ReplicationStrategy,
-
-    version: u64,
 }
 
 /// All [`Shard`]s within a [`Keyspace`].
@@ -69,10 +68,9 @@ pub type Version = u64;
 
 impl Keyspace {
     /// Creates a new [`Keyspace`].
-    pub fn new(
+    pub(crate) fn new(
         operators: HashSet<node_operator::Idx>,
         replication_strategy: ReplicationStrategy,
-        version: u64,
     ) -> Result<Keyspace, CreationError> {
         if operators.len() < REPLICATION_FACTOR as usize {
             return Err(CreationError::TooFewOperators(operators.len()));
@@ -86,7 +84,6 @@ impl Keyspace {
             operators,
             shards: (),
             replication_strategy,
-            version,
         })
     }
 
@@ -127,11 +124,6 @@ impl<S> Keyspace<S> {
     /// Returns [`ReplicationStrategy`] of this [`Keyspace`].
     pub fn replication_strategy(&self) -> ReplicationStrategy {
         self.replication_strategy
-    }
-
-    /// Returns [`Version`] of this [`Keyspace`].
-    pub fn version(&self) -> Version {
-        self.version
     }
 
     pub(super) fn contains_operator(&self, idx: node_operator::Idx) -> bool {
@@ -219,7 +211,6 @@ impl sealed::Calculate<Shards> for Keyspace {
                 operators: self.operators,
                 shards: Shards(sharding),
                 replication_strategy: ReplicationStrategy::UniformDistribution,
-                version: self.version,
             },
 
             // we checked this in the `Keyspace` constructor
@@ -235,4 +226,35 @@ impl sealed::Calculate<()> for Keyspace {
     async fn calculate_shards(self) -> Keyspace {
         self
     }
+}
+
+impl<S> From<Keyspace<S>> for smart_contract::Keyspace {
+    fn from(keyspace: Keyspace<S>) -> Self {
+        smart_contract::Keyspace {
+            operators: keyspace.operators,
+            replication_strategy: keyspace.replication_strategy as u8,
+        }
+    }
+}
+
+impl TryFrom<smart_contract::Keyspace> for Keyspace {
+    type Error = TryFromSmartContractError;
+
+    fn try_from(keyspace: smart_contract::Keyspace) -> Result<Self, Self::Error> {
+        let replication_strategy = ReplicationStrategy::try_from(keyspace.replication_strategy)
+            .map_err(|_| {
+                TryFromSmartContractError::InvalidReplicationStrategy(keyspace.replication_strategy)
+            })?;
+
+        Self::new(keyspace.operators, replication_strategy).map_err(Into::into)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum TryFromSmartContractError {
+    #[error("Invalid ReplicationStrategy: {0}")]
+    InvalidReplicationStrategy(u8),
+
+    #[error(transparent)]
+    CreationError(#[from] CreationError),
 }

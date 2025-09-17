@@ -1,0 +1,53 @@
+[package]
+name = "wcn_testing"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+# Local
+wcn_client = { workspace = true }
+wcn_cluster = { workspace = true, features = ["testing"] }
+wcn_rpc = { workspace = true }
+wcn_storage_api = { workspace = true }
+wcn_db = { workspace = true }
+wcn_node = { workspace = true }
+
+# Derives
+derive_more = { workspace = true, features = ["as_ref"] }
+
+# General purpose
+tap = { workspace = true }
+time = { workspace = true }
+rand = { workspace = true }
+
+# Collections
+smallvec = { workspace = true }
+
+# Encoding
+const-hex = { workspace = true }
+
+# Async
+futures = { workspace = true }
+futures-concurrency = { workspace = true }
+tokio = { workspace = true }
+
+# O11y
+tracing = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+
+libp2p-identity = { workspace = true, features = ["rand"] }
+alloy = { workspace = true, features = [
+    "provider-anvil-node",
+    "node-bindings",
+] }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true, features = [
+    "env-filter",
+    "parking_lot",
+    "json",
+] }
+
+[lints]
+workspace = true

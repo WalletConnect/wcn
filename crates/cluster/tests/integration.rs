@@ -12,9 +12,7 @@ use {
         node_operator,
         smart_contract::{
             self,
-            evm::{self, RpcProvider},
-            Read,
-            Signer,
+            evm::{self, RpcProvider, Signer},
         },
         testing,
         Cluster,
@@ -62,6 +60,8 @@ async fn test_suite() {
 
     let settings = Settings {
         max_node_operator_data_bytes: 4096,
+        event_propagation_latency: Duration::from_secs(1),
+        clock_skew: Duration::from_millis(100),
     };
 
     // Use Anvil's first key for deployment - convert PrivateKeySigner to our Signer
@@ -100,16 +100,11 @@ async fn test_suite() {
         .unwrap();
 
     for idx in 1..=7 {
-        connect(
-            &cfg,
-            idx + 1,
-            cluster.smart_contract().address().unwrap(),
-            &anvil,
-        )
-        .await
-        .complete_migration(1)
-        .await
-        .unwrap();
+        connect(&cfg, idx + 1, cluster.smart_contract().address(), &anvil)
+            .await
+            .complete_migration(1)
+            .await
+            .unwrap();
     }
 
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -140,6 +135,8 @@ async fn test_suite() {
     cluster
         .update_settings(Settings {
             max_node_operator_data_bytes: 10000,
+            event_propagation_latency: Duration::from_secs(1),
+            clock_skew: Duration::from_millis(100),
         })
         .await
         .unwrap();

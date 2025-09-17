@@ -8,7 +8,7 @@ use {
     std::{
         future::Future,
         io,
-        net::{Ipv4Addr, SocketAddrV4},
+        net::{Ipv4Addr, SocketAddrV4, TcpListener},
         sync::Arc,
         time::Duration,
     },
@@ -31,20 +31,19 @@ use {
 mod metrics;
 
 /// Configuration options of a WCN Node.
-#[derive(Clone)]
 #[derive_where(Debug)]
 pub struct Config {
     /// [`Keypair`] of the node.
     pub keypair: Keypair,
 
-    /// Port of the primary WCN RPC server.
-    pub primary_rpc_server_port: u16,
+    /// Socket to bind the primary WCN RPC server to.
+    pub primary_rpc_server_socket: wcn_rpc::server::Socket,
 
-    /// Port of the secondary WCN RPC server.
-    pub secondary_rpc_server_port: u16,
+    /// Socket to bind the secondary WCN RPC server to.
+    pub secondary_rpc_server_socket: wcn_rpc::server::Socket,
 
-    /// Port of the Prometheus metrics server.
-    pub metrics_server_port: u16,
+    /// Socket to serve the Prometheus metrics server on.
+    pub metrics_server_socket: TcpListener,
 
     /// For how long an inbound connection is allowed to be idle before it
     /// gets timed out.
@@ -76,7 +75,7 @@ pub struct Config {
     ///
     /// Only one node within node operator infrastructure is supposed to have
     /// this set.
-    pub smart_contract_signer: Option<smart_contract::Signer>,
+    pub smart_contract_signer: Option<smart_contract::evm::Signer>,
 
     /// [`EncryptioKey`] used to encrypt/decrypt on-chain data.
     ///
@@ -265,7 +264,7 @@ pub async fn run(config: Config) -> Result<impl Future<Output = ()>> {
 }
 
 async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
-    let app_cfg = config.clone().try_into_app()?;
+    let app_cfg = config.try_into_app()?;
 
     let rpc_provider = if let Some(signer) = config.smart_contract_signer.clone() {
         smart_contract::evm::RpcProvider::new(config.rpc_provider_url.clone(), signer).await
@@ -294,34 +293,6 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         app_cfg.database_low_prio_connection,
     );
 
-    let primary_rpc_server_cfg = wcn_rpc::server::Config {
-        name: "primary",
-        port: config.primary_rpc_server_port,
-        keypair: config.keypair.clone(),
-        connection_timeout: Duration::from_secs(2),
-        max_connections: 500,
-        max_connections_per_ip: 50,
-        max_connection_rate_per_ip: 50,
-        max_concurrent_rpcs: 10000,
-        max_idle_connection_timeout: config.max_idle_connection_timeout,
-        priority: wcn_rpc::transport::Priority::High,
-        shutdown_signal: config.shutdown_signal.clone(),
-    };
-
-    let secondary_rcp_server_cfg = wcn_rpc::server::Config {
-        name: "secondary",
-        port: config.secondary_rpc_server_port,
-        keypair: config.keypair.clone(),
-        connection_timeout: Duration::from_secs(2),
-        max_connections: 100,
-        max_connections_per_ip: 10,
-        max_connection_rate_per_ip: 10,
-        max_concurrent_rpcs: 1000,
-        max_idle_connection_timeout: config.max_idle_connection_timeout,
-        priority: wcn_rpc::transport::Priority::Low,
-        shutdown_signal: config.shutdown_signal.clone(),
-    };
-
     // Set higher RPC timeout as replication tasks are being handled within RPC
     // lifecycle.
     let coordinator_api = config
@@ -334,6 +305,32 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         .cluster_api()
         .with_state(cluster.smart_contract().clone());
 
+    let primary_rpc_server_cfg = wcn_rpc::server::Config {
+        name: "primary",
+        socket: config.primary_rpc_server_socket,
+        keypair: config.keypair.clone(),
+        connection_timeout: Duration::from_secs(2),
+        max_connections: 500,
+        max_connections_per_ip: 50,
+        max_connection_rate_per_ip: 50,
+        max_concurrent_rpcs: 10000,
+        max_idle_connection_timeout: config.max_idle_connection_timeout,
+        shutdown_signal: config.shutdown_signal.clone(),
+    };
+
+    let secondary_rcp_server_cfg = wcn_rpc::server::Config {
+        name: "secondary",
+        socket: config.secondary_rpc_server_socket,
+        keypair: config.keypair.clone(),
+        connection_timeout: Duration::from_secs(2),
+        max_connections: 100,
+        max_connections_per_ip: 50,
+        max_connection_rate_per_ip: 50,
+        max_concurrent_rpcs: 1000,
+        max_idle_connection_timeout: config.max_idle_connection_timeout,
+        shutdown_signal: config.shutdown_signal.clone(),
+    };
+
     let primary_rpc_server_fut = coordinator_api
         .clone()
         .multiplex(replica_api.clone())
@@ -344,7 +341,11 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         .multiplex(replica_api)
         .serve(secondary_rcp_server_cfg)?;
 
-    let metrics_server_fut = metrics::serve(&config).await?;
+    let metrics_server_fut = metrics::serve(
+        config.metrics_server_socket,
+        config.prometheus_handle,
+        config.shutdown_signal.clone(),
+    )?;
 
     let migration_manager_fut = migration_manager
         .map(|manager| manager.run(async move { config.shutdown_signal.wait().await }))

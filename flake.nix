@@ -32,6 +32,7 @@
           clang
           libclang
           gcc13 # jemalloc fails to build on gcc14 (in debug builds)
+          rocksdb
         ];
         rustc = {
           stable = fenixPackages.stable.rustc;

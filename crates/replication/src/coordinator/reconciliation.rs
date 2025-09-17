@@ -10,6 +10,8 @@ pub(super) fn reconcile(
 ) -> Option<operation::Output> {
     use operation::{Borrowed, Owned};
 
+    tracing::debug!(?operation, ?responses);
+
     match operation {
         Operation::Owned(owned) => match owned {
             Owned::HScan(_) => reconcile_map_page(responses).map(Into::into),

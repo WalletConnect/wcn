@@ -10,7 +10,7 @@ use {
         keyspace::{self},
         migration,
         node_operator,
-        smart_contract::{self, testing::FakeSmartContract, Read},
+        smart_contract::{self, testing::FakeSmartContract},
         Cluster,
         EncryptionKey,
     },
@@ -93,9 +93,11 @@ async fn transfers_data_and_writes_to_smart_contract() {
     let cluster = Cluster::deploy(
         cfg.clone(),
         &cfg.smart_contract_registry
-            .deployer(smart_contract::testing::signer(42)),
+            .deployer(smart_contract::testing::account_address(42)),
         cluster::Settings {
             max_node_operator_data_bytes: 1024,
+            event_propagation_latency: Duration::from_secs(1),
+            clock_skew: Duration::from_millis(100),
         },
         (0..8)
             .map(|idx| cluster::testing::node_operator(idx as u8))
@@ -120,7 +122,9 @@ async fn transfers_data_and_writes_to_smart_contract() {
         })
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let settings = *cluster.view().settings();
+    tokio::time::sleep(settings.event_propagation_latency).await;
 
     let cluster_view = cluster.view();
 
@@ -189,8 +193,8 @@ async fn transfers_data_and_writes_to_smart_contract() {
     let new_operator_cluster = Cluster::connect(
         cfg.clone(),
         &cfg.smart_contract_registry
-            .connector(smart_contract::testing::signer(10)),
-        cluster.smart_contract().address().unwrap(),
+            .connector(smart_contract::testing::account_address(10)),
+        cluster.smart_contract().address(),
     )
     .await
     .unwrap();
