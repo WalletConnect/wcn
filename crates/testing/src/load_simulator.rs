@@ -165,7 +165,8 @@ impl Namespace {
 
         let validate_map_fut =
             stream::iter(self.map_storage.entries.iter()).for_each(|(key, map)| async {
-                self.execute_hscan(*key, &*map.read().await).await;
+                self.execute_hscan(*key, &*map.read().await, 300, None)
+                    .await;
                 count.fetch_add(1, atomic::Ordering::Relaxed);
             });
 
@@ -358,13 +359,13 @@ impl Namespace {
 
     async fn execute_random_hscan(&self) {
         let (key, map) = self.map_storage.get_random_map().await;
-        self.execute_hscan(key, &map).await
-    }
 
-    async fn execute_hscan(&self, key: u32, map: &Map) {
         let count = (rand::random::<u8>() as u32) + 1;
         let cursor = rand::random::<bool>().then(rand::random);
+        self.execute_hscan(key, &map, count, cursor).await
+    }
 
+    async fn execute_hscan(&self, key: u32, map: &Map, count: u32, cursor: Option<u8>) {
         let page = self.hscan(key, count, cursor).await;
 
         let mut guard = HScanTestCaseGuard {
