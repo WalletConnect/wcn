@@ -4,7 +4,14 @@ use {
     derive_more::derive::AsRef,
     derive_where::derive_where,
     futures::{Stream, StreamExt as _, TryStreamExt as _, future::Either, stream},
-    std::{marker::PhantomData, sync::Arc, time::Duration},
+    std::{
+        marker::PhantomData,
+        sync::{
+            Arc,
+            atomic::{self, AtomicUsize},
+        },
+        time::Duration,
+    },
     tokio::sync::oneshot,
     wc::future::FutureExt,
     wcn_cluster::{
@@ -22,6 +29,8 @@ use {
     },
     wcn_storage_api::rpc::client::{Coordinator as CoordinatorClient, CoordinatorConnection},
 };
+
+const CONNECTION_TIMEOUT: Duration = Duration::from_millis(1500);
 
 #[derive(Clone)]
 pub struct Node<D> {
@@ -102,12 +111,52 @@ where
 
         let success = conn
             .wait_open()
-            .with_timeout(Duration::from_millis(1500))
+            .with_timeout(CONNECTION_TIMEOUT)
             .await
             .is_ok();
 
         if success {
             return conn;
+        }
+    }
+}
+
+pub(crate) struct FixedNodeList {
+    nodes: Vec<ClusterConnection>,
+    idx: AtomicUsize,
+}
+
+impl FixedNodeList {
+    fn new(client: &ClusterClient, nodes: &[PeerAddr]) -> Result<Self, Error> {
+        if nodes.is_empty() {
+            return Err(Error::NoAvailableNodes);
+        }
+
+        let nodes = nodes
+            .iter()
+            .map(|addr| client.new_connection(addr.addr, &addr.id, ()))
+            .collect();
+
+        Ok(Self {
+            nodes,
+            idx: Default::default(),
+        })
+    }
+
+    async fn next(&self) -> ClusterConnection {
+        loop {
+            let idx = self.idx.fetch_add(1, atomic::Ordering::Relaxed) % self.nodes.len();
+            let conn = self.nodes[idx].clone();
+
+            let success = conn
+                .wait_open()
+                .with_timeout(CONNECTION_TIMEOUT)
+                .await
+                .is_ok();
+
+            if success {
+                return conn;
+            }
         }
     }
 }
@@ -120,9 +169,20 @@ where
 // is that [`wcn_cluster::View`] is also parametrized over this config, and we
 // need them to be compatible.
 #[allow(clippy::large_enum_variant)]
+#[allow(dead_code)]
 pub(crate) enum SmartContract<D: NodeData> {
     Static(ClusterView),
     Dynamic(Arc<ArcSwap<View<D>>>),
+    FixedNodeList(FixedNodeList),
+}
+
+impl<D: NodeData> SmartContract<D> {
+    pub(crate) fn fixed_node_list(
+        client: &ClusterClient,
+        nodes: &[PeerAddr],
+    ) -> Result<Self, Error> {
+        FixedNodeList::new(client, nodes).map(Self::FixedNodeList)
+    }
 }
 
 impl<D: NodeData> Read for SmartContract<D> {
@@ -131,6 +191,13 @@ impl<D: NodeData> Read for SmartContract<D> {
             Self::Static(view) => Ok(view.clone()),
 
             Self::Dynamic(cluster) => select_open_connection(cluster)
+                .await
+                .cluster_view()
+                .await
+                .map_err(transport_err),
+
+            Self::FixedNodeList(nodes) => nodes
+                .next()
                 .await
                 .cluster_view()
                 .await
@@ -144,6 +211,18 @@ impl<D: NodeData> Read for SmartContract<D> {
 
             Self::Dynamic(cluster) => {
                 let stream = select_open_connection(cluster)
+                    .await
+                    .events()
+                    .await
+                    .map_err(transport_err)?
+                    .map_err(transport_err);
+
+                Ok(Either::Right(stream))
+            }
+
+            Self::FixedNodeList(nodes) => {
+                let stream = nodes
+                    .next()
                     .await
                     .events()
                     .await

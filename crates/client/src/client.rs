@@ -80,15 +80,16 @@ where
 
         let cluster_cfg = cluster::Config::new(
             config.cluster_key,
-            cluster_api_client,
+            cluster_api_client.clone(),
             coordinator_api_client,
         );
 
         let bootstrap_sc = cluster::SmartContract::Static(initial_cluster_view);
         let bootstrap_cluster = cluster::Cluster::new(cluster_cfg.clone(), bootstrap_sc).await?;
         let cluster_view = Arc::new(ArcSwap::new(bootstrap_cluster.view()));
-        let dynamic_sc = cluster::SmartContract::Dynamic(cluster_view.clone());
-        let cluster = cluster::Cluster::new(cluster_cfg, dynamic_sc).await?;
+        let cluster_sc =
+            cluster::SmartContract::fixed_node_list(&cluster_api_client, &config.nodes)?;
+        let cluster = cluster::Cluster::new(cluster_cfg, cluster_sc).await?;
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         tokio::spawn(cluster::update_task(
