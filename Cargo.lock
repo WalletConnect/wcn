@@ -5925,7 +5925,6 @@ dependencies = [
  "derive_more",
  "futures",
  "futures-concurrency",
- "itertools 0.14.0",
  "libp2p-identity",
  "smallvec",
  "tap",

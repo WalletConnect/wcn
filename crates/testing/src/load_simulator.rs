@@ -351,7 +351,7 @@ impl Namespace {
 
         record.del(version);
 
-        self.execute_hget(key, field, &record).await;
+        self.execute_hget(key, field, record).await;
     }
 
     async fn execute_random_hcard(&self) {
@@ -398,15 +398,6 @@ impl Namespace {
                 return;
             }
         };
-
-        // let got_count = page.entries.len() as u32;
-
-        // if page.has_next {
-        //     assert_eq!(
-        //         count, got_count,
-        //         "has_next is present, but counts do not match"
-        //     )
-        // }
 
         let mut got_iter = page.entries.iter().peekable();
         let mut expected_iter = map
@@ -754,31 +745,6 @@ enum RecordChange {
     SetExp(RecordExpiration),
     Del(RecordVersion),
 }
-
-// impl fmt::Debug for RecordChange {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Self::Set(rec) =>
-// f.debug_tuple("Set").field(&DebugRecord(rec)).finish(),
-// Self::SetExp(exp) => f                 .debug_tuple("SetExp")
-//                 .field(&exp.to_unix_timestamp_secs())
-//                 .finish(),
-//             Self::Del => write!(f, "Del"),
-//         }
-//     }
-// }
-
-// struct DebugRecord<'a>(&'a Record);
-
-// impl<'a> fmt::Debug for DebugRecord<'a> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         f.debug_tuple("Record")
-//             .field(self.0.value.last().unwrap())
-//             .field(&self.0.expiration.to_unix_timestamp_secs())
-//             .field(&(self.0.version.to_unix_timestamp_micros() / 1_000_000))
-//             .finish()
-//     }
-// }
 
 struct KvStorage {
     entries: HashMap<u32, RwLock<TestRecord>>,

@@ -18,7 +18,6 @@ anyhow = { workspace = true }
 backoff = { workspace = true }
 tap = { workspace = true }
 time = { workspace = true }
-itertools = { workspace = true }
 
 # Collections
 smallvec = { workspace = true }

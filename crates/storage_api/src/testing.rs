@@ -25,7 +25,6 @@ use {
         iter,
         ops::RangeInclusive,
         sync::{Arc, Mutex},
-        time::Duration,
     },
     xxhash_rust::xxh3::Xxh3Builder,
 };
@@ -193,17 +192,8 @@ impl StorageApi for FakeStorage {
         for item in data {
             match item {
                 DataItem::Frame(frame) => {
-                    processed += 1;
-
                     let key: KeyPayload = serde_json::from_slice(&frame.key).unwrap();
                     let record: Record = serde_json::from_slice(&frame.value).unwrap();
-
-                    if let Some(rec) = this.kv.get(&key.key) {
-                        if rec.version.unix_timestamp_micros >= record.version.unix_timestamp_micros
-                        {
-                            continue;
-                        }
-                    }
 
                     match frame.data_type {
                         DataType::Kv => this.kv.insert(key.key, record),
@@ -213,6 +203,8 @@ impl StorageApi for FakeStorage {
                             .or_default()
                             .insert(key.field, record),
                     };
+
+                    processed += 1;
                 }
                 DataItem::Done(count) => assert_eq!(count, processed),
             };
@@ -243,54 +235,22 @@ fn key(namespace: &Namespace, bytes: &[u8]) -> Vec<u8> {
 impl Inner {
     fn get(&self, op: operation::Get) -> Option<Record> {
         let key = key(&op.namespace, &op.key);
-        self.kv
-            .get(&key)
-            .filter(|rec| {
-                rec.expiration.unix_timestamp_secs
-                    >= RecordExpiration::from(Duration::from_secs(0)).unix_timestamp_secs
-                    && !rec.value.is_empty()
-            })
-            .cloned()
+        self.kv.get(&key).cloned()
     }
 
     fn set(&mut self, op: operation::Set) {
         let key = key(&op.namespace, &op.key);
-
-        if let Some(rec) = self.kv.get(&key) {
-            if rec.version.unix_timestamp_micros >= op.record.version.unix_timestamp_micros {
-                return;
-            }
-        }
-
         let _ = self.kv.insert(key, op.record);
     }
 
     fn del(&mut self, op: operation::Del) {
         let key = key(&op.namespace, &op.key);
-
-        if let Some(rec) = self.kv.get(&key) {
-            if rec.version.unix_timestamp_micros >= op.version.unix_timestamp_micros {
-                return;
-            }
-        }
-
-        let _ = self.kv.insert(key, Record {
-            value: vec![],
-            expiration: Duration::from_secs(60 * 60 * 24).into(),
-            version: op.version,
-        });
+        let _ = self.kv.remove(&key);
     }
 
     fn get_exp(&self, op: operation::GetExp) -> Option<RecordExpiration> {
         let key = key(&op.namespace, &op.key);
-        self.kv
-            .get(&key)
-            .filter(|rec| {
-                rec.expiration.unix_timestamp_secs
-                    >= RecordExpiration::from(Duration::from_secs(0)).unix_timestamp_secs
-                    && !rec.value.is_empty()
-            })
-            .map(|rec| rec.expiration)
+        self.kv.get(&key).map(|rec| rec.expiration)
     }
 
     fn set_exp(&mut self, op: operation::SetExp) {

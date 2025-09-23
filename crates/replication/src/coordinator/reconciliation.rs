@@ -95,7 +95,8 @@ pub(super) fn reconcile_map_page(
 
     let mut entries: Vec<_> = counters
         .into_iter()
-        .filter_map(|(entry, count)| (count >= MAJORITY_QUORUM_THRESHOLD).then(|| entry.clone()))
+        .filter(|(_, count)| *count >= MAJORITY_QUORUM_THRESHOLD)
+        .map(|(entry, _)| entry.clone())
         .collect();
 
     entries.sort_unstable_by(|a, b| a.field.cmp(&b.field));
@@ -130,118 +131,124 @@ pub(super) fn reconcile_map_cardinality(
     None
 }
 
-// TODO: Fix
-// #[cfg(test)]
-// mod test {
-//     use {
-//         super::*,
-//         std::array,
-//         wcn_storage_api::{
-//             self as storage_api,
-//             Error,
-//             MapEntry,
-//             Record,
-//             RecordExpiration,
-//             RecordVersion,
-//         },
-//     };
+#[cfg(test)]
+mod test {
+    use {
+        super::*,
+        wcn_storage_api::{MapEntry, Record, RecordExpiration, RecordVersion},
+    };
 
-//     #[test]
-//     fn reconcile_map_page() {
-//         let expiration =
-// RecordExpiration::from(std::time::Duration::from_secs(60));         let
-// version = RecordVersion::now();
+    #[test]
+    fn reconcile_map_page() {
+        let expiration = RecordExpiration::from(std::time::Duration::from_secs(60));
+        let version = RecordVersion::now();
 
-//         let page = |values: &[u8], has_next| MapPage {
-//             entries: values
-//                 .iter()
-//                 .map(|&byte| MapEntry {
-//                     field: vec![byte],
-//                     record: Record {
-//                         value: vec![byte],
-//                         expiration,
-//                         version,
-//                     },
-//                 })
-//                 .collect(),
-//             has_next,
-//         };
+        let page = |values: &[u8], has_next| MapPage {
+            entries: values
+                .iter()
+                .map(|&byte| MapEntry {
+                    field: vec![byte],
+                    record: Record {
+                        value: vec![byte],
+                        expiration,
+                        version,
+                    },
+                })
+                .collect(),
+            has_next,
+        };
 
-//         let response = |values, has_next|
-// Ok(operation::Output::MapPage(page(values, has_next)));         let
-// err_response = || Err(Error::new(storage_api::ErrorKind::Internal));
+        let response = |values, has_next| Ok(operation::Output::MapPage(page(values, has_next)));
 
-//         let responses: &mut [_; 5] = &mut array::from_fn(|_|
-// Some(response(&[0, 1, 2], true)));
+        let assert_page = |responses: &_, replicas_per_response: [_; 5], values, has_next| {
+            assert_eq!(
+                super::reconcile_map_page(responses, &replicas_per_response),
+                Some(page(values, has_next))
+            )
+        };
 
-//         let assert_page = |responses: &_, values, has_next| {
-//             assert_eq!(
-//                 super::reconcile_map_page(responses),
-//                 Some(page(values, has_next))
-//             )
-//         };
+        let responses = [
+            Some(response(&[0, 1, 2], true)),
+            Some(response(&[0, 1], true)),
+            Some(response(&[0, 1, 3], true)),
+            None,
+            None,
+        ];
+        assert_page(&responses, [2, 1, 2, 0, 0], &[0, 1], true);
 
-//         let assert_none = |responses: &_|
-// assert_eq!(super::reconcile_map_page(responses), None);
+        let responses = [
+            Some(response(&[0, 1, 2], false)),
+            Some(response(&[0, 1, 2], true)),
+            Some(response(&[0, 1, 3], false)),
+            None,
+            None,
+        ];
+        assert_page(&responses, [2, 1, 2, 0, 0], &[0, 1, 2], false);
 
-//         assert_page(responses, &[0, 1, 2], true);
+        let responses = [
+            Some(response(&[2, 4], false)),
+            Some(response(&[0, 1], true)),
+            Some(response(&[0, 1, 3], true)),
+            Some(response(&[0, 1, 4], false)),
+            None,
+        ];
+        assert_page(&responses, [2, 1, 1, 1, 0], &[0, 1, 4], false);
 
-//         responses[0] = Some(response(&[0, 1], true));
-//         assert_page(responses, &[0, 1, 2], true);
+        let responses = [
+            Some(response(&[0, 1, 2], true)),
+            Some(response(&[1, 2, 3], true)),
+            Some(response(&[2, 3, 4], true)),
+            Some(response(&[4, 5, 6], true)),
+            Some(response(&[7, 8, 9], false)),
+        ];
+        assert_page(&responses, [1, 1, 1, 1, 1], &[2], true);
+    }
 
-//         responses[1] = Some(response(&[0, 1], false));
-//         assert_page(responses, &[0, 1, 2], true);
+    #[test]
+    fn reconcile_map_cardinality() {
+        let response = |value| Ok(operation::Output::Cardinality(value));
 
-//         responses[2] = Some(response(&[0, 1], false));
-//         assert_page(responses, &[0, 1], true);
+        let assert_cardinality = |responses: &_, replicas_per_response: [_; 5], value| {
+            assert_eq!(
+                super::reconcile_map_cardinality(responses, &replicas_per_response),
+                Some(value)
+            );
+        };
 
-//         responses[3] = Some(response(&[0, 1], false));
-//         assert_page(responses, &[0, 1], false);
+        let responses = [
+            Some(response(0)),
+            Some(response(1)),
+            Some(response(2)),
+            None,
+            None,
+        ];
+        assert_cardinality(&responses, [2, 1, 2, 0, 0], 1);
 
-//         responses[4] = Some(err_response());
-//         assert_page(responses, &[0, 1], false);
+        let responses = [
+            Some(response(0)),
+            Some(response(10)),
+            Some(response(42)),
+            None,
+            None,
+        ];
+        assert_cardinality(&responses, [2, 2, 1, 0, 0], 10);
 
-//         responses[0] = None;
-//         assert_page(responses, &[0, 1], false);
+        let responses = [
+            Some(response(0)),
+            Some(response(1)),
+            Some(response(2)),
+            Some(response(3)),
+            None,
+        ];
+        assert_cardinality(&responses, [1, 1, 1, 2, 0], 2);
 
-//         responses[1] = Some(err_response());
-//         assert_none(responses);
-
-//         responses[0] = Some(response(&[0, 1, 2], true));
-//         assert_page(responses, &[0, 1], false);
-
-//         responses[2] = Some(err_response());
-//         assert_none(responses);
-//     }
-
-//     #[test]
-//     fn reconcile_map_cardinality() {
-//         let response = |value| Ok(operation::Output::Cardinality(value));
-//         let err_response = ||
-// Err(Error::new(storage_api::ErrorKind::Internal));
-
-//         let responses: &mut [_; 5] = &mut array::from_fn(|_|
-// Some(response(42)));
-
-//         let assert_cardinality = |responses: &_, value| {
-//             assert_eq!(super::reconcile_map_cardinality(responses),
-// Some(value));         };
-
-//         assert_cardinality(responses, 42);
-
-//         responses[0] = Some(response(10));
-//         assert_cardinality(responses, 42);
-
-//         responses[1] = Some(response(10));
-//         assert_cardinality(responses, 42);
-
-//         responses[2] = Some(response(10));
-//         assert_cardinality(responses, 10);
-
-//         responses[3] = None;
-//         assert_cardinality(responses, 10);
-
-//         responses[4] = Some(err_response());
-//         assert_cardinality(responses, 10);
-//     }
-// }
+        let responses = [
+            Some(response(0)),
+            Some(response(1)),
+            Some(response(2)),
+            Some(response(3)),
+            Some(response(4)),
+        ];
+        assert_cardinality(&responses, [1, 1, 1, 1, 1], 2)
+    }
+}

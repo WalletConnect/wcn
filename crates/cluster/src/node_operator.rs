@@ -249,7 +249,7 @@ impl<N> NodeOperator<N> {
 
                 Ok(NodeOperator::new(operator.id, data.name, nodes, clients)?)
             }
-            ver => return Err(Error::UnknownSchemaVersion(ver)),
+            ver => Err(Error::UnknownSchemaVersion(ver)),
         }
     }
 

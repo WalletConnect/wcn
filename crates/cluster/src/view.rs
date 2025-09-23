@@ -173,6 +173,7 @@ impl<C: Config> View<C> {
 
         let time = migration.started_at
             + self.settings.event_propagation_latency
+            + self.settings.clock_skew
             + migration::PULL_DATA_LEEWAY_TIME;
 
         Some(time)
@@ -231,16 +232,11 @@ impl<C: Config> View<C> {
     /// Checks whether a data pull with the specified [`keyspace::Version`] can
     /// be executed at this moment.
     pub fn validate_data_pull(&self, keyspace_version: keyspace::Version) -> bool {
-        if !self.migration.is_in_progress() {
+        let Some(scheduled_after) = self.data_pull_scheduled_after() else {
             return false;
-        }
+        };
 
-        let allowed_after = self.migration.started_at
-            + self.settings.event_propagation_latency
-            + self.settings.clock_skew
-            + migration::PULL_DATA_LEEWAY_TIME;
-
-        OffsetDateTime::now_utc() >= allowed_after && self.keyspace_version == keyspace_version
+        OffsetDateTime::now_utc() >= scheduled_after && self.keyspace_version == keyspace_version
     }
 
     pub(super) fn require_no_migration(&self) -> Result<(), migration::InProgressError> {

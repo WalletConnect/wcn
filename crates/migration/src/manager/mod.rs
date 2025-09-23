@@ -3,7 +3,6 @@ use {
     backoff::ExponentialBackoffBuilder,
     futures::{stream, FutureExt as _, StreamExt, TryFutureExt},
     futures_concurrency::future::Race,
-    itertools::Itertools as _,
     smallvec::SmallVec,
     std::{
         fmt,
@@ -221,6 +220,10 @@ where
             .secondary_keyspace_shards()
             .ok_or_else(|| anyhow!("Missing secondary keyspace shards"))?;
 
+        // a separate closure because otherwise rustfmt breaks and refuses to format
+        // this function
+        let log_err = |err, shard_id, source_id| tracing::warn!(?err, %shard_id, %source_id, "Failed to transfer shard");
+
         primary_shards
             .zip(secondary_shards)
             .filter_map(|((shard_id, primary), (_, secondary))| {
@@ -229,11 +232,11 @@ where
 
                 let added_operators = replica_set_difference(new, old);
 
+                let idx = added_operators
+                    .iter()
+                    .position(|op| op.id == self.manager.node_operator_id)?;
+
                 // Skip the shard if this node operator is not being newly added to it.
-                let Some((idx, _)) =  added_operators.iter().find_position(|op| op.id == self.manager.node_operator_id) else {
-                    return None;
-                };
-              
                 let removed_operators = replica_set_difference(old, new);
 
                 // Pull data only from the operator being replaced to ensure consistency.
@@ -245,12 +248,15 @@ where
                 Some((shard_id, source))
             })
             .pipe(stream::iter)
-            .for_each_concurrent(Some(self.manager.config.concurrency()), |(shard_id, source)| {
-                retry(move || {
-                    self.transfer_shard(shard_id, source, keyspace_version)
-                        .map_err(move |err| tracing::info!(?err, %shard_id, source = %source.id, "Failed to transfer shard"))
-                })
-            })
+            .for_each_concurrent(
+                Some(self.manager.config.concurrency()),
+                |(shard_id, source)| {
+                    retry(move || {
+                        self.transfer_shard(shard_id, source, keyspace_version)
+                            .map_err(move |err| log_err(err, shard_id, source.id))
+                    })
+                },
+            )
             .await;
 
         Ok(State::CompletingMigration(migration_id))
