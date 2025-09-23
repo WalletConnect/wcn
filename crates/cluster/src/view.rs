@@ -20,7 +20,6 @@ use {
         Settings,
     },
     derive_where::derive_where,
-    itertools::Itertools,
     std::sync::Arc,
     tap::Pipe as _,
     time::OffsetDateTime,
@@ -320,11 +319,7 @@ impl<C: Config> View<C> {
         let node_operators = view
             .node_operators
             .into_iter()
-            .map(|slot| {
-                slot.map(|operator| NodeOperator::try_from_sc(operator, cfg))
-                    .transpose()
-            })
-            .try_collect::<_, Vec<_>, _>()?
+            .map(|slot| slot.map(|operator| NodeOperator::from_sc(operator, cfg)))
             .pipe(NodeOperators::from_slots)?;
 
         let ownership = Ownership::new(view.owner);
@@ -470,10 +465,8 @@ impl smart_contract::event::NodeOperatorAdded {
             .require_not_exists(&self.operator.id)?
             .require_free_slot(self.idx)?;
 
-        view.node_operators.set(
-            self.idx,
-            Some(NodeOperator::try_from_sc(self.operator, cfg)?),
-        );
+        view.node_operators
+            .set(self.idx, Some(NodeOperator::from_sc(self.operator, cfg)));
 
         Ok(())
     }
@@ -483,7 +476,7 @@ impl smart_contract::event::NodeOperatorUpdated {
     pub(super) fn apply<C: Config>(self, cfg: &C, view: &mut View<C>) -> Result<()> {
         let idx = view.node_operators.require_idx(&self.operator.id)?;
         view.node_operators
-            .set(idx, Some(NodeOperator::try_from_sc(self.operator, cfg)?));
+            .set(idx, Some(NodeOperator::from_sc(self.operator, cfg)));
 
         Ok(())
     }

@@ -233,7 +233,7 @@ pub type Address = AccountAddress;
 
 /// Account address on the chain hosting WCN cluster [`SmartContract`].
 #[derive(Clone, Copy, From, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct AccountAddress([u8; 20]);
+pub struct AccountAddress(pub [u8; 20]);
 
 impl fmt::Debug for AccountAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

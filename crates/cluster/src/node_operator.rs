@@ -3,10 +3,14 @@
 use {
     crate::{self as cluster, client, node, smart_contract, Client, Config, EncryptionKey, Node},
     derive_more::derive::AsRef,
+    libp2p_identity::PeerId,
     serde::{Deserialize, Serialize},
-    std::sync::{
-        atomic::{self, AtomicUsize},
-        Arc,
+    std::{
+        net::Ipv4Addr,
+        sync::{
+            atomic::{self, AtomicUsize},
+            Arc,
+        },
     },
     tap::Tap,
 };
@@ -189,11 +193,22 @@ impl NodeOperator {
     }
 }
 
-impl<C: Config> NodeOperator<C> {
-    pub(super) fn try_from_sc(
+impl<N> NodeOperator<N> {
+    pub(super) fn from_sc(
         operator: smart_contract::NodeOperator,
-        cfg: &C,
-    ) -> Result<NodeOperator<C::Node>, TryFromSmartContractError> {
+        cfg: &impl Config<Node = N>,
+    ) -> Self {
+        let id = operator.id;
+
+        NodeOperator::try_from_sc(operator, cfg)
+            .map_err(|err| tracing::warn!(%id, ?err, "Invalid NodeOperator"))
+            .unwrap_or_else(|_| NodeOperator::new_corrupted(id, cfg))
+    }
+
+    fn try_from_sc(
+        operator: smart_contract::NodeOperator,
+        cfg: &impl Config<Node = N>,
+    ) -> Result<Self, TryFromSmartContractError> {
         use TryFromSmartContractError as Error;
 
         let data_bytes = operator.data;
@@ -205,22 +220,57 @@ impl<C: Config> NodeOperator<C> {
         let schema_version = data_bytes[0];
         let bytes = &data_bytes[1..];
 
-        let data = match schema_version {
-            0 => postcard::from_bytes::<DataV0>(bytes),
+        match schema_version {
+            0 => {
+                let data = postcard::from_bytes::<DataV0>(bytes).map_err(Error::from_postcard)?;
+
+                let nodes = data
+                    .nodes
+                    .into_iter()
+                    .map(|v0| Node::from(v0).tap_mut(|node| node.decrypt(cfg.as_ref())))
+                    .map(|node| cfg.new_node(operator.id, node))
+                    .collect();
+
+                let clients = data.clients.into_iter().map(Into::into).collect();
+
+                Ok(NodeOperator::new(operator.id, data.name, nodes, clients)?)
+            }
+            1 => {
+                let data = postcard::from_bytes::<DataV1>(bytes).map_err(Error::from_postcard)?;
+
+                let nodes = data
+                    .nodes
+                    .into_iter()
+                    .map(|v1| Node::from(v1).tap_mut(|node| node.decrypt(cfg.as_ref())))
+                    .map(|node| cfg.new_node(operator.id, node))
+                    .collect();
+
+                let clients = data.clients.into_iter().map(Into::into).collect();
+
+                Ok(NodeOperator::new(operator.id, data.name, nodes, clients)?)
+            }
             ver => return Err(Error::UnknownSchemaVersion(ver)),
         }
-        .map_err(Error::from_postcard)?;
+    }
 
-        let nodes = data
-            .nodes
-            .into_iter()
-            .map(|v0| Node::from(v0).tap_mut(|node| node.decrypt(cfg.as_ref())))
-            .map(|node| cfg.new_node(operator.id, node))
+    fn new_corrupted(id: Id, cfg: &impl Config<Node = N>) -> Self {
+        let nodes = (0..MIN_NODES)
+            .map(|_| Node {
+                peer_id: PeerId::random(),
+                ipv4_addr: Ipv4Addr::UNSPECIFIED,
+                primary_port: 0,
+                secondary_port: 0,
+            })
+            .map(|node| cfg.new_node(id, node))
             .collect();
 
-        let clients = data.clients.into_iter().map(Into::into).collect();
-
-        Ok(NodeOperator::new(operator.id, data.name, nodes, clients)?)
+        Self {
+            id,
+            name: Name("CORRUPTED_DATA".to_string()),
+            clients: vec![],
+            nodes,
+            counter: Default::default(),
+        }
     }
 }
 
@@ -231,6 +281,16 @@ impl<C: Config> NodeOperator<C> {
 struct DataV0 {
     name: Name,
     nodes: Vec<node::V0>,
+    clients: Vec<client::V0>,
+}
+
+// NOTE: The on-chain serialization is non self-describing!
+// This `struct` can not be changed, a `struct` with a new schema version should
+// be created instead.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct DataV1 {
+    name: Name,
+    nodes: Vec<node::V1>,
     clients: Vec<client::V0>,
 }
 

@@ -3,6 +3,8 @@ use {
     backoff::ExponentialBackoffBuilder,
     futures::{stream, FutureExt as _, StreamExt, TryFutureExt},
     futures_concurrency::future::Race,
+    itertools::Itertools as _,
+    smallvec::SmallVec,
     std::{
         fmt,
         future::{self, Future},
@@ -14,7 +16,7 @@ use {
     time::OffsetDateTime,
     wcn_cluster::{
         self as cluster,
-        keyspace,
+        keyspace::{self, ReplicaSet},
         migration,
         node_operator,
         smart_contract::{self, Write},
@@ -208,7 +210,7 @@ where
             let duration_ms = duration.whole_milliseconds();
 
             tracing::info!("Data transfer scheduled at {}ms from now", duration_ms);
-            tokio::time::sleep(duration.unsigned_abs()).await;
+            tokio::time::sleep(duration.unsigned_abs() + Duration::from_secs(5)).await;
         }
 
         let cluster_view = self.cluster().view();
@@ -219,39 +221,39 @@ where
             .secondary_keyspace_shards()
             .ok_or_else(|| anyhow!("Missing secondary keyspace shards"))?;
 
-        let replica_idx = |shard: &keyspace::Shard<&NodeOperator<_>>| {
-            shard
-                .replica_set()
-                .iter()
-                .position(|op| op.id == self.manager.node_operator_id)
-        };
-
         primary_shards
             .zip(secondary_shards)
             .filter_map(|((shard_id, primary), (_, secondary))| {
-                // If operator is not in the new replica set skip this shard.
-                let secondary_idx = replica_idx(&secondary)?;
+                let old = primary.replica_set();
+                let new = secondary.replica_set();
 
-                // Also skip if operator is in the old replica set. Meaning that it's in both,
-                // so we don't need to transfer any data.
-                let None = replica_idx(&primary) else {
+                let added_operators = replica_set_difference(new, old);
+
+                // Skip the shard if this node operator is not being newly added to it.
+                let Some((idx, _)) =  added_operators.iter().find_position(|op| op.id == self.manager.node_operator_id) else {
                     return None;
                 };
+              
 
-                // Pull data only from the operator previously occupying the same replica index
-                // to guarantee consistency.
+                let removed_operators = replica_set_difference(old, new);
+
+                // Pull data only from the operator being replaced to ensure consistency.
                 // TODO: We should have a way to override this behaviour for special
                 // circumstances, for example if a node operator is completely dead and we are
                 // forcefully removing it.
-                let source = primary.replica_set()[secondary_idx];
+                let source = removed_operators[idx];
 
                 Some((shard_id, source))
+              
+                
+
             })
             .pipe(stream::iter)
             .for_each_concurrent(Some(self.manager.config.concurrency()), |(shard_id, source)| {
                 retry(move || {
                     self.transfer_shard(shard_id, source, keyspace_version)
-                        .map_err(move |err| tracing::warn!(?err, %shard_id, source = %source.id, "Failed to transfer shard"))
+                        // TODO: Revert to info
+                        .map_err(move |err| tracing::debug!(?err, %shard_id, source = %source.id, "Failed to transfer shard"))
                 })
             })
             .await;
@@ -405,4 +407,20 @@ where
     // NOTE(unwrap): we use `.with_max_elapsed_time(None)`, the error won't be
     // emitted.
     backoff::future::retry(backoff, f).await.unwrap()
+}
+
+// Returns `NodeOperator`s which are in `a`, but not in `b`.
+fn replica_set_difference<'a, T>(
+    a: &ReplicaSet<&'a NodeOperator<T>>,
+    b: &ReplicaSet<&NodeOperator<T>>,
+) -> SmallVec<[&'a NodeOperator<T>; 5]> {
+    let mut diff = SmallVec::new();
+
+    for operator in a {
+        if !b.iter().any(|op| op.id == operator.id) {
+            diff.push(*operator);
+        }
+    }
+
+    diff
 }
