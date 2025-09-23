@@ -158,7 +158,7 @@ async fn transfers_data_and_writes_to_smart_contract() {
         let correct_data = set_op("Correct");
         let wrong_data = set_op("Wrong");
 
-        for replica in cluster_view.primary_replica_set(hash).into_iter() {
+        for replica in cluster_view.primary_replica_set(hash) {
             let old_operator_idx = removed_operators.iter().position(|op| op.id == replica.id);
 
             let is_source_replica =
