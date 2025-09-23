@@ -67,18 +67,7 @@ impl<'a, C: Config> ReadRepair<'a, C> {
         response: Response,
     ) {
         match response {
-            Ok(output) if &output != self.output => {
-                let target = const {
-                    const_hex::const_decode_to_array::<20>(
-                        b"90f79bf6eb2c4f870365e785982e1f101e93b906",
-                    )
-                }
-                .unwrap();
-
-                if operator.id.0 != target {
-                    tracing::info!(operator_id = %operator.id, expected = ?self.output, got = ?output, "Wrong output");
-                }
-            }
+            Ok(output) if &output != self.output => {}
 
             // Errors are not being repaired.
             _ => return,

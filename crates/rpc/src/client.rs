@@ -167,8 +167,7 @@ impl<API: Api> Client<API> {
 
             drop(guard);
 
-            // TODO: Revert to info
-            tracing::debug!(
+            tracing::info!(
                 api = %API::NAME,
                 addr = %conn.remote_peer_addr(),
                 peer_id = %conn.remote_peer_id(),

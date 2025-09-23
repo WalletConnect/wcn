@@ -6,7 +6,6 @@ use {
     std::{
         array,
         collections::{BTreeMap, HashMap},
-        fmt,
         iter,
         ops::RangeInclusive,
         sync::{
@@ -24,14 +23,12 @@ use {
     wcn_storage_api::{Record, RecordExpiration, RecordVersion},
 };
 
-const KV_KEYS: u32 = 50_000;
-const MAP_KEYS: u32 = 500;
+const KV_KEYS: u32 = 100_000;
+const MAP_KEYS: u32 = 1000;
 
 const KEY_SIZE: usize = 32;
 const FIELD_SIZE: usize = 32;
 const VALUE_SIZE: usize = 1024;
-
-// const READ_AFTER_WRITE_DELAY: Duration = Duration::from_millis(500);
 
 pub(super) struct LoadSimulator {
     namespaces: Vec<Namespace>,
@@ -118,7 +115,7 @@ impl Namespace {
         };
 
         let populate_kv_fut = stream::iter(0..(KV_KEYS / 2)).for_each_concurrent(1000, |_| async {
-            self.execute_random_set(false).await;
+            self.execute_random_set().await;
             count.fetch_add(1, atomic::Ordering::Relaxed);
         });
 
@@ -131,7 +128,7 @@ impl Namespace {
 
         let populate_map_fut =
             stream::iter(0..(MAP_KEYS * 256 / 2)).for_each_concurrent(1000, |_| async {
-                self.execute_random_hset(false).await;
+                self.execute_random_hset().await;
                 count.fetch_add(1, atomic::Ordering::Relaxed);
             });
 
@@ -222,7 +219,7 @@ impl Namespace {
 
     async fn execute_random_kv_write(&self) {
         match rand::random_range(0..2) {
-            0 => self.execute_random_set(true).await,
+            0 => self.execute_random_set().await,
             // TODO: Fix
             // 1 => self.execute_random_set_exp().await,
             1 => self.execute_random_del().await,
@@ -232,7 +229,7 @@ impl Namespace {
 
     async fn execute_random_map_write(&self) {
         match rand::random_range(0..2) {
-            0 => self.execute_random_hset(true).await,
+            0 => self.execute_random_hset().await,
             // TODO: Fix
             // 1 => self.execute_random_hset_exp().await,
             1 => self.execute_random_hdel().await,
@@ -243,7 +240,6 @@ impl Namespace {
     async fn execute_random_get(&self) {
         let (key, expected_record) = self.kv_storage.get_random_entry().await;
         self.execute_get(key, &expected_record).await;
-        // tokio::time::sleep(READ_AFTER_WRITE_DELAY).await;
     }
 
     async fn execute_get(&self, key: u32, expected_record: &TestRecord) {
@@ -251,18 +247,13 @@ impl Namespace {
         assert_record("get", key, None, expected_record, got_record.as_ref());
     }
 
-    async fn execute_random_set(&self, read_after_write: bool) {
+    async fn execute_random_set(&self) {
         let (key, mut record) = self.kv_storage.get_random_entry_mut().await;
 
         let new_record = random_record(self.namespace.idx(), key, 0);
         self.set(key, &new_record).await;
 
         record.set(new_record);
-
-        // tokio::time::sleep(READ_AFTER_WRITE_DELAY).await;
-        // if read_after_write {
-        //     self.execute_get(key, &record).await;
-        // }
     }
 
     async fn execute_random_get_exp(&self) {
@@ -271,7 +262,6 @@ impl Namespace {
         let got_ttl = self.get_exp(key).await;
 
         assert_exp(key, "get_exp", &expected_record, got_ttl);
-        // tokio::time::sleep(READ_AFTER_WRITE_DELAY).await;
     }
 
     #[allow(dead_code)]
@@ -296,8 +286,6 @@ impl Namespace {
 
         record.del(version);
 
-        // tokio::time::sleep(READ_AFTER_WRITE_DELAY).await;
-
         self.execute_get(key, &record).await;
     }
 
@@ -318,7 +306,7 @@ impl Namespace {
         );
     }
 
-    async fn execute_random_hset(&self, read_after_write: bool) {
+    async fn execute_random_hset(&self) {
         let (key, mut map) = self.map_storage.get_random_map_mut().await;
         let (field, record) = map.get_random_entry_mut();
 
@@ -326,11 +314,6 @@ impl Namespace {
         self.hset(key, field, &new_record).await;
 
         record.set(new_record);
-
-        // tokio::time::sleep(READ_AFTER_WRITE_DELAY).await;
-        // if read_after_write {
-        //     self.execute_hget(key, field, &record).await;
-        // }
     }
 
     async fn execute_random_hget_exp(&self) {
@@ -367,8 +350,6 @@ impl Namespace {
         let record = map.entries.get_mut(&field).unwrap();
 
         record.del(version);
-
-        // tokio::time::sleep(READ_AFTER_WRITE_DELAY).await;
 
         self.execute_hget(key, field, &record).await;
     }

@@ -19,20 +19,18 @@ async fn test_suite() {
     let mut cluster = TestCluster::deploy().await;
 
     tokio::time::sleep(Duration::from_secs(5)).await;
-    // test_client_encryption(&cluster).await;
+    test_client_encryption(&cluster).await;
 
     cluster
         .under_load(async |cluster| {
             cluster.corrupt_node_operator_data(2).await;
-            // wait some time to make sure that nothing blows up
+            // wait some time to check that nothing blows up while the data is broken
             tokio::time::sleep(Duration::from_secs(5)).await;
             cluster.fix_node_operator_data(2).await;
 
-            tokio::time::sleep(Duration::from_secs(10)).await;
+            cluster.shutdown_one_node_per_node_operator().await;
 
-            // cluster.shutdown_one_node_per_node_operator().await;
-
-            // cluster.redeploy_all_offline_nodes().await;
+            cluster.redeploy_all_offline_nodes().await;
 
             cluster
                 .replace_all_node_operators_except_namespace_owner()
@@ -80,8 +78,6 @@ async fn test_client_encryption(cluster: &TestCluster) {
         .unwrap();
 
     let unencrypted_client = create_client().build().await.unwrap();
-
-    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let ttl = Duration::from_secs(60);
 

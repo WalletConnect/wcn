@@ -210,7 +210,7 @@ where
             let duration_ms = duration.whole_milliseconds();
 
             tracing::info!("Data transfer scheduled at {}ms from now", duration_ms);
-            tokio::time::sleep(duration.unsigned_abs() + Duration::from_secs(5)).await;
+            tokio::time::sleep(duration.unsigned_abs()).await;
         }
 
         let cluster_view = self.cluster().view();
@@ -234,7 +234,6 @@ where
                     return None;
                 };
               
-
                 let removed_operators = replica_set_difference(old, new);
 
                 // Pull data only from the operator being replaced to ensure consistency.
@@ -244,16 +243,12 @@ where
                 let source = removed_operators[idx];
 
                 Some((shard_id, source))
-              
-                
-
             })
             .pipe(stream::iter)
             .for_each_concurrent(Some(self.manager.config.concurrency()), |(shard_id, source)| {
                 retry(move || {
                     self.transfer_shard(shard_id, source, keyspace_version)
-                        // TODO: Revert to info
-                        .map_err(move |err| tracing::debug!(?err, %shard_id, source = %source.id, "Failed to transfer shard"))
+                        .map_err(move |err| tracing::info!(?err, %shard_id, source = %source.id, "Failed to transfer shard"))
                 })
             })
             .await;

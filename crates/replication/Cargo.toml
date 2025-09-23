@@ -18,7 +18,6 @@ thiserror = { workspace = true }
 
 # General purpose
 tap = { workspace = true }
-const-hex = { workspace = true }
 
 # Collections
 smallvec = { workspace = true }

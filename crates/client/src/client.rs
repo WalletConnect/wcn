@@ -137,18 +137,18 @@ where
     async fn execute_internal(&self, op: &op::Operation<'_>) -> Result<op::Output, Error> {
         let (conn, node_data) = self.find_next_node();
 
-        // let is_connected = conn
-        //     .wait_open()
-        //     .with_timeout(self.connection_timeout)
-        //     .await
-        //     .is_ok();
+        let is_connected = conn
+            .wait_open()
+            .with_timeout(self.connection_timeout)
+            .await
+            .is_ok();
 
-        // if !is_connected {
-        //     // Getting to this point means we've tried every operator to find a
-        // connected     // node and failed. Then we tried to open connection to
-        // the next node and also     // failed.
-        //     return Err(Error::NoAvailableNodes);
-        // }
+        if !is_connected {
+            // Getting to this point means we've tried every operator to find a connected
+            // node and failed. Then we tried to open connection to the next node and also
+            // failed.
+            return Err(Error::NoAvailableNodes);
+        }
 
         let start_time = Instant::now();
 

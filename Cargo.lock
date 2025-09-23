@@ -5982,7 +5982,6 @@ dependencies = [
 name = "wcn_replication"
 version = "0.1.0"
 dependencies = [
- "const-hex",
  "derive-where",
  "derive_more",
  "futures",

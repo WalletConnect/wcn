@@ -171,22 +171,8 @@ impl<C: Config> StorageApi for InboundConnection<C> {
 
         let quorum_response_idx = loop {
             let Some((operator, response)) = response_futures.next().await else {
-                tracing::warn!(replica_responses = ?primary_quorum.replica_responses, "Quorum not reached");
                 break None;
             };
-
-            if response.is_err() {
-                let target = const {
-                    const_hex::const_decode_to_array::<20>(
-                        b"90f79bf6eb2c4f870365e785982e1f101e93b906",
-                    )
-                }
-                .unwrap();
-
-                if operator.id.0 != target {
-                    tracing::warn!(operator_id = %operator.id, ?response);
-                }
-            }
 
             let response_idx = receive_response(&mut responses, response);
 
@@ -229,8 +215,7 @@ impl<C: Config> StorageApi for InboundConnection<C> {
         }
         .unwrap_or_else(|| {
             metrics::counter!("wcn_replication_coordinator_inconsistent_results").increment(1);
-            // TODO: Fix Debug impl printing all value bytes
-            tracing::warn!(replicas = ?primary_replicas.map(|operator| operator.id), replica_responses = ?primary_quorum.replica_responses, ?responses, "Inconsistent results");
+            tracing::warn!(?responses, "Inconsistent results");
             const { &Err(Error::new(ErrorKind::Internal)) }
         });
 
@@ -238,30 +223,9 @@ impl<C: Config> StorageApi for InboundConnection<C> {
 
         let mut read_repair = ReadRepair::<C>::new(operation, &responses, &primary_quorum);
 
-        let guard = &mut Guard {
-            key: operation.key(),
-            disarmed: false,
-            replication_completed: false,
-            replica_responses: primary_quorum.replica_responses,
-            extra: 0,
-        };
-
         let complete_replication_fut = async {
             // Drive all futures to completion
             while let Some((operator_idx, response)) = response_futures.next().await {
-                if response.is_err() {
-                    let target = const {
-                        const_hex::const_decode_to_array::<20>(
-                            b"90f79bf6eb2c4f870365e785982e1f101e93b906",
-                        )
-                    }
-                    .unwrap();
-
-                    if operator_idx.id.0 != target {
-                        tracing::warn!(operator_id = %operator_idx.id, ?response, "complete");
-                    }
-                }
-
                 // If read repair is scheduled, check extra responses in case they also need to
                 // be repaired.
                 if let Some(repair) = &mut read_repair {
@@ -269,16 +233,12 @@ impl<C: Config> StorageApi for InboundConnection<C> {
                 }
             }
 
-            guard.replication_completed = true;
-
             if let Some(repair) = read_repair {
                 repair.run().await;
             }
-
-            guard.disarmed = true;
         };
 
-        let (callback_result, _res) = (callback_fut, complete_replication_fut).join().await;
+        let (callback_result, _) = (callback_fut, complete_replication_fut).join().await;
 
         callback_result
     }
@@ -303,46 +263,10 @@ impl<C: Config> StorageApi for InboundConnection<C> {
     }
 }
 
-struct Guard<'a> {
-    key: &'a [u8],
-    replication_completed: bool,
-    replica_responses: [Option<u8>; RF],
-    extra: usize,
-    disarmed: bool,
-}
-
-impl<'a> Drop for Guard<'a> {
-    fn drop(&mut self) {
-        if !self.disarmed {
-            tracing::warn!(?self.key, ?self.replica_responses, %self.extra, self.replication_completed, "Incomplete replication");
-        }
-    }
-}
-
-struct Guard2<'a, T> {
-    operator: &'a NodeOperator<T>,
-    operation: &'a Operation<'a>,
-    disarmed: bool,
-}
-
-impl<'a, T> Drop for Guard2<'a, T> {
-    fn drop(&mut self) {
-        if !self.disarmed {
-            tracing::warn!(operator_id = %self.operator.id, ?self.operation, "Incomplete replication");
-        }
-    }
-}
-
 async fn execute<C: Config>(
     operator: &NodeOperator<C::Node>,
     operation: &Operation<'_>,
 ) -> storage_api::Result<operation::Output> {
-    let mut guard = Guard2 {
-        operator,
-        operation,
-        disarmed: false,
-    };
-
     let mut res = Err(Error::internal());
 
     // Retry transport errors using different nodes.
@@ -352,14 +276,10 @@ async fn execute<C: Config>(
 
         match &res {
             Err(err) if err.kind() == ErrorKind::Transport => {}
-            _ => {
-                guard.disarmed = true;
-                return res;
-            }
+            _ => return res,
         }
     }
 
-    guard.disarmed = true;
     res
 }
 

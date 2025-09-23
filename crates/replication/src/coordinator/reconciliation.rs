@@ -12,8 +12,6 @@ pub(super) fn reconcile(
 ) -> Option<operation::Output> {
     use operation::{Borrowed, Owned};
 
-    tracing::info!(?operation, ?responses);
-
     let reconcile_page = || reconcile_map_page(responses, replicas_per_response).map(Into::into);
 
     let reconcile_card =
@@ -97,15 +95,7 @@ pub(super) fn reconcile_map_page(
 
     let mut entries: Vec<_> = counters
         .into_iter()
-        .filter(|(entry, count)| {
-            if *count >= MAJORITY_QUORUM_THRESHOLD {
-                true
-            } else {
-                tracing::warn!(?entry, count, "Dropping entry");
-                false
-            }
-        })
-        .map(|(entry, _)| entry.clone())
+        .filter_map(|(entry, count)| (count >= MAJORITY_QUORUM_THRESHOLD).then(|| entry.clone()))
         .collect();
 
     entries.sort_unstable_by(|a, b| a.field.cmp(&b.field));

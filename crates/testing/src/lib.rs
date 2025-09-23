@@ -140,7 +140,6 @@ impl TestCluster {
     pub async fn under_load(&mut self, f: impl AsyncFnOnce(&mut Self)) {
         let operator = &mut self.operators[0];
         operator.initialize_clients().await;
-        tokio::time::sleep(Duration::from_secs(5)).await;
 
         let client = operator.clients[0].inner.clone().unwrap();
         let namespaces = [operator.namespace(0), operator.namespace(1)];
@@ -148,8 +147,6 @@ impl TestCluster {
         let mut simulator = LoadSimulator::new(client, &namespaces);
 
         simulator.populate_namespaces().await;
-
-        tokio::time::sleep(Duration::from_secs(10)).await;
 
         let shutdown = ShutdownSignal::new();
         let mut simulator_fut = pin!(simulator.run(shutdown.clone()));
@@ -212,8 +209,8 @@ impl TestCluster {
 
         let contract_address = self.cluster.smart_contract().address();
 
-        for _ in 0..self.operators.len() - 3 {
-            let idx = 3;
+        for _ in 0..self.operators.len() - 1 {
+            let idx = 1;
 
             let operator_id = *self.operators[idx].signer.address();
             tracing::info!(%operator_id, "Removing node operator from the cluster");
@@ -349,7 +346,7 @@ impl Client {
             nodes,
             max_retries: 3,
         })
-        // .with_encryption(wcn_client::EncryptionKey::new(&encryption_secret).unwrap())
+        .with_encryption(wcn_client::EncryptionKey::new(&encryption_secret).unwrap())
         .build()
         .await
         .unwrap()
@@ -375,8 +372,6 @@ impl Database {
         tracing::info!(%operator_id, peer_id = %self.peer_id(), "Deploying database");
 
         let fut = wcn_db::run(clone_database_config(&self.config)).unwrap();
-
-        tracing::info!("after");
 
         self.thread_handle = Some(thread::spawn(move || {
             let _guard = tracing::info_span!("database", %operator_id).entered();

@@ -599,15 +599,13 @@ impl<API: Api> InboundRpc<API> {
             )
         };
 
-        let conn = self.conn.clone();
         let (api, rpc_handler, rpc) = self.upgrade();
 
-        async move {
+        async {
             if let Some(timeout) = api.rpc_timeout(id) {
                 handler(rpc_handler, rpc)
                     .with_timeout(timeout)
                     .await
-                    .tap_err(|err| tracing::warn!(?timeout,remote_peer_id = %conn.remote_peer_id(), remote_peer_addr = %conn.remote_peer_addr(), ?err))
                     .map_err(|_| Error::timeout())?
             } else {
                 handler(rpc_handler, rpc).await

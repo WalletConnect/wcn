@@ -81,15 +81,14 @@ impl RocksBackend {
             let ctx = deserialize::<DataContext<Vec<u8>>>(&value)?;
             let value = serialize(&MergeOp::from(ctx))?;
 
-            self.inner.db.merge_cf(self.cf_handle(cf), &key, &value)?;
-            // batch.merge(cf, &key, &value);
+            batch.merge(cf, &key, &value);
 
             // Write batch to database if it is full. Start a new batch.
             total_items_processed += 1;
             items_processed += 1;
             if items_processed >= IMPORTER_BATCH_SIZE {
-                // backend.write_batch(batch)?;
-                // batch = batch::WriteBatch::new(backend.clone());
+                backend.write_batch(batch)?;
+                batch = batch::WriteBatch::new(backend.clone());
                 items_processed = 0;
             }
         }
@@ -115,8 +114,8 @@ impl RocksBackend {
             let mut items_processed = 0;
 
             // rocks iterators are exclusive -- [start, end)
-            let start = (*range.start()).checked_sub(1);
-            let end = (*range.end()).checked_add(2);
+            let start = Some(*range.start());
+            let end = (*range.end()).checked_add(1);
 
             let string_iter = DbIterator::new(
                 schema::StringColumn::NAME,
