@@ -23,7 +23,7 @@ Additionally, you will receive a symmetric key we use for encrypting semi-sensit
 By any means you prefer generate a keypair compatible with the Optimism chain (EVM).
 The address of that keypair will be the identifier of your Node Operator in the WalletConnect Network.
 
-You will need to provide the secret key to the env of at least one of your Nodes, so it's not recommended to reuse an existing keypair.
+You will need to provide the secret key to the env of one of your Nodes, so it's not recommended to reuse an existing keypair.
 
 The account should have some Optimism on it, the smart-contract calls are cheap and performed rarely.
 Having 5$ equivalent of Optimism on it should be good enough for a year.
