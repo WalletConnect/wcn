@@ -1,18 +1,45 @@
 ## Architecture Overview
 
-The WalletConnect Network 2.0. architecture is organized as follows:
+The WalletConnect Network 2.0 architecture is organized as follows:
 
-- A group of regional clusters of nodes containing each a minimum of 5 node operators
-- Node operators which run a minium of 2 wcn-node instances and at least 1 wcn-db instance in their respective region
-- A Smart Contract per region where state is decentralized and shared among node operator software deployments.
+- A set of regional Clusters, each containing at least 5 Node Operators.
+- Node Operators which run at least 2 Nodes (`wcn_node`) and a single Database (`wcn_db`) in their respective region.
+- A Smart-Contract (Optimism) per Cluster, in which Cluster management operations are being perfromed.
 
 ## Operator Onboarding
 
-### Generate cryptographic key-pairs for your deployments
+### Inquire your region
 
-Pull the repository and run the following
+First of all, you'll need to contact a WalletConnect team member and negotiate the region your Node Operator will be placed into.
 
-```
+Currenty we have Clusters located in Europe, North America, South America and Asia-Pacific.
+You may be able to choose your preffered region, or you may be assigned to a specific region, depending on the current state of the network.
+
+After your region is decided you will be provided with the address of the respective Smart-Contract, which you'll need later for the on-boarding process.
+Additionally, you will receive a symmetric key we use for encrypting semi-sensitive on-chain data (IP addresses).
+
+### Generate Node Operator keypair
+
+By any means you prefer generate a keypair compatible with the Optimism chain (EVM).
+The address of that keypair will be the identifier of your Node Operator in the WalletConnect Network.
+
+You will need to provide the secret key to the env of at least one of your Nodes, so it's not recommended to reuse an existing keypair.
+
+The account should have some Optimism on it, the smart-contract calls are cheap and performed rarely.
+Having 5$ equivalent of Optimism on it should be good enough for a year.
+
+### Generate Node & Database keypairs
+
+Every WCN Node and WCN Database requires a keypair for authentication of network calls.
+
+Your Database should not be exposed outside of your private network, and the necessity of it having a keypair may be removed in the future.
+Your Nodes must be exposed to the public internet, and therefore having a keypair for auth is critical.
+
+You can have a separate keypair per Node/Database, or you can use a single keypair for everything.
+
+To generate a keypair pull the repository and run the following:
+
+```bash
  cargo run -p wcn_cluster -F cli key generate
 ```
 
@@ -26,67 +53,159 @@ It will show you the following (**DO NOT use these example values for your deplo
 }
 ```
 
-You will need to store the private keys you generate in a secure place and avoid losing them as well as the `peer_id`  for each key as that is used by our team to identify and allow your deployments to join the network.
+You'll need to provide the `secret_key` to the env of your Nodes/Database.
 
-**Note:** Peer IDs are derived from public keys, thus they may be freely shared without posing a security risk.
+`peer_id` is an alternative representation of `public_key` and it will be mostly used instead of the `public_key`.
+You'll need to share `peer_id`s of your Nodes with the WalletConnect team during the on-boarding process.
 
-## Prepare your infrastructure
+After being on-boarded you'll be able to update the list of your Nodes (including their `peer_id`s) in the Smart-Contract using our CLI tool.
 
-As pointed out before, operators are expected to run at least one wcn-db instance and at least two wcn-node instances, with the latter configured to point to this aforementioned wcn-db instance.
+### Prepare your infrastructure
 
-### Database configuration
+#### Allocate compute
 
-This is the database component mentioned before and as with any database, it requires disk space to store information in it. It is highly advisable this information is not deleted or tampered with in any way and if there’s plans to wipe the information therein, please notify our team to receive guidance on how to go through the deployment decommissioning process.
+You'll need to deploy at least 2 Nodes and a single Database.
+The current resource requirements:
+ - 8CPU / 16GB RAM / 200GB SSD for the Database
+ - 4CPU / 8GB RAM for each Node
 
-In terms of security and availability, you should keep this gated behind a firewall and only let your wcn-node deployments interact with it, however it’s highly advisable you keep the metrics port open so our monitoring systems can collect metrics.
+The requirements may change in the future, in which case there will be a public announcement.
 
-**Note:** this component is not optional and implements the core functionality of the network, data storage, thus it important operators see to its availability and data integrity.
+Nodes are stateless and we plan to make them auto-scaleable. 
 
-Operators can use the wcn-db container image we provide here: https://github.com/WalletConnect/wcn/pkgs/container/wcn-db
+#### Allocate IP address(es)
 
+You'll need to have at least one public static IPv4 address.
+
+You may choose to use the same or different addresses per Node.
+
+### Deploy Database
+
+WCN Database is (of course) stateful. You should never lose the data being stored under any normal conditions.
+If there are some exceptional circumstances, please, contact WalletConnect team for guidance.
+
+Your Database should be placed behind a firewall and it should not be accessible via public internet.
+
+You can either build it from source:
+```bash
+cargo build -p wcn_db --release
 ```
-SECRET_KEY: <your secret key>
-PRIMARY_RPC_SERVER_PORT: 30010
-SECONDARY_RPC_SERVER_PORT: 30011
-METRICS_SERVER_PORT: 30012
-ROCKSDB_DIR: "/wcn/rocksdb"
+
+Or you can use the Docker image we provide: https://github.com/WalletConnect/wcn/pkgs/container/wcn-db
+
+Here's the required environment variables:
+```bash
+# A `secret_key` previously generated via `key generate` command.
+export SECRET_KEY=your_secret_key
+
+# Port of the "primary" RPC server (UDP).
+export PRIMARY_RPC_SERVER_PORT=3000
+
+# Port of the "secondary" RPC server (UDP).
+export SECONDARY_RPC_SERVER_PORT=3001
+
+# Port of the Prometheus metrics server (TCP).
+export METRICS_SERVER_PORT=3002
+
+# Directory in which the persistent data will be stored.
+export ROCKSDB_DIR=/wcn/rocksdb
 ```
 
-### Node configuration
+### Choose Optimism RPC provider
 
-This component acts as a stateless request coordinator within the network and it’s important that it can access a the regional Cluster Smart Contract via some RPC provider. The address for the contract on each region will be provided by the team.
+WCN Nodes require access to the WCN Cluster smart-contract on the Optimism chain.
+In the following section you'll need to specify the URL of the RPC provider to use.
 
-It’s also very important that any firewall that gates this component allows inbound and outbound UDP and TCP traffic to and from all ports specified below.
+Choose your provider wisely, it should be hosted by an organization you trust.
+It would be ideal if you can (or already do) host your own Optimism node.
 
-**Note:** failing to deploy or correctly configure this component negatively impacts the network by reducing availability and affects incentives for network participants.
+If you choose to use an external RPC provider prefer a paid one, with good reputation.
 
-Operators can use the wcn-node container image we provide here: https://github.com/WalletConnect/wcn/pkgs/container/wcn-node
+If your RPC provider gets compromised or you end up using a malicious one, your Node Operator may experience downtime and your Database data may get corrupted.
+Therefore it's your resposibility to ensure RPC provider trustworthyness.
 
+It is also recommended to use RPC providers supporting WebSocket connections (the RPC provider URLs starting with `wss://`).
+If you choose to use HTTPs expect your Nodes to issue substantial amount of requests, which may be undesireable if you are paying per request.
+
+### Deploy Nodes
+
+WCN Nodes are stateless.
+You must have at least 2 Nodes, or more if you prefer.
+
+Your Nodes may or may not be placed behind a firewall, but if they are make sure that the inbound UDP traffic from the public internet is allowed for the ports you configure. 
+
+You can either build the Node binary from source:
+```bash
+cargo build -p wcn_node --release
 ```
-SECRET_KEY: <your secret key>
-SMART_CONTRACT_ADDRESS: <the address of the cluster smart contract for your region>
-RPC_PROVIDER_URL: <an RPC provider URL, e.g. from Infura or Alchemy or your own node>
-DATABASE_PEER_ID: <the peer ID of your database node>
-DATABASE_RPC_SERVER_ADDRESS: <the address where your database is hosted at>
-DATABASE_PRIMARY_RPC_SERVER_PORT: 30010
-DATABASE_SECONDARY_RPC_SERVER_PORT: 30011
-METRICS_SERVER_PORT: 3017
-ORGANIZATION: <your organiztaion's name>
-REGION: eu|us|ap|sa
-PRIMARY_RPC_SERVER_PORT: 3013
-SECONDARY_RPC_SERVER_PORT: 3014
+
+Or you can use the Docker image we provide: https://github.com/WalletConnect/wcn/pkgs/container/wcn-node
+
+Here's the required environment variables:
+```bash
+# Secret key of this Node (`secret_key` you previously generated via `key generate` command).
+export SECRET_KEY="<secret key of this node>"
+
+# Port of the "primary" RPC server (UDP).
+export PRIMARY_RPC_SERVER_PORT=3010
+
+# Port of the "secondary" RPC server (UDP).
+export SECONDARY_RPC_SERVER_PORT=3011
+
+# Port of the Prometheus metrics server (TCP).
+export METRICS_SERVER_PORT=3012
+
+# IPv4 address of your WCN Database in your private network.
+export DATABASE_RPC_SERVER_ADDRESS=10.0.10.0
+
+# Peer ID of your WCN Database (`peer_id` you previously generated via `key generate` command).
+export DATABASE_PEER_ID="<peer id>"
+
+# Port of the "primary" RPC server of your Database. 
+export DATABASE_PRIMARY_RPC_SERVER_PORT=3000
+
+# Port of the "secondary" RPC server of your Database. 
+export DATABASE_SECONDARY_RPC_SERVER_PORT=3001
+
+# Address of the WCN Cluster smart-contract.
+# You should have received it from WalletConnect team after your region has been assigned to you.
+export SMART_CONTRACT_ADDRESS="<EVM address (hex)>"
+
+# Symmetric key used for on-chain data encryption.
+# You should have received it from WalletConnect team alongside `SMART_CONTRACT_ADDRESS`.
+export SMART_CONTRACT_ENCRYPTION_KEY="<symmetric key (hex)>"
+
+# URL of the Optimism RPC provider.
+export RPC_PROVIDER_URL="<wss:// or https:// URL>"
 ```
+
+**IMPORTANT** Exactly _one_ of your Nodes **MUST** also have this configured:
+```bash
+# Private key of your Node Operator.
+# This is from the keypair you generated to be used with Optimism chain.
+export SMART_CONTRACT_SIGNER_PRIVATE_KEY="<private key of your Node Operator>"
+```
+**No matter how many Nodes you have this variable MUST only be configured on one of them!**
+Specifying this variable makes the node "primary", which enables data migration management on it.
 
 ### Firewall
 
-Please ensure your firewall configuration allows the ports specified in the Node configuration section of these docs and the metrics port for the wcn-db deployments you host.
+To re-iterate, please double check the following:
+- your Database is behind a firewall and **IS NOT** being exposed to the public internet
+- your Nodes **ARE** being exposed to the public internet on `PRIMARY_RPC_SERVER_PORT` (UDP) and `SECONDARY_RPC_SERVER_PORT` (UDP)
 
 ## Availability
 
-You MUST always have at least one `wcn_node` online, meaning if there’s an update you should perform a rolling deployment, updating nodes one by one, or at least in batches, so there’s always some nodes still available to serve inbound RPCs. While re-deploying, first verify that the node is operational before continuing with the next one (TODO: specify how to verify → Grafana / Prometheus).
+You **MUST** always have at least one Node online.
+Meaning if there’s an update you should perform a rolling deployment, updating nodes one by one, or at least in batches.
+This way there should always be at least one Node still available to serve inbound RPCs.
 
-`wcn_db` MUST always be online, if your Database is offline you as node operator (organization) are considered to be fully down and will be penalized accordingly.
+While re-deploying Nodes, first verify that the newly deployed Node is operational before continuing with the next one.
+(TODO: Specify how to verify via logs / shared Grafana / Prometheus metrics)
 
-In case if you need to restart your Database (re-configuration / update) a “permit” needs to be acquired from the Smart Contract by announcing that you’re about to start a *Maintenance*. Only one Node Operator is allowed to be under *Maintenance* at any given time.
+Your Database **MUST** always be online.
+If your Database is offline you as a Node Operator (organization) are considered to be fully down and will be penalized accordingly.
 
-TODO: Docs on how to use CLI to enter maintenance mode
+In case if you need to restart your Database (re-configuration / update) a "permit" needs to be acquired from the WCN Cluster smart-contract, 
+by announcing that you’re about to start a *Maintenance*. Only one Node Operator is allowed to be under *Maintenance* at any given time.
+(TODO: Docs on how to use CLI to enter maintenance)
