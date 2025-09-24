@@ -33,6 +33,7 @@ use {
         sync::{OwnedSemaphorePermit, Semaphore},
     },
     tokio_serde::Deserializer as _,
+    tracing::Instrument,
     wc::{
         future::{CancellationToken, FutureExt as _, StaticFutureExt},
         metrics::{
@@ -435,6 +436,7 @@ fn accept_connection<R: sealed::ConnectionRouter>(
     }
     .map_err(|err| tracing::debug!(?err, "Inbound connection handler failed"))
     .with_metrics(future_metrics!("wcn_rpc_server_inbound_connection"))
+    .in_current_span()
     .pipe(tokio::spawn);
 }
 
@@ -694,7 +696,9 @@ impl<API: Api> Connection<API> {
         let fut = async {
             loop {
                 let rpc = self.accept_rpc().await?;
-                async move { rpc.read_id().and_then(handler_fn).await }.spawn();
+                async move { rpc.read_id().and_then(handler_fn).await }
+                    .in_current_span()
+                    .spawn();
             }
         };
 

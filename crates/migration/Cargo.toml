@@ -19,6 +19,9 @@ backoff = { workspace = true }
 tap = { workspace = true }
 time = { workspace = true }
 
+# Collections
+smallvec = { workspace = true }
+
 # Async
 futures = { workspace = true }
 futures-concurrency = { workspace = true }

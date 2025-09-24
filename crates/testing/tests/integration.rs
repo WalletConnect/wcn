@@ -23,6 +23,11 @@ async fn test_suite() {
 
     cluster
         .under_load(async |cluster| {
+            cluster.corrupt_node_operator_data(2).await;
+            // wait some time to check that nothing blows up while the data is broken
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            cluster.fix_node_operator_data(2).await;
+
             cluster.shutdown_one_node_per_node_operator().await;
 
             cluster.redeploy_all_offline_nodes().await;

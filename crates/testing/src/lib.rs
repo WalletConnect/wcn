@@ -27,6 +27,7 @@ use {
         node_operator,
         smart_contract::{
             self,
+            Write as _,
             evm::{self, RpcProvider, Signer},
         },
     },
@@ -108,12 +109,12 @@ impl TestCluster {
         let mut operators: Vec<_> = (1..=OPERATORS_COUNT)
             .map(|n| NodeOperator::new(n, &anvil, contract_address))
             .collect();
-        let operators_on_chain = operators.iter().map(NodeOperator::on_chain).collect();
+        let operators_ = operators.iter().map(NodeOperator::to_domain).collect();
 
         let encryption_key = wcn_cluster::testing::encryption_key();
         let cfg = DeploymentConfig { encryption_key };
 
-        let cluster = Cluster::deploy(cfg, &provider, settings, operators_on_chain)
+        let cluster = Cluster::deploy(cfg, &provider, settings, operators_)
             .await
             .unwrap();
 
@@ -159,6 +160,28 @@ impl TestCluster {
         simulator_fut.await;
 
         simulator.validate_namespaces().await;
+    }
+
+    pub async fn corrupt_node_operator_data(&self, node_operator_idx: usize) {
+        let operator = &self.operators[node_operator_idx];
+
+        self.cluster
+            .smart_contract()
+            .update_node_operator(smart_contract::NodeOperator {
+                id: *operator.signer.address(),
+                data: b"junk".into(),
+            })
+            .await
+            .unwrap();
+    }
+
+    pub async fn fix_node_operator_data(&self, node_operator_idx: usize) {
+        let operator = &self.operators[node_operator_idx];
+
+        self.cluster
+            .update_node_operator(operator.to_domain())
+            .await
+            .unwrap();
     }
 
     pub async fn shutdown_one_node_per_node_operator(&mut self) {
@@ -216,7 +239,7 @@ impl TestCluster {
             tracing::info!(%operator_id, "Adding node operator to the cluster");
 
             self.cluster
-                .add_node_operator(operator.on_chain())
+                .add_node_operator(operator.to_domain())
                 .await
                 .unwrap();
 
@@ -291,7 +314,7 @@ impl Client {
         namespace(self.operator_id, 2)
     }
 
-    fn on_chain(&self) -> wcn_cluster::Client {
+    fn to_domain(&self) -> wcn_cluster::Client {
         wcn_cluster::Client {
             peer_id: self.keypair.public().to_peer_id(),
             authorized_namespaces: self.authorized_namespaces.clone().into(),
@@ -453,7 +476,7 @@ impl Node {
         self.thread_handle.is_none()
     }
 
-    fn on_chain(&self) -> wcn_cluster::Node {
+    fn to_domain(&self) -> wcn_cluster::Node {
         wcn_cluster::Node {
             peer_id: self.config.keypair.public().to_peer_id(),
             ipv4_addr: Ipv4Addr::LOCALHOST,
@@ -494,7 +517,7 @@ impl NodeOperator {
             max_connections_per_ip: 100,
             max_connection_rate_per_ip: 100,
             max_concurrent_rpcs: 20000,
-            max_idle_connection_timeout: Duration::from_millis(500),
+            max_idle_connection_timeout: Duration::from_secs(5),
             rocksdb_dir: format!("/tmp/wcn_db/{db_peer_id}").parse().unwrap(),
             rocksdb: Default::default(),
             shutdown_signal: db_shutdown_signal.clone(),
@@ -591,12 +614,12 @@ impl NodeOperator {
             .await
     }
 
-    fn on_chain(&self) -> wcn_cluster::NodeOperator {
+    fn to_domain(&self) -> wcn_cluster::NodeOperator {
         wcn_cluster::NodeOperator::new(
             *self.signer.address(),
             self.name.clone(),
-            self.nodes.iter().map(Node::on_chain).collect(),
-            self.clients.iter().map(Client::on_chain).collect(),
+            self.nodes.iter().map(Node::to_domain).collect(),
+            self.clients.iter().map(Client::to_domain).collect(),
         )
         .unwrap()
     }

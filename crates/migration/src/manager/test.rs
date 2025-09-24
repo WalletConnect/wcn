@@ -145,26 +145,31 @@ async fn transfers_data_and_writes_to_smart_contract() {
             keyspace_version: Some(1),
         };
 
-        let new_operator_replica_idx = cluster_view
-            .secondary_replica_set(hash)
-            .unwrap()
+        let old = &cluster_view.primary_replica_set(hash);
+        let new = &cluster_view.secondary_replica_set(hash).unwrap();
+
+        let added_operators = super::replica_set_difference(new, old);
+        let removed_operators = super::replica_set_difference(old, new);
+
+        let new_operator_idx = added_operators
             .iter()
             .position(|op| op.id == new_operator.id);
 
         let correct_data = set_op("Correct");
         let wrong_data = set_op("Wrong");
 
-        for (idx, replica) in cluster_view
-            .primary_replica_set(hash)
-            .into_iter()
-            .enumerate()
-        {
+        for replica in cluster_view.primary_replica_set(hash) {
+            let old_operator_idx = removed_operators.iter().position(|op| op.id == replica.id);
+
+            let is_source_replica =
+                new_operator_idx.is_some() && new_operator_idx == old_operator_idx;
+
             // Put wrong data into shards that shouldn't be transferred and into operators
             // that are not the primary data transfer source.
             cfg.storage_registry
                 .get(replica.id)
                 .execute(
-                    operation::Owned::Set(if Some(idx) == new_operator_replica_idx {
+                    operation::Owned::Set(if is_source_replica {
                         correct_data.clone()
                     } else {
                         wrong_data.clone()
@@ -181,7 +186,7 @@ async fn transfers_data_and_writes_to_smart_contract() {
             keyspace_version: Some(1),
         };
 
-        let expected_record = if new_operator_replica_idx.is_some() {
+        let expected_record = if new_operator_idx.is_some() {
             Some(correct_data.record.clone())
         } else {
             None

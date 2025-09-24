@@ -163,24 +163,24 @@ impl<C: Config> StorageApi for InboundConnection<C> {
                 .pipe(Either::Right)
         });
 
-        let mut response_futures =
-            pin!((primary_replica_requests, secondary_replica_requests).merge());
+        let mut response_futures = pin!((primary_replica_requests, secondary_replica_requests)
+            .merge()
+            .fuse());
 
         let mut responses: ResponseBuffer = std::array::from_fn(|_| None);
 
         let quorum_response_idx = loop {
-            let Some((operator_idx, response)) = response_futures.next().await else {
+            let Some((operator, response)) = response_futures.next().await else {
                 break None;
             };
 
             let response_idx = receive_response(&mut responses, response);
 
-            let primary_quorum_response =
-                primary_quorum.response_received(operator_idx, response_idx);
+            let primary_quorum_response = primary_quorum.response_received(operator, response_idx);
 
             let secondary_quorum_response = secondary_quorum
                 .as_mut()
-                .and_then(|replica_set| replica_set.response_received(operator_idx, response_idx));
+                .and_then(|replica_set| replica_set.response_received(operator, response_idx));
 
             match (primary_quorum_response, secondary_quorum_response) {
                 (Some(idx), _) if secondary_quorum.is_none() => break Some(idx),
@@ -203,15 +203,18 @@ impl<C: Config> StorageApi for InboundConnection<C> {
 
             // If we didn't get the quorum and this is a read operation, then try to reconcile
             // the responses.
-            None => reconciliation::reconcile(operation, &responses[..RF])
-                .map(|out| reconciled_response = Some(Ok(out)))
-                .pipe(|_| reconciled_response.as_ref()),
+            None => reconciliation::reconcile(
+                operation,
+                &responses[..RF],
+                &primary_quorum.replicas_per_response[..RF],
+            )
+            .map(|out| reconciled_response = Some(Ok(out)))
+            .pipe(|_| reconciled_response.as_ref()),
 
             Some(idx) => responses[idx as usize].as_ref(),
         }
         .unwrap_or_else(|| {
             metrics::counter!("wcn_replication_coordinator_inconsistent_results").increment(1);
-            // TODO: Fix Debug impl printing all value bytes
             tracing::warn!(?responses, "Inconsistent results");
             const { &Err(Error::new(ErrorKind::Internal)) }
         });

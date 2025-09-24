@@ -5926,6 +5926,7 @@ dependencies = [
  "futures",
  "futures-concurrency",
  "libp2p-identity",
+ "smallvec",
  "tap",
  "time",
  "tokio",

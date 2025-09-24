@@ -520,13 +520,13 @@ struct DebugValueCompact<'a>(&'a [u8]);
 
 impl<'a> fmt::Debug for DebugValueCompact<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.is_empty() {
-            write!(f, "[]")
+        const MAX_LENGTH: usize = 7;
+
+        if self.0.len() <= MAX_LENGTH {
+            self.0.fmt(f)
         } else {
-            let first = self.0[0];
-            let last = self.0.last().unwrap();
             let len = self.0.len();
-            write!(f, "[{first}, ..., {last}] (len: {len})")
+            write!(f, "{:?}... (len: {len})", &self.0[..MAX_LENGTH])
         }
     }
 }

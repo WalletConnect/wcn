@@ -68,6 +68,18 @@ pub(crate) struct V0 {
     pub secondary_port: u16,
 }
 
+// NOTE: The on-chain serialization is non self-describing!
+// This `struct` can not be changed, a `struct` with a new schema version should
+// be created instead.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub(crate) struct V1 {
+    pub peer_id: PeerId,
+    pub ipv4_addr: Ipv4Addr,
+    pub private_ipv4_addr: Option<Ipv4Addr>,
+    pub primary_port: u16,
+    pub secondary_port: u16,
+}
+
 impl From<Node> for V0 {
     fn from(node: Node) -> Self {
         Self {
@@ -81,6 +93,29 @@ impl From<Node> for V0 {
 
 impl From<V0> for Node {
     fn from(node: V0) -> Self {
+        Self {
+            peer_id: node.peer_id,
+            ipv4_addr: node.ipv4_addr,
+            primary_port: node.primary_port,
+            secondary_port: node.secondary_port,
+        }
+    }
+}
+
+impl From<Node> for V1 {
+    fn from(node: Node) -> Self {
+        Self {
+            peer_id: node.peer_id,
+            ipv4_addr: node.ipv4_addr,
+            private_ipv4_addr: None,
+            primary_port: node.primary_port,
+            secondary_port: node.secondary_port,
+        }
+    }
+}
+
+impl From<V1> for Node {
+    fn from(node: V1) -> Self {
         Self {
             peer_id: node.peer_id,
             ipv4_addr: node.ipv4_addr,

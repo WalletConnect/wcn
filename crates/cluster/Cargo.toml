@@ -47,7 +47,7 @@ tokio = { workspace = true, features = ["time", "rt"] }
 tokio-stream = { workspace = true }
 
 # Domain specific
-libp2p-identity = { workspace = true, features = ["serde"] }
+libp2p-identity = { workspace = true, features = ["serde", "rand"] }
 xxhash-rust = { workspace = true }
 multihash = { version = "0.19", default-features = false }
 alloy = { workspace = true, features = [

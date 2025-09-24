@@ -190,6 +190,8 @@ impl<API: Api> Client<API> {
         peer_id: &PeerId,
         params: API::ConnectionParameters,
     ) -> Connection<API> {
+        tracing::debug!(%addr, %peer_id, "Connecting to");
+
         let conn = self.new_connection_inner(addr, peer_id, params, None);
         conn.reconnect(self.config.reconnect_interval);
         conn
