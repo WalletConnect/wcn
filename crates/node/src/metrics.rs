@@ -2,6 +2,7 @@ use {
     metrics_exporter_prometheus::PrometheusHandle,
     std::{future::Future, io, net::TcpListener, time::Duration},
     sysinfo::Networks,
+    wcn_metrics_api::MetricsApi,
     wcn_rpc::server::ShutdownSignal,
 };
 

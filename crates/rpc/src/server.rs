@@ -238,6 +238,13 @@ impl ShutdownSignal {
         self.token.cancelled().await
     }
 
+    /// Same as [`ShutdownSignal::wait`] but makes a [`Clone`] under the hood to
+    /// make the future 'static.
+    pub fn wait_owned(&self) -> impl Future<Output = ()> + Send + 'static {
+        let this = self.clone();
+        async move { this.wait().await }
+    }
+
     /// Indicates whether this [`ShutdownSignal`] has been
     /// [emitted][`Self::emit`].
     pub fn is_emitted(&self) -> bool {

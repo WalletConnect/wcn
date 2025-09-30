@@ -111,6 +111,10 @@ impl Config {
         wcn_cluster_api::rpc::ClusterApi::new().with_rpc_timeout(Duration::from_secs(5))
     }
 
+    fn metrics_api(&self) -> wcn_metrics_api::rpc::MetricsApi {
+        wcn_metrics_api::rpc::MetricsApi::new().with_rpc_timeout(Duration::from_secs(5))
+    }
+
     fn try_into_app(&self) -> Result<AppConfig, ErrorInner> {
         let replica_client_cfg = rpc_client::Config {
             keypair: self.keypair.clone(),
@@ -148,10 +152,21 @@ impl Config {
             priority: wcn_rpc::transport::Priority::Low,
         };
 
+        let metrics_client_cfg = rpc_client::Config {
+            keypair: self.keypair.clone(),
+            connection_timeout: Duration::from_secs(5),
+            reconnect_interval: Duration::from_millis(1),
+            max_concurrent_rpcs: 300,
+            max_idle_connection_timeout: self.max_idle_connection_timeout,
+            priority: wcn_rpc::transport::Priority::Low,
+        };
+
         let database_client = self.database_api().try_into_client(database_client_cfg)?;
         let database_low_prio_client = self
             .database_api()
             .try_into_client(database_low_prio_client_cfg)?;
+
+        let metrics_client = self.metrics_api().try_into_client(metrics_client_cfg)?;
 
         Ok(AppConfig {
             encryption_key: self.smart_contract_encryption_key,
@@ -172,6 +187,13 @@ impl Config {
                 &self.database_peer_id,
                 (),
             ),
+
+            database_metrics_connection: metrics_client.new_connection(
+                self.database_secondary_socket_addr(),
+                &self.database_peer_id,
+                (),
+            ),
+            metrics_client,
         })
     }
 
@@ -200,6 +222,9 @@ struct AppConfig {
 
     database_connection: storage_api_client::DatabaseConnection,
     database_low_prio_connection: storage_api_client::DatabaseConnection,
+
+    database_metrics_connection: wcn_metrics_api::rpc::client::Connection,
+    metrics_client: wcn_metrics_api::rpc::Client,
 }
 
 #[derive(AsRef, Clone)]
@@ -305,6 +330,17 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         .cluster_api()
         .with_state(cluster.smart_contract().clone());
 
+    let metrics_provider = wcn_metrics::Provider::new([
+        wcn_metrics::Target::remote("db", app_cfg.database_metrics_connection.clone()),
+        wcn_metrics::Target::local("node", config.prometheus_handle.clone()),
+    ]);
+
+    let metrics_api = config.metrics_api().with_state(metrics_provider);
+
+    let prometheus_server_fut = prometheus_server(&config)?;
+    let system_monitor_fut = wcn_metrics::system::Monitor::new(config.prometheus_handle)
+        .run(config.shutdown_signal.wait_owned());
+
     let primary_rpc_server_cfg = wcn_rpc::server::Config {
         name: "primary",
         socket: config.primary_rpc_server_socket,
@@ -339,13 +375,8 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
 
     let secondary_rpc_server_fut = coordinator_api
         .multiplex(replica_api)
+        .multiplex(metrics_api)
         .serve(secondary_rcp_server_cfg)?;
-
-    let metrics_server_fut = metrics::serve(
-        config.metrics_server_socket,
-        config.prometheus_handle,
-        config.shutdown_signal.clone(),
-    )?;
 
     let migration_manager_fut = migration_manager
         .map(|manager| manager.run(async move { config.shutdown_signal.wait().await }))
@@ -354,12 +385,35 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
     (
         primary_rpc_server_fut,
         secondary_rpc_server_fut,
-        metrics_server_fut,
+        system_monitor_fut,
+        prometheus_server_fut,
         migration_manager_fut,
     )
         .join()
         .map(drop)
         .pipe(Ok)
+}
+
+fn prometheus_server(cfg: &Config) -> io::Result<impl Future<Output = ()>> {
+    let socket = cfg.metrics_server_socket.try_clone()?;
+    let prometheus = cfg.prometheus_handle.clone();
+    let shutdown_fut = cfg.shutdown_signal.wait_owned();
+
+    let svc = axum::Router::new()
+        .route(
+            "/metrics",
+            axum::routing::get(move || async move { prometheus.render() }),
+        )
+        .into_make_service();
+
+    socket.set_nonblocking(true)?;
+    let listener = tokio::net::TcpListener::from_std(socket)?;
+
+    Ok(async {
+        let _ = axum::serve(listener, svc)
+            .with_graceful_shutdown(shutdown_fut)
+            .await;
+    })
 }
 
 #[derive(Debug, thiserror::Error)]

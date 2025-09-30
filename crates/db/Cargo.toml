@@ -25,6 +25,8 @@ wcn_logging = { workspace = true }
 wcn_rpc = { workspace = true, features = ["server"] }
 wcn_rocks = { workspace = true }
 wcn_storage_api = { workspace = true, features = ["rpc_server"] }
+wcn_metrics_api = { workspace = true, features = ["rpc_server"] }
+wcn_metrics = { workspace = true }
 
 # Org
 wc = { workspace = true, features = ["alloc", "future", "metrics"] }

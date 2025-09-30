@@ -1,0 +1,37 @@
+[package]
+name = "wcn_metrics"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+cluster = ["wcn_cluster"]
+
+[dependencies]
+# Local
+wcn_metrics_api = { workspace = true }
+wcn_cluster = { workspace = true, optional = true }
+
+# Org
+wc = { workspace = true, features = ["alloc"] }
+
+# Derives
+derive_more = { workspace = true, features = ["from"] }
+derive-where = { workspace = true }
+
+# General purpose
+tap = { workspace = true }
+
+# Async
+futures = { workspace = true }
+futures-concurrency = { workspace = true }
+tokio = { version = "1.0", default-features = false }
+
+# O11y
+tracing = { workspace = true }
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+sysinfo = { workspace = true, features = ["system", "network"] }

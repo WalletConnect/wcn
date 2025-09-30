@@ -21,6 +21,8 @@ debug = 1
 # Local
 wcn_cluster = { path = "crates/cluster", default-features = false }
 wcn_cluster_api = { path = "crates/cluster_api", default-features = false }
+wcn_metrics_api = { path = "crates/metrics_api", default-features = false }
+wcn_metrics = { path = "crates/metrics", default-features = false }
 wcn_logging = { path = "crates/logging", default-features = false }
 wcn_rocks = { path = "crates/rocks", default-features = false }
 wcn_rpc = { path = "crates/rpc", default-features = false }
