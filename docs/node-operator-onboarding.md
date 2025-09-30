@@ -111,6 +111,9 @@ export METRICS_SERVER_PORT=3002
 export ROCKSDB_DIR=/wcn/rocksdb
 ```
 
+You don't need to do regular database backups, we have fault tolerance (via data replication redundancy) on the network level.
+However, it makes sense to make a filesystem snapshot if you need to move your database across machines / data centers.
+
 ### Choose Optimism RPC provider
 
 WCN Nodes require access to the WCN Cluster smart-contract on the Optimism chain.
@@ -188,11 +191,22 @@ export SMART_CONTRACT_SIGNER_PRIVATE_KEY="<private key of your Node Operator>"
 **No matter how many Nodes you have this variable MUST only be configured on one of them!**
 Specifying this variable makes the node "primary", which enables data migration management on it.
 
+Your "primary" node is allowed to be offline for short periods of time, for example, during rolling re-deployments.
+
 ### Firewall
 
 To re-iterate, please double check the following:
 - your Database is behind a firewall and **IS NOT** being exposed to the public internet
 - your Nodes **ARE** being exposed to the public internet on `PRIMARY_RPC_SERVER_PORT` (UDP) and `SECONDARY_RPC_SERVER_PORT` (UDP)
+
+### Joining the Cluster
+
+After everything mentioned above is setup, contact WalletConnect team and provide the following:
+- your Node Operator ID (Optimism address, the one that corresponds to `SMART_CONTRACT_SIGNER_PRIVATE_KEY`)
+- Peer IDs of your Nodes, their IPv4 addresses and `PRIMARY_RPC_SERVER_PORT`/`SECONDARY_RPC_SERVER_PORT` ports
+
+The data you provide will be written to the Smart-Contract.
+After this initial write you will be able to update the list of your Nodes yourself using our CLI tool.
 
 ## Availability
 
