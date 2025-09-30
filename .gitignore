@@ -41,3 +41,4 @@ terraform.rc
 #Ignore terraform lock hcl
 .terraform.lock.hcl
 *.auto.tfvars
+tmp/

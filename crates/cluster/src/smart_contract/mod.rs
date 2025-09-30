@@ -237,13 +237,15 @@ pub struct AccountAddress([u8; 20]);
 
 impl fmt::Debug for AccountAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", const_hex::encode(self.0))
+        // NOTE: prexied with `0x` as per convention for Ethereum addresses
+        write!(f, "0x{}", const_hex::encode(self.0))
     }
 }
 
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", const_hex::encode(self.0))
+        // NOTE: prexied with `0x` as per convention for Ethereum addresses
+        write!(f, "0x{}", const_hex::encode(self.0))
     }
 }
 
@@ -324,6 +326,7 @@ impl FromStr for AccountAddress {
     type Err = InvalidAddressError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.strip_prefix("0x").unwrap_or(s);
         const_hex::decode_to_array(s)
             .map(Self)
             .map_err(|err| InvalidAddressError(err.to_string()))
