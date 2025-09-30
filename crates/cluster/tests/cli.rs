@@ -148,7 +148,7 @@ pub async fn cli_test_suite() {
 
     test_keygen().unwrap();
     test_deploy(&anvil, &key, operators.clone(), cfg).unwrap();
-    test_update(&anvil, &key, operators.clone(), cfg.clone(), sc.address()).unwrap();
+    test_update(&anvil, &key, operators.clone(), cfg, sc.address()).unwrap();
     test_update_settings(&anvil, &key, cfg, sc.address()).unwrap();
     // test_migration_start(&anvil, key, sc).unwrap();
 }
