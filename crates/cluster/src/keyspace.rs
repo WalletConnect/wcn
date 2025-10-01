@@ -68,7 +68,7 @@ pub type Version = u64;
 
 impl Keyspace {
     /// Creates a new [`Keyspace`].
-    pub(crate) fn new(
+    pub fn new(
         operators: HashSet<node_operator::Idx>,
         replication_strategy: ReplicationStrategy,
     ) -> Result<Keyspace, CreationError> {
