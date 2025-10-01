@@ -2,6 +2,7 @@ use {
     crate::Config,
     std::{future::Future, io, path::Path},
     tap::{TapFallible as _, TapOptional as _},
+    wc::metrics::backend as metrics,
     wcn_rocks::RocksBackend,
 };
 
@@ -32,7 +33,6 @@ pub(super) fn custom_system_monitor_metrics_fn(
     db: RocksBackend,
 ) -> impl Fn() + Send + 'static {
     let is_rocksdb_metrics_enabled = cfg.rocksdb.enable_metrics;
-    let db = db.clone();
 
     move || {
         // We have a similar issue to https://github.com/facebook/rocksdb/issues/3889

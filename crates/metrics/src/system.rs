@@ -1,10 +1,10 @@
 use {
     futures::FutureExt as _,
     futures_concurrency::future::Race as _,
-    metrics_exporter_prometheus::PrometheusHandle,
     std::{path::PathBuf, time::Duration},
     sysinfo::{Disks, Networks, System},
     tokio::sync::mpsc,
+    wc::metrics::{backend as metrics, exporter_prometheus::PrometheusHandle},
 };
 
 /// System monitor.

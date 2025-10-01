@@ -3,9 +3,9 @@ use {
     crate::storage::Storage,
     futures::FutureExt as _,
     futures_concurrency::future::Join as _,
-    metrics_exporter_prometheus::BuildError as PrometheusBuildError,
     std::{future::Future, io, time::Duration},
     tap::Pipe as _,
+    wc::metrics::exporter_prometheus::BuildError as PrometheusBuildError,
     wcn_rpc::server::{Api as _, Server},
 };
 
@@ -78,7 +78,7 @@ pub fn run(cfg: Config) -> Result<impl Future<Output = ()> + Send, Error> {
     let metrics_api = wcn_metrics_api::rpc::MetricsApi::new()
         .with_rpc_timeout(Duration::from_secs(2))
         .with_state(wcn_metrics::LocalProvider::new([
-            wcn_metrics::Target::local("db", cfg.prometheus_handle.clone()),
+            wcn_metrics::Target::local("db", cfg.prometheus_handle),
         ]));
 
     let primary_rpc_server_fut = database_api

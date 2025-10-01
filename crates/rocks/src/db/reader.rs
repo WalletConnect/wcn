@@ -12,6 +12,7 @@ use {
         thread::{self, JoinHandle},
     },
     tokio::sync::oneshot,
+    wc::metrics::backend as metrics,
 };
 
 const CHANNEL_CAPACITY: usize = 1024;

@@ -1,9 +1,9 @@
-use {metrics_exporter_prometheus::PrometheusHandle, wcn_metrics_api::MetricsApi};
+use {wc::metrics::exporter_prometheus::PrometheusHandle, wcn_metrics_api::MetricsApi};
 
-#[cfg(feature = "cluster")]
-pub mod aggregator;
-#[cfg(feature = "cluster")]
-pub use aggregator::Aggregator;
+// #[cfg(feature = "cluster")]
+// pub mod aggregator;
+// #[cfg(feature = "cluster")]
+// pub use aggregator::Aggregator;
 
 pub mod provider;
 pub use provider::{LocalProvider, Provider};

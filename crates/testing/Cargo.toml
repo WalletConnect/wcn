@@ -13,6 +13,9 @@ wcn_storage_api = { workspace = true }
 wcn_db = { workspace = true }
 wcn_node = { workspace = true }
 
+# Org
+wc = { workspace = true, features = ["metrics_exporter_prometheus"] }
+
 # Derives
 derive_more = { workspace = true, features = ["as_ref"] }
 
@@ -34,7 +37,6 @@ tokio = { workspace = true }
 
 # O11y
 tracing = { workspace = true }
-metrics-exporter-prometheus = { workspace = true }
 
 libp2p-identity = { workspace = true, features = ["rand"] }
 alloy = { workspace = true, features = [

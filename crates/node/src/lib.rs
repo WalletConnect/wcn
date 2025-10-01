@@ -4,7 +4,6 @@ use {
     futures::{future::OptionFuture, FutureExt as _},
     futures_concurrency::future::Join as _,
     libp2p_identity::Keypair,
-    metrics_exporter_prometheus::PrometheusHandle,
     std::{
         future::Future,
         io,
@@ -13,6 +12,7 @@ use {
         time::Duration,
     },
     tap::Pipe,
+    wc::metrics::exporter_prometheus::PrometheusHandle,
     wcn_cluster::{
         keyspace,
         node_operator,
@@ -27,8 +27,6 @@ use {
     },
     wcn_storage_api::rpc::client as storage_api_client,
 };
-
-mod metrics;
 
 /// Configuration options of a WCN Node.
 #[derive_where(Debug)]
@@ -236,6 +234,9 @@ struct Node {
     replica_connection: storage_api_client::ReplicaConnection,
 
     replica_low_prio_connection: storage_api_client::ReplicaConnection,
+
+    // TODO: will be used for metrics aggregation
+    _metrics_connection: wcn_metrics_api::rpc::client::Connection,
 }
 
 impl wcn_cluster::Config for AppConfig {
@@ -252,6 +253,11 @@ impl wcn_cluster::Config for AppConfig {
                 (),
             ),
             replica_low_prio_connection: self.replica_low_prio_client.new_connection(
+                node.secondary_socket_addr(),
+                &node.peer_id,
+                (),
+            ),
+            _metrics_connection: self.metrics_client.new_connection(
                 node.secondary_socket_addr(),
                 &node.peer_id,
                 (),

@@ -8,7 +8,7 @@ publish = false
 workspace = true
 
 [features]
-cluster = ["wcn_cluster"]
+cluster = ["wcn_cluster", "prometheus-parse"]
 
 [dependencies]
 # Local
@@ -16,7 +16,7 @@ wcn_metrics_api = { workspace = true }
 wcn_cluster = { workspace = true, optional = true }
 
 # Org
-wc = { workspace = true, features = ["alloc"] }
+wc = { workspace = true, features = ["metrics_exporter_prometheus"] }
 
 # Derives
 derive_more = { workspace = true, features = ["from"] }
@@ -32,6 +32,5 @@ tokio = { version = "1.0", default-features = false }
 
 # O11y
 tracing = { workspace = true }
-metrics = { workspace = true }
-metrics-exporter-prometheus = { workspace = true }
 sysinfo = { workspace = true, features = ["system", "network"] }
+prometheus-parse = { version = "0.2", optional = true }

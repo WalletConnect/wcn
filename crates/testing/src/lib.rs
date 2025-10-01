@@ -8,7 +8,6 @@ use {
     futures::{StreamExt, stream},
     futures_concurrency::future::Race as _,
     libp2p_identity::Keypair,
-    metrics_exporter_prometheus::PrometheusRecorder,
     std::{
         collections::HashSet,
         net::{Ipv4Addr, SocketAddrV4, TcpListener},
@@ -17,6 +16,7 @@ use {
         time::Duration,
     },
     tap::Pipe,
+    wc::metrics::exporter_prometheus::PrometheusHandle,
     wcn_client::{Client as WcnClient, PeerId},
     wcn_cluster::{
         Cluster,
@@ -61,6 +61,8 @@ pub struct TestCluster {
     cluster: Cluster<DeploymentConfig>,
     anvil: AnvilInstance,
 
+    prometheus_handle: PrometheusHandle,
+
     next_operator_id: u8,
 }
 
@@ -77,7 +79,7 @@ impl Drop for TestCluster {
 }
 
 impl TestCluster {
-    pub async fn deploy() -> Self {
+    pub async fn deploy(prometheus_handle: PrometheusHandle) -> Self {
         // Spin up a local Anvil instance automatically
         let anvil = Anvil::new()
             .block_time(1)
@@ -107,7 +109,7 @@ impl TestCluster {
             .unwrap();
 
         let mut operators: Vec<_> = (1..=OPERATORS_COUNT)
-            .map(|n| NodeOperator::new(n, &anvil, contract_address))
+            .map(|n| NodeOperator::new(n, &anvil, contract_address, prometheus_handle.clone()))
             .collect();
         let operators_ = operators.iter().map(NodeOperator::to_domain).collect();
 
@@ -134,6 +136,7 @@ impl TestCluster {
             cluster,
             anvil,
             next_operator_id: OPERATORS_COUNT + 1,
+            prometheus_handle,
         }
     }
 
@@ -232,8 +235,12 @@ impl TestCluster {
             self.operators[idx].shutdown().await;
             self.operators.remove(idx);
 
-            let mut operator =
-                NodeOperator::new(self.next_operator_id(), &self.anvil, contract_address);
+            let mut operator = NodeOperator::new(
+                self.next_operator_id(),
+                &self.anvil,
+                contract_address,
+                self.prometheus_handle.clone(),
+            );
 
             let operator_id = *operator.signer.address();
             tracing::info!(%operator_id, "Adding node operator to the cluster");
@@ -263,6 +270,10 @@ impl TestCluster {
 
     pub fn node_operator(&self, id: node_operator::Id) -> Option<&NodeOperator> {
         self.operators.iter().find(|op| op.signer.address() == &id)
+    }
+
+    pub fn prometheus_handle(&self) -> &PrometheusHandle {
+        &self.prometheus_handle
     }
 
     fn next_operator_id(&mut self) -> u8 {
@@ -357,7 +368,6 @@ impl Client {
 struct Database {
     operator_id: node_operator::Id,
     config: wcn_db::Config,
-    _prometheus_recorder: PrometheusRecorder,
     shutdown_signal: ShutdownSignal,
     thread_handle: Option<thread::JoinHandle<()>>,
 }
@@ -403,7 +413,6 @@ impl Database {
 pub struct Node {
     operator_id: node_operator::Id,
     config: wcn_node::Config,
-    _prometheus_recorder: PrometheusRecorder,
     shutdown_signal: ShutdownSignal,
     thread_handle: Option<thread::JoinHandle<()>>,
 }
@@ -491,6 +500,7 @@ impl NodeOperator {
         id: u8,
         anvil: &AnvilInstance,
         contract_address: smart_contract::Address,
+        prometheus_handle: PrometheusHandle,
     ) -> NodeOperator {
         let smart_contract_signer = anvil.keys()[id as usize]
             .to_bytes()
@@ -503,9 +513,6 @@ impl NodeOperator {
         let db_keypair = Keypair::generate_ed25519();
         let db_peer_id = db_keypair.public().to_peer_id();
         let db_shutdown_signal = ShutdownSignal::new();
-
-        let db_prometheus_recorder =
-            metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
 
         let db_config = wcn_db::Config {
             keypair: db_keypair,
@@ -521,7 +528,7 @@ impl NodeOperator {
             rocksdb_dir: format!("/tmp/wcn_db/{db_peer_id}").parse().unwrap(),
             rocksdb: Default::default(),
             shutdown_signal: db_shutdown_signal.clone(),
-            prometheus_handle: db_prometheus_recorder.handle(),
+            prometheus_handle,
         };
 
         let database_primary_rpc_server_port = db_config.primary_rpc_server_socket.port().unwrap();
@@ -530,7 +537,6 @@ impl NodeOperator {
 
         let database = Database {
             config: db_config,
-            _prometheus_recorder: db_prometheus_recorder,
             shutdown_signal: db_shutdown_signal,
             thread_handle: None,
             operator_id,
@@ -542,7 +548,7 @@ impl NodeOperator {
                 let shutdown_signal = ShutdownSignal::new();
 
                 let prometheus_recorder =
-                    metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
+                    wc::metrics::exporter_prometheus::PrometheusBuilder::new().build_recorder();
 
                 let config = wcn_node::Config {
                     keypair,
@@ -567,7 +573,6 @@ impl NodeOperator {
                 Node {
                     operator_id,
                     config,
-                    _prometheus_recorder: prometheus_recorder,
                     shutdown_signal,
                     thread_handle: None,
                 }

@@ -16,10 +16,15 @@ async fn test_suite() {
         .finish();
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
-    let mut cluster = TestCluster::deploy().await;
+    let prometheus_handle = wc::metrics::exporter_prometheus::PrometheusBuilder::new()
+        .install_recorder()
+        .unwrap();
+
+    let mut cluster = TestCluster::deploy(prometheus_handle).await;
 
     tokio::time::sleep(Duration::from_secs(5)).await;
     test_client_encryption(&cluster).await;
+    test_metrics(&cluster).await;
 
     cluster
         .under_load(async |cluster| {
@@ -138,4 +143,13 @@ async fn test_client_encryption(cluster: &TestCluster) {
     assert!(matches!(err, wcn_client::Error::Encryption(_)));
 
     tracing::info!("WCN client encryption tests passed");
+}
+
+async fn test_metrics(cluster: &TestCluster) {
+    let metrics = cluster.prometheus_handle().render();
+
+    let contains_target_metrics =
+        metrics.contains("wcn_rpc") && metrics.contains("futures_started");
+
+    assert!(contains_target_metrics, "{metrics}");
 }
