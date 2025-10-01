@@ -11,6 +11,7 @@ use {
         marker::PhantomData,
         time::Instant,
     },
+    wc::metrics::backend as metrics,
 };
 
 pub trait CompactionFilterFactory<C: cf::Column>:

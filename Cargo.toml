@@ -21,6 +21,8 @@ debug = 1
 # Local
 wcn_cluster = { path = "crates/cluster", default-features = false }
 wcn_cluster_api = { path = "crates/cluster_api", default-features = false }
+wcn_metrics_api = { path = "crates/metrics_api", default-features = false }
+wcn_metrics = { path = "crates/metrics", default-features = false }
 wcn_logging = { path = "crates/logging", default-features = false }
 wcn_rocks = { path = "crates/rocks", default-features = false }
 wcn_rpc = { path = "crates/rpc", default-features = false }
@@ -32,7 +34,7 @@ wcn_db = { path = "crates/db", default-features = false }
 wcn_node = { path = "crates/node", default-features = false }
 
 # Org
-wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.14.1", default-features = false }
+wc = { git = "https://github.com/WalletConnect/utils-rs.git", rev = "80b92a9", default-features = false }
 
 # Derives
 derive_more = { version = "2.0", default-features = false, features = ["std"] }
@@ -76,8 +78,6 @@ tokio-serde = { version = "0.9", default-features = false }
 # O11y
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
-metrics = { version = "0.24", default-features = false }
-metrics-exporter-prometheus = { version = "0.17", default-features = false }
 sysinfo = { version = "0.37", default-features = false }
 
 # Other

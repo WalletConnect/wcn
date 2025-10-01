@@ -1,0 +1,27 @@
+[package]
+name = "wcn_metrics_api"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = []
+rpc_client = ["wcn_rpc/client"]
+rpc_server = ["wcn_rpc/server"]
+
+[dependencies]
+# Local
+wcn_rpc = { workspace = true }
+
+# Derives
+derive_more = { workspace = true, features = ["from", "try_into"] }
+thiserror = { workspace = true }
+strum = { workspace = true }
+
+# Serialization
+serde = "1"
+
+[dev-dependencies]

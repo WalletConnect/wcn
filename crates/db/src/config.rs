@@ -3,7 +3,6 @@ use {
     base64::Engine as _,
     derive_where::derive_where,
     libp2p_identity::{Keypair, PeerId},
-    metrics_exporter_prometheus::PrometheusHandle,
     serde::{Deserialize, Deserializer},
     std::{
         net::{Ipv4Addr, SocketAddrV4, TcpListener},
@@ -11,6 +10,7 @@ use {
         time::Duration,
     },
     tap::{Pipe as _, TapOptional as _},
+    wc::metrics::exporter_prometheus::PrometheusHandle,
     wcn_rocks::RocksdbDatabaseConfig,
     wcn_rpc::server::ShutdownSignal,
 };

@@ -1,10 +1,10 @@
-pub use wcn_rpc_derive::Message;
 use {
     derive_more::Display,
     serde::{de::DeserializeOwned, Serialize},
     std::{borrow::Cow, fmt::Debug, marker::PhantomData, time::Duration},
     transport::Codec,
 };
+pub use {libp2p_identity::PeerId, wcn_rpc_derive::Message};
 
 #[cfg(feature = "client")]
 pub mod client;

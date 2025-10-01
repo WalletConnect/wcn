@@ -29,6 +29,11 @@ pub struct NodeOperators<N = Node> {
 }
 
 impl<N> NodeOperators<N> {
+    /// Returns an iterator over all [`NodeOperator`]s in this collection.
+    pub fn iter(&self) -> impl Iterator<Item = &NodeOperator<N>> {
+        self.slots.iter().filter_map(|slot| slot.as_ref())
+    }
+
     pub(super) fn from_slots(
         slots: impl IntoIterator<Item = Option<NodeOperator<N>>>,
     ) -> Result<Self, CreationError> {

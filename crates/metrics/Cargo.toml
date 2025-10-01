@@ -1,0 +1,39 @@
+[package]
+name = "wcn_metrics"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+cluster = ["wcn_cluster", "prometheus-parse"]
+
+[dependencies]
+# Local
+wcn_metrics_api = { workspace = true }
+wcn_cluster = { workspace = true, optional = true }
+
+# Org
+wc = { workspace = true, features = ["metrics_exporter_prometheus"] }
+
+# Derives
+derive_more = { workspace = true, features = ["from"] }
+derive-where = { workspace = true }
+
+# General purpose
+tap = { workspace = true }
+
+# Async
+futures = { workspace = true }
+futures-concurrency = { workspace = true }
+tokio = { version = "1.0", default-features = false }
+
+# O11y
+tracing = { workspace = true }
+sysinfo = { workspace = true, features = ["system", "network", "disk"] }
+prometheus-parse = { version = "0.2", optional = true }
+
+# Other
+libp2p-identity = { workspace = true }

@@ -1,8 +1,8 @@
 use {
     anyhow::Context as _,
     futures::{future::FusedFuture as _, FutureExt as _},
-    metrics_exporter_prometheus::PrometheusBuilder,
     std::pin,
+    wc::metrics::exporter_prometheus::PrometheusBuilder,
     wcn_db::{config, Error},
 };
 
