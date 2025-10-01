@@ -12,7 +12,7 @@ pub mod system;
 
 /// Metrics target.
 ///
-/// Represents a destinct service the metrics can be collected for.
+/// Represents a distinct service the metrics can be collected for.
 pub struct Target<M: MetricsApi = sealed::NoRemote> {
     name: &'static str,
     inner: TargetInner<M>,
