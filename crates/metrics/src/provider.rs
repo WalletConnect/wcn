@@ -1,9 +1,9 @@
 use {
     crate::{Target, TargetInner},
     derive_where::derive_where,
+    libp2p_identity::PeerId,
     std::{collections::HashMap, sync::Arc},
     tap::Pipe as _,
-    wcn_cluster::PeerId,
     wcn_metrics_api::MetricsApi,
 };
 

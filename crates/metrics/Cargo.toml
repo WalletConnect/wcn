@@ -34,3 +34,6 @@ tokio = { version = "1.0", default-features = false }
 tracing = { workspace = true }
 sysinfo = { workspace = true, features = ["system", "network", "disk"] }
 prometheus-parse = { version = "0.2", optional = true }
+
+# Other
+libp2p-identity = { workspace = true }
