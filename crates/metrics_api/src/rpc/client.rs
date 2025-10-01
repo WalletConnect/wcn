@@ -19,6 +19,6 @@ impl crate::MetricsApi for Connection {
 impl From<wcn_rpc::client::Error> for crate::Error {
     fn from(err: wcn_rpc::client::Error) -> Self {
         Self::new(crate::ErrorKind::Transport)
-            .with_message(format!("wcn_cluster_api::client::Error: {err}"))
+            .with_message(format!("wcn_metrics_api::client::Error: {err}"))
     }
 }

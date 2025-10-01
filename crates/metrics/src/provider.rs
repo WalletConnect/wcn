@@ -46,7 +46,7 @@ impl<M: MetricsApi, A: Authorization> Provider<M, A> {
     /// Returns `None` if the peer is not authorized to use this
     /// [`Provider`].
     pub fn new_inbound_connection(&self, peer_id: PeerId) -> Option<InboundConnection<M, A>> {
-        if self.auth.is_authorized(&peer_id) {
+        if !self.auth.is_authorized(&peer_id) {
             return None;
         }
 
