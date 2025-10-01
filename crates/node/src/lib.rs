@@ -339,7 +339,8 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
     let metrics_provider = wcn_metrics::Provider::new([
         wcn_metrics::Target::remote("db", app_cfg.database_metrics_connection.clone()),
         wcn_metrics::Target::local("node", config.prometheus_handle.clone()),
-    ]);
+    ])
+    .with_auth(cluster.clone());
 
     let metrics_api = config.metrics_api().with_state(metrics_provider);
 

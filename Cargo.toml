@@ -34,7 +34,7 @@ wcn_db = { path = "crates/db", default-features = false }
 wcn_node = { path = "crates/node", default-features = false }
 
 # Org
-wc = { git = "https://github.com/WalletConnect/utils-rs.git", rev = "45a6b30", default-features = false }
+wc = { git = "https://github.com/WalletConnect/utils-rs.git", rev = "80b92a9", default-features = false }
 
 # Derives
 derive_more = { version = "2.0", default-features = false, features = ["std"] }
