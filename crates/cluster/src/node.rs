@@ -131,7 +131,7 @@ impl From<Node> for V1 {
         Self {
             peer_id: node.peer_id,
             ipv4_addr: node.ipv4_addr,
-            private_ipv4_addr: None,
+            private_ipv4_addr: node.private_ipv4_addr,
             primary_port: node.primary_port,
             secondary_port: node.secondary_port,
         }
