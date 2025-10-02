@@ -1,12 +1,12 @@
 use {
-    crate::{Error, NodeData, PeerAddr},
+    crate::{Connector, Error, NodeData, PeerAddr},
     arc_swap::ArcSwap,
     derive_more::derive::AsRef,
     derive_where::derive_where,
     futures::{Stream, StreamExt as _, TryStreamExt as _, future::Either, stream},
-    std::{marker::PhantomData, sync::Arc, time::Duration},
+    std::{collections::HashSet, marker::PhantomData, sync::Arc, time::Duration},
     tokio::sync::oneshot,
-    wc::future::FutureExt,
+    wc::future::FutureExt as _,
     wcn_cluster::{
         EncryptionKey,
         PeerId,
@@ -14,21 +14,45 @@ use {
         smart_contract::{ReadError, ReadResult},
     },
     wcn_cluster_api::{
-        ClusterApi,
+        ClusterApi as _,
         ClusterView,
         Event,
         Read,
-        rpc::client::{Cluster as ClusterClient, ClusterConnection},
+        rpc::{
+            ClusterApi,
+            client::{Cluster as ClusterClient, ClusterConnection},
+        },
     },
-    wcn_storage_api::rpc::client::{Coordinator as CoordinatorClient, CoordinatorConnection},
+    wcn_storage_api::rpc::{
+        CoordinatorApi,
+        client::{Coordinator as CoordinatorClient, CoordinatorConnection},
+    },
 };
 
 #[derive(Clone)]
 pub struct Node<D> {
     pub peer_id: PeerId,
-    pub cluster_conn: ClusterConnection,
-    pub coordinator_conn: CoordinatorConnection,
+    pub public_cluster_conn: ClusterConnection,
+    pub public_coordinator_conn: CoordinatorConnection,
+    pub private_cluster_conn: Option<ClusterConnection>,
+    pub private_coordinator_conn: Option<CoordinatorConnection>,
     pub data: D,
+}
+
+impl<D> Node<D> {
+    pub(crate) fn cluster_api(&self) -> Connector<ClusterApi> {
+        Connector {
+            public_conn: self.public_cluster_conn.clone(),
+            private_conn: self.private_cluster_conn.clone(),
+        }
+    }
+
+    pub(crate) fn coordinator_api(&self) -> Connector<CoordinatorApi> {
+        Connector {
+            public_conn: self.public_coordinator_conn.clone(),
+            private_conn: self.private_coordinator_conn.clone(),
+        }
+    }
 }
 
 impl<D> AsRef<PeerId> for Node<D> {
@@ -71,43 +95,66 @@ where
     type Node = Node<D>;
 
     fn new_node(&self, operator_id: node_operator::Id, node: wcn_cluster::Node) -> Self::Node {
-        let cluster_conn =
-            self.cluster_api
-                .new_connection(node.primary_socket_addr(), &node.peer_id, ());
-        let coordinator_conn =
-            self.coordinator_api
-                .new_connection(node.primary_socket_addr(), &node.peer_id, ());
+        let id = &node.peer_id;
+        let public_addr = node.primary_socket_addr();
+
+        let public_cluster_conn = self.cluster_api.new_connection(public_addr, id, ());
+        let public_coordinator_conn = self.coordinator_api.new_connection(public_addr, id, ());
+
+        let (private_cluster_conn, private_coordinator_conn) = node
+            .primary_socket_addr_private()
+            .map(|addr| {
+                let cluster_conn = self.cluster_api.new_connection(addr, id, ());
+                let coordinator_conn = self.coordinator_api.new_connection(addr, id, ());
+
+                (cluster_conn, coordinator_conn)
+            })
+            .unzip();
 
         Node {
             peer_id: node.peer_id,
-            cluster_conn,
-            coordinator_conn,
+            public_cluster_conn,
+            public_coordinator_conn,
+            private_cluster_conn,
+            private_coordinator_conn,
             data: D::new(&operator_id, &node),
         }
     }
 }
 
-async fn select_open_connection<D>(cluster: &ArcSwap<View<D>>) -> ClusterConnection
+async fn select_open_connection<D>(
+    cluster: &ArcSwap<View<D>>,
+    trusted_operators: &HashSet<node_operator::Id>,
+) -> ClusterConnection
 where
     D: NodeData,
 {
-    loop {
-        let conn = cluster
-            .load()
-            .node_operators()
-            .next()
-            .next_node()
-            .cluster_conn
-            .clone();
+    let cluster = cluster.load();
+    let next_node = || cluster.node_operators().next().next_node().cluster_api();
 
-        let success = conn
+    loop {
+        // Empty trusted operators list means all nodes are allowed to be used.
+        let conn = if trusted_operators.is_empty() {
+            next_node()
+        } else {
+            // Try to find a white-listed node. If that fails, just use the next node.
+            cluster
+                .node_operators()
+                .find_next_operator(|operator| {
+                    trusted_operators
+                        .contains(&operator.id)
+                        .then(|| operator.next_node().cluster_api())
+                })
+                .unwrap_or_else(next_node)
+        };
+
+        let result = conn
             .wait_open()
             .with_timeout(Duration::from_millis(1500))
-            .await
-            .is_ok();
+            .await;
 
-        if success {
-            return conn;
+        if let Ok(conn) = result {
+            return conn.clone();
         }
     }
 }
@@ -122,7 +169,10 @@ where
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum SmartContract<D: NodeData> {
     Static(ClusterView),
-    Dynamic(Arc<ArcSwap<View<D>>>),
+    Dynamic {
+        trusted_operators: HashSet<node_operator::Id>,
+        cluster_view: Arc<ArcSwap<View<D>>>,
+    },
 }
 
 impl<D: NodeData> Read for SmartContract<D> {
@@ -130,7 +180,10 @@ impl<D: NodeData> Read for SmartContract<D> {
         match self {
             Self::Static(view) => Ok(view.clone()),
 
-            Self::Dynamic(cluster) => select_open_connection(cluster)
+            Self::Dynamic {
+                cluster_view,
+                trusted_operators,
+            } => select_open_connection(cluster_view, trusted_operators)
                 .await
                 .cluster_view()
                 .await
@@ -142,8 +195,11 @@ impl<D: NodeData> Read for SmartContract<D> {
         match self {
             Self::Static(_) => Ok(Either::Left(stream::pending())),
 
-            Self::Dynamic(cluster) => {
-                let stream = select_open_connection(cluster)
+            Self::Dynamic {
+                cluster_view,
+                trusted_operators,
+            } => {
+                let stream = select_open_connection(cluster_view, trusted_operators)
                     .await
                     .events()
                     .await

@@ -58,6 +58,7 @@ async fn test_client_encryption(cluster: &TestCluster) {
             operation_timeout: Duration::from_secs(2),
             reconnect_interval: Duration::from_millis(100),
             max_concurrent_rpcs: 5000,
+            max_retries: 3,
             nodes: operator
                 .nodes()
                 .iter()
@@ -66,7 +67,7 @@ async fn test_client_encryption(cluster: &TestCluster) {
                     addr: SocketAddrV4::new(Ipv4Addr::LOCALHOST, node.primary_rpc_server_port()),
                 })
                 .collect(),
-            max_retries: 3,
+            trusted_operators: Default::default(),
         })
     };
 

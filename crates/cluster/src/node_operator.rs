@@ -258,6 +258,7 @@ impl<N> NodeOperator<N> {
             .map(|_| Node {
                 peer_id: PeerId::random(),
                 ipv4_addr: Ipv4Addr::UNSPECIFIED,
+                private_ipv4_addr: None,
                 primary_port: 0,
                 secondary_port: 0,
             })
