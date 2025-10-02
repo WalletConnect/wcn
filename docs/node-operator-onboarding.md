@@ -25,8 +25,8 @@ The address of that keypair will be the identifier of your Node Operator in the 
 
 You will need to provide the secret key to the env of one of your Nodes, so it's not recommended to reuse an existing keypair.
 
-The account should have some Optimism on it, the smart-contract calls are cheap and performed rarely.
-Having 5$ equivalent of Optimism on it should be good enough for a year.
+The account should have some ETH on the Optimism Mainnet. Smart contract calls are inexpensive and infrequent.
+Having the equivalent of $5 worth of ETH on Optimism should be sufficient for about a year.
 
 ### Generate Node & Database keypairs
 
