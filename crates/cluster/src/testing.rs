@@ -24,6 +24,7 @@ pub fn node_operator(id: u8) -> NodeOperator {
     let nodes = (0..2).map(|node_id| Node {
         peer_id: node_peer_id(id, node_id),
         ipv4_addr: node_addr(id, node_id),
+        private_ipv4_addr: None,
         primary_port: 3000,
         secondary_port: 3001,
     });

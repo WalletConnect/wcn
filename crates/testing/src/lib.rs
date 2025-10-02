@@ -354,8 +354,9 @@ impl Client {
             reconnect_interval: Duration::from_millis(100),
             max_concurrent_rpcs: 5000,
             max_idle_connection_timeout: Duration::from_secs(5),
-            nodes,
             max_retries: 3,
+            nodes,
+            trusted_operators: Default::default(),
         })
         .with_encryption(wcn_client::EncryptionKey::new(&encryption_secret).unwrap())
         .build()
@@ -489,6 +490,7 @@ impl Node {
         wcn_cluster::Node {
             peer_id: self.config.keypair.public().to_peer_id(),
             ipv4_addr: Ipv4Addr::LOCALHOST,
+            private_ipv4_addr: None,
             primary_port: self.config.primary_rpc_server_socket.port().unwrap(),
             secondary_port: self.config.secondary_rpc_server_socket.port().unwrap(),
         }
