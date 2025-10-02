@@ -269,12 +269,14 @@ fn test_update(
       {
         "peer_id": "12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN",
         "ipv4_addr": "10.0.0.0",
+        "private_ipv4_addr": null,
         "primary_port": 3000,
         "secondary_port": 3001
       },
       {
         "peer_id": "12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp",
         "ipv4_addr": "10.0.0.1",
+        "private_ipv4_addr": null,
         "primary_port": 3000,
         "secondary_port": 3001
       }
