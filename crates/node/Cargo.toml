@@ -23,7 +23,7 @@ wcn_cluster = { workspace = true }
 wcn_storage_api = { workspace = true, features = ["rpc_client", "rpc_server"] }
 wcn_cluster_api = { workspace = true, features = ["rpc_server"] }
 wcn_metrics_api = { workspace = true, features = ["rpc_client", "rpc_server"] }
-wcn_metrics = { workspace = true, features = ["cluster"] }
+wcn_metrics = { workspace = true, features = ["aggregator"] }
 wcn_migration = { workspace = true }
 wcn_replication = { workspace = true }
 
@@ -54,7 +54,6 @@ tokio = { version = "1", default-features = false, features = ["signal"] }
 # O11y
 tracing = { workspace = true }
 sysinfo = { workspace = true, features = ["system", "network"] }
-prometheus-parser = "0.4"
 
 # Other
 libp2p-identity = { workspace = true }

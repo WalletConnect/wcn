@@ -121,9 +121,9 @@ impl ApiName {
     }
 
     /// Returns UTF-8 representation of this [`ServerName`].
-    pub const fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match std::str::from_utf8(&self.0) {
-            Ok(s) => s,
+            Ok(s) => s.trim_end_matches('\0'),
             Err(_) => "invalid",
         }
     }
