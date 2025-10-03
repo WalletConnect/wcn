@@ -169,7 +169,7 @@ async fn append_extra_labels(metrics: String, extra_labels: ExtraLabels<'_>) -> 
             (first_word_end_idx, false, false)
         };
 
-        buf.extend(line[..insert_idx].chars());
+        buf.push_str(&line[..insert_idx]);
 
         if !has_braces {
             buf.push('{');
@@ -186,7 +186,7 @@ async fn append_extra_labels(metrics: String, extra_labels: ExtraLabels<'_>) -> 
             buf.push('}');
         }
 
-        buf.extend(line[insert_idx..].chars());
+        buf.push_str(&line[insert_idx..]);
 
         buf.push('\n');
 
