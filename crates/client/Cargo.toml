@@ -28,6 +28,7 @@ strum = { workspace = true }
 # Async
 futures = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
+futures-concurrency = { workspace = true }
 
 # O11y
 tracing = { workspace = true }

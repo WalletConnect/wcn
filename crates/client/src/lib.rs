@@ -1,10 +1,13 @@
 use {
     client::BaseClient,
     derive_where::derive_where,
-    std::{net::SocketAddrV4, sync::Arc, time::Duration},
+    futures::FutureExt as _,
+    futures_concurrency::future::Race as _,
+    std::{collections::HashSet, net::SocketAddrV4, sync::Arc, time::Duration},
     tap::Pipe,
     wc::metrics::{self, enum_ordinalize::Ordinalize},
     wcn_cluster::smart_contract,
+    wcn_rpc::client::{Api, Connection},
     wcn_storage_api::{
         MapEntryBorrowed,
         Record,
@@ -110,6 +113,10 @@ pub struct Config {
 
     /// [`PeerAddr`]s of the bootstrap nodes.
     pub nodes: Vec<PeerAddr>,
+
+    /// List of trusted node operators to use with the cluster API. If the list
+    /// is empty, all nodes in the cluster may be used.
+    pub trusted_operators: HashSet<NodeOperatorId>,
 }
 
 #[derive(Debug, Clone)]
@@ -446,6 +453,36 @@ impl metrics::Enum for OperationName {
             Self::HSetExp => "hset_exp",
             Self::HCard => "hcard",
             Self::HScan => "hscan",
+        }
+    }
+}
+
+pub(crate) struct Connector<API: Api> {
+    public_conn: Connection<API>,
+    private_conn: Option<Connection<API>>,
+}
+
+impl<API: Api> Connector<API> {
+    pub(crate) fn is_open(&self) -> bool {
+        let public_open = !self.public_conn.is_closed();
+        let private_open = self
+            .private_conn
+            .as_ref()
+            .map(|conn| !conn.is_closed())
+            .unwrap_or(false);
+
+        public_open || private_open
+    }
+
+    pub(crate) async fn wait_open(&self) -> &Connection<API> {
+        let public_fut = self.public_conn.wait_open().map(|_| &self.public_conn);
+
+        if let Some(private) = &self.private_conn {
+            let private_fut = private.wait_open().map(|_| private);
+
+            (public_fut, private_fut).race().await
+        } else {
+            public_fut.await
         }
     }
 }

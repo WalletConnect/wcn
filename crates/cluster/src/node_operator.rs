@@ -174,7 +174,7 @@ impl NodeOperator {
             .map(|node| node.tap_mut(|n| n.encrypt(key)).into())
             .collect();
 
-        let data = DataV0 {
+        let data = DataV1 {
             name: self.name,
             nodes,
             clients: self.clients.into_iter().map(Into::into).collect(),
@@ -184,7 +184,7 @@ impl NodeOperator {
 
         // reserve first byte for versioning
         let mut buf = vec![0; size + 1];
-        buf[0] = 0; // current schema version
+        buf[0] = 1; // current schema version
         postcard::to_slice(&data, &mut buf[1..]).map_err(Error::from_postcard)?;
         Ok(smart_contract::NodeOperator {
             id: self.id,
@@ -258,6 +258,7 @@ impl<N> NodeOperator<N> {
             .map(|_| Node {
                 peer_id: PeerId::random(),
                 ipv4_addr: Ipv4Addr::UNSPECIFIED,
+                private_ipv4_addr: None,
                 primary_port: 0,
                 secondary_port: 0,
             })

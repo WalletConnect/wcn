@@ -28,6 +28,9 @@ pub struct Node {
     /// [`Ipv4Addr`] of the [`Node`].
     pub ipv4_addr: Ipv4Addr,
 
+    /// Optional private [`Ipv4Addr`] of the [`Node`].
+    pub private_ipv4_addr: Option<Ipv4Addr>,
+
     /// Primary RPC server port.
     pub primary_port: u16,
 
@@ -37,23 +40,43 @@ pub struct Node {
 
 impl Node {
     /// Builds [`SocketAddrV4`] using [`Node::ipv4_addr`] and
-    /// [`Node::primary_port`].
+    /// [`Node::primary_port`] using the node's public IP address.
     pub fn primary_socket_addr(&self) -> SocketAddrV4 {
         SocketAddrV4::new(self.ipv4_addr, self.primary_port)
     }
 
     /// Builds [`SocketAddrV4`] using [`Node::ipv4_addr`] and
-    /// [`Node::secondary_port`].
+    /// [`Node::secondary_port`] using the node's public IP address.
     pub fn secondary_socket_addr(&self) -> SocketAddrV4 {
         SocketAddrV4::new(self.ipv4_addr, self.secondary_port)
     }
 
+    /// Builds [`SocketAddrV4`] using [`Node::private_ipv4_addr`] and
+    /// [`Node::primary_port`] using the node's private IP address.
+    pub fn primary_socket_addr_private(&self) -> Option<SocketAddrV4> {
+        self.private_ipv4_addr
+            .map(|addr| SocketAddrV4::new(addr, self.primary_port))
+    }
+
+    /// Builds [`SocketAddrV4`] using [`Node::private_ipv4_addr`] and
+    /// [`Node::secondary_port`] using the node's private IP address.
+    pub fn secondary_socket_addr_private(&self) -> Option<SocketAddrV4> {
+        self.private_ipv4_addr
+            .map(|addr| SocketAddrV4::new(addr, self.secondary_port))
+    }
+
     pub(crate) fn encrypt(&mut self, key: &EncryptionKey) {
         self.ipv4_addr = encrypt_ip(key, &self.peer_id, self.ipv4_addr);
+        self.private_ipv4_addr = self
+            .private_ipv4_addr
+            .map(|addr| encrypt_ip(key, &self.peer_id, addr));
     }
 
     pub(crate) fn decrypt(&mut self, key: &EncryptionKey) {
         self.ipv4_addr = decrypt_ip(key, &self.peer_id, self.ipv4_addr);
+        self.private_ipv4_addr = self
+            .private_ipv4_addr
+            .map(|addr| decrypt_ip(key, &self.peer_id, addr));
     }
 }
 
@@ -96,6 +119,7 @@ impl From<V0> for Node {
         Self {
             peer_id: node.peer_id,
             ipv4_addr: node.ipv4_addr,
+            private_ipv4_addr: None,
             primary_port: node.primary_port,
             secondary_port: node.secondary_port,
         }
@@ -107,7 +131,7 @@ impl From<Node> for V1 {
         Self {
             peer_id: node.peer_id,
             ipv4_addr: node.ipv4_addr,
-            private_ipv4_addr: None,
+            private_ipv4_addr: node.private_ipv4_addr,
             primary_port: node.primary_port,
             secondary_port: node.secondary_port,
         }
@@ -119,6 +143,7 @@ impl From<V1> for Node {
         Self {
             peer_id: node.peer_id,
             ipv4_addr: node.ipv4_addr,
+            private_ipv4_addr: node.private_ipv4_addr,
             primary_port: node.primary_port,
             secondary_port: node.secondary_port,
         }

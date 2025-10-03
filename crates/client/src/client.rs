@@ -1,6 +1,7 @@
 use {
     crate::{
         Config,
+        Connector,
         EncryptionKey,
         Error,
         OperationName,
@@ -15,7 +16,7 @@ use {
     },
     tokio::sync::oneshot,
     wc::future::FutureExt,
-    wcn_storage_api::{StorageApi, operation as op, rpc::client::CoordinatorConnection},
+    wcn_storage_api::{StorageApi, operation as op, rpc::CoordinatorApi},
 };
 
 pub struct BaseClient<T: RequestObserver> {
@@ -87,7 +88,10 @@ where
         let bootstrap_sc = cluster::SmartContract::Static(initial_cluster_view);
         let bootstrap_cluster = cluster::Cluster::new(cluster_cfg.clone(), bootstrap_sc).await?;
         let cluster_view = Arc::new(ArcSwap::new(bootstrap_cluster.view()));
-        let dynamic_sc = cluster::SmartContract::Dynamic(cluster_view.clone());
+        let dynamic_sc = cluster::SmartContract::Dynamic {
+            cluster_view: cluster_view.clone(),
+            trusted_operators: config.trusted_operators,
+        };
         let cluster = cluster::Cluster::new(cluster_cfg, dynamic_sc).await?;
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -137,18 +141,12 @@ where
     async fn execute_internal(&self, op: &op::Operation<'_>) -> Result<op::Output, Error> {
         let (conn, node_data) = self.find_next_node();
 
-        let is_connected = conn
-            .wait_open()
-            .with_timeout(self.connection_timeout)
-            .await
-            .is_ok();
-
-        if !is_connected {
+        let Ok(conn) = conn.wait_open().with_timeout(self.connection_timeout).await else {
             // Getting to this point means we've tried every operator to find a connected
             // node and failed. Then we tried to open connection to the next node and also
             // failed.
             return Err(Error::NoAvailableNodes);
-        }
+        };
 
         let start_time = Instant::now();
 
@@ -169,7 +167,7 @@ where
         result
     }
 
-    fn find_next_node(&self) -> (CoordinatorConnection, T::NodeData) {
+    fn find_next_node(&self) -> (Connector<CoordinatorApi>, T::NodeData) {
         // Constraints:
         // - Each next request should go to a different operator.
         // - Find an available (i.e. connected) node of the next operator, filtering out
@@ -182,8 +180,9 @@ where
             // Iterate over all of the operators to find one with a connected node.
             let result = operators.find_next_operator(|operator| {
                 operator.find_next_node(|node| {
-                    (!node.coordinator_conn.is_closed())
-                        .then(|| (node.coordinator_conn.clone(), node.data.clone()))
+                    let connector = node.coordinator_api();
+
+                    connector.is_open().then(|| (connector, node.data.clone()))
                 })
             });
 
@@ -195,7 +194,7 @@ where
                 // be established during the request.
                 let node = operators.next().next_node();
 
-                (node.coordinator_conn.clone(), node.data.clone())
+                (node.coordinator_api(), node.data.clone())
             }
         })
     }
