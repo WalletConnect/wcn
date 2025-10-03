@@ -131,13 +131,17 @@ impl TestCluster {
             .for_each_concurrent(OPERATORS_COUNT as usize, NodeOperator::deploy)
             .await;
 
-        Self {
+        let this = Self {
             operators,
             cluster,
             anvil,
             next_operator_id: OPERATORS_COUNT + 1,
             prometheus_handle,
-        }
+        };
+
+        tracing::info!("Metrics: {}", this.metrics_url());
+
+        this
     }
 
     pub async fn under_load(&mut self, f: impl AsyncFnOnce(&mut Self)) {
@@ -274,6 +278,26 @@ impl TestCluster {
 
     pub fn prometheus_handle(&self) -> &PrometheusHandle {
         &self.prometheus_handle
+    }
+
+    fn metrics_url(&self) -> String {
+        let port = self.operators[0].nodes[0]
+            .config
+            .metrics_server_socket
+            .local_addr()
+            .unwrap()
+            .port();
+
+        format!("http://localhost:{port}/metrics/cluster")
+    }
+
+    pub async fn metrics(&self) -> String {
+        reqwest::get(self.metrics_url())
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap()
     }
 
     fn next_operator_id(&mut self) -> u8 {
@@ -528,7 +552,7 @@ impl NodeOperator {
             rocksdb_dir: format!("/tmp/wcn_db/{db_peer_id}").parse().unwrap(),
             rocksdb: Default::default(),
             shutdown_signal: db_shutdown_signal.clone(),
-            prometheus_handle,
+            prometheus_handle: prometheus_handle.clone(),
         };
 
         let database_primary_rpc_server_port = db_config.primary_rpc_server_socket.port().unwrap();
@@ -547,9 +571,6 @@ impl NodeOperator {
                 let keypair = Keypair::generate_ed25519();
                 let shutdown_signal = ShutdownSignal::new();
 
-                let prometheus_recorder =
-                    wc::metrics::exporter_prometheus::PrometheusBuilder::new().build_recorder();
-
                 let config = wcn_node::Config {
                     keypair,
                     primary_rpc_server_socket: wcn_rpc::server::Socket::new_high_priority(0)
@@ -567,7 +588,7 @@ impl NodeOperator {
                     smart_contract_encryption_key: wcn_cluster::testing::encryption_key(),
                     rpc_provider_url: rpc_provider_url.clone().parse().unwrap(),
                     shutdown_signal: shutdown_signal.clone(),
-                    prometheus_handle: prometheus_recorder.handle(),
+                    prometheus_handle: prometheus_handle.clone(),
                 };
 
                 Node {

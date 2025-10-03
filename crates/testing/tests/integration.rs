@@ -24,6 +24,8 @@ async fn test_suite() {
 
     tokio::time::sleep(Duration::from_secs(5)).await;
     test_client_encryption(&cluster).await;
+
+    tokio::time::sleep(Duration::from_secs(5)).await;
     test_metrics(&cluster).await;
 
     cluster
@@ -146,10 +148,19 @@ async fn test_client_encryption(cluster: &TestCluster) {
 }
 
 async fn test_metrics(cluster: &TestCluster) {
-    let metrics = cluster.prometheus_handle().render();
+    let metrics = cluster.metrics().await;
 
-    let contains_target_metrics =
-        metrics.contains("wcn_rpc") && metrics.contains("futures_started");
+    let keywords = [
+        "wcn_rpc",
+        "futures_started",
+        "operator",
+        "service_kind",
+        "node",
+        "db",
+        "node_idx",
+    ];
 
-    assert!(contains_target_metrics, "{metrics}");
+    for keyword in keywords {
+        assert!(metrics.contains(keyword), "{metrics}: missing {keyword}");
+    }
 }

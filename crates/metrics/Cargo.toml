@@ -8,7 +8,8 @@ publish = false
 workspace = true
 
 [features]
-cluster = ["wcn_cluster", "prometheus-parse"]
+cluster = ["wcn_cluster"]
+aggregator = ["cluster"]
 
 [dependencies]
 # Local
@@ -33,7 +34,6 @@ tokio = { version = "1.0", default-features = false }
 # O11y
 tracing = { workspace = true }
 sysinfo = { workspace = true, features = ["system", "network", "disk"] }
-prometheus-parse = { version = "0.2", optional = true }
 
 # Other
 libp2p-identity = { workspace = true }

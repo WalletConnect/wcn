@@ -2,7 +2,7 @@
 
 use {
     crate::{self as cluster, client, node, smart_contract, Client, Config, EncryptionKey, Node},
-    derive_more::derive::AsRef,
+    derive_more::derive::{AsRef, Display},
     libp2p_identity::PeerId,
     serde::{Deserialize, Serialize},
     std::{
@@ -30,7 +30,7 @@ pub type Idx = u8;
 ///
 /// Used for informational purposes only.
 /// Expected to be unique within the cluster, but not enforced to.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, Serialize, Deserialize)]
 pub struct Name(String);
 
 impl Name {

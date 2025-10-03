@@ -1,7 +1,7 @@
 use {
     derive_more::AsRef,
     derive_where::derive_where,
-    futures::{future::OptionFuture, FutureExt as _},
+    futures::{future::OptionFuture, FutureExt as _, StreamExt as _},
     futures_concurrency::future::Join as _,
     libp2p_identity::Keypair,
     std::{
@@ -21,6 +21,7 @@ use {
         EncryptionKey,
         PeerId,
     },
+    wcn_metrics_api::MetricsApi,
     wcn_rpc::{
         client::{self as rpc_client, Api as _},
         server::{self as rpc_server, Api as _, Server as _, ShutdownSignal},
@@ -235,8 +236,7 @@ struct Node {
 
     replica_low_prio_connection: storage_api_client::ReplicaConnection,
 
-    // TODO: will be used for metrics aggregation
-    _metrics_connection: wcn_metrics_api::rpc::client::Connection,
+    metrics_connection: wcn_metrics_api::rpc::client::Connection,
 }
 
 impl wcn_cluster::Config for AppConfig {
@@ -257,7 +257,7 @@ impl wcn_cluster::Config for AppConfig {
                 &node.peer_id,
                 (),
             ),
-            _metrics_connection: self.metrics_client.new_connection(
+            metrics_connection: self.metrics_client.new_connection(
                 node.secondary_socket_addr(),
                 &node.peer_id,
                 (),
@@ -287,6 +287,12 @@ impl wcn_migration::manager::Config for AppConfig {
 
     fn concurrency(&self) -> usize {
         100
+    }
+}
+
+impl wcn_metrics::aggregator::Config for AppConfig {
+    fn outbound_metrics_api_connection(node: &Self::Node) -> &impl MetricsApi {
+        &node.metrics_connection
     }
 }
 
@@ -340,11 +346,13 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         wcn_metrics::Target::remote("db", app_cfg.database_metrics_connection.clone()),
         wcn_metrics::Target::local("node", config.prometheus_handle.clone()),
     ])
-    .with_auth(cluster);
+    .with_auth(cluster.clone());
 
     let metrics_api = config.metrics_api().with_state(metrics_provider);
 
-    let prometheus_server_fut = prometheus_server(&config)?;
+    let metrics_aggregator = wcn_metrics::Aggregator::<AppConfig>::new(cluster);
+
+    let prometheus_server_fut = prometheus_server(&config, metrics_aggregator)?;
     let system_monitor_fut = wcn_metrics::system::Monitor::new(config.prometheus_handle)
         .run(config.shutdown_signal.wait_owned());
 
@@ -401,7 +409,10 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         .pipe(Ok)
 }
 
-fn prometheus_server(cfg: &Config) -> io::Result<impl Future<Output = ()>> {
+fn prometheus_server(
+    cfg: &Config,
+    metrics_aggregator: wcn_metrics::Aggregator<AppConfig>,
+) -> io::Result<impl Future<Output = ()>> {
     let socket = cfg.metrics_server_socket.try_clone()?;
     let prometheus = cfg.prometheus_handle.clone();
     let shutdown_fut = cfg.shutdown_signal.wait_owned();
@@ -411,6 +422,8 @@ fn prometheus_server(cfg: &Config) -> io::Result<impl Future<Output = ()>> {
             "/metrics",
             axum::routing::get(move || async move { prometheus.render() }),
         )
+        .route("/metrics/cluster", axum::routing::get(cluster_metrics))
+        .with_state(metrics_aggregator)
         .into_make_service();
 
     socket.set_nonblocking(true)?;
@@ -421,6 +434,13 @@ fn prometheus_server(cfg: &Config) -> io::Result<impl Future<Output = ()>> {
             .with_graceful_shutdown(shutdown_fut)
             .await;
     })
+}
+
+async fn cluster_metrics(
+    state: axum::extract::State<wcn_metrics::Aggregator<AppConfig>>,
+) -> impl axum::response::IntoResponse {
+    let metrics = state.0.render_cluster_metrics();
+    axum::body::Body::from_stream(metrics.map::<Result<_, axum::BoxError>, _>(Ok))
 }
 
 #[derive(Debug, thiserror::Error)]
