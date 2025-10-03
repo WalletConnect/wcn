@@ -136,7 +136,7 @@ impl<API: Api> Client<API> {
             let remote_peer_id = quic::connection_peer_id(&conn)?;
 
             if *peer_id != remote_peer_id {
-                tracing::warn!(
+                tracing::debug!(
                     expected = ?peer_id,
                     got = ?&remote_peer_id,
                     addr = ?addr,
