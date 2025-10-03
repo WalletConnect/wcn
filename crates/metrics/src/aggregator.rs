@@ -190,7 +190,7 @@ async fn append_extra_labels(metrics: String, extra_labels: ExtraLabels<'_>) -> 
 
         buf.push('\n');
 
-        // Yeild every 100 lines
+        // Yield every 100 lines
         if idx % 100 == 0 {
             tokio::task::yield_now().await;
         }
