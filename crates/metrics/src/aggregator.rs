@@ -27,7 +27,7 @@ impl<C: Config> Aggregator<C> {
     /// Gets metrics from all of the nodes/databases within the cluster,
     /// aggregates them and renders into a final [`String`].
     ///
-    /// Metrics are being streamed in chuncks, each chunk represents a separate
+    /// Metrics are being streamed in chunks, each chunk represents a separate
     /// "service" (node / database) of a node operator.
     pub fn render_cluster_metrics(&self) -> impl Stream<Item = String> + Send + 'static {
         stream::iter(self.cluster.view().node_operators().clone().into_iter())
@@ -190,7 +190,7 @@ async fn append_extra_labels(metrics: String, extra_labels: ExtraLabels<'_>) -> 
 
         buf.push('\n');
 
-        // Yeild every 100 lines
+        // Yield every 100 lines
         if idx % 100 == 0 {
             tokio::task::yield_now().await;
         }
