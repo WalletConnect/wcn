@@ -2,7 +2,7 @@
 
 use wcn_cluster::EncryptionKey;
 
-mod update;
+pub mod update;
 
 #[derive(Debug, clap::Args)]
 pub struct OperatorCmd {
