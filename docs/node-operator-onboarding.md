@@ -4,7 +4,7 @@ The WalletConnect Network 2.0 architecture is organized as follows:
 
 - A set of regional Clusters, each containing at least 5 Node Operators.
 - Node Operators which run at least 2 Nodes (`wcn_node`) and a single Database (`wcn_db`) in their respective region.
-- A Smart-Contract (Optimism) per Cluster, in which Cluster management operations are being perfromed.
+- A Smart-Contract (Optimism) per Cluster, in which Cluster management operations are being performed.
 
 ## Operator Onboarding
 
