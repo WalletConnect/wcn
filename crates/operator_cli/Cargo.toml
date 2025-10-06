@@ -1,0 +1,24 @@
+[package]
+name = "wcn_operator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Local
+wcn_cluster = { workspace = true }
+
+# Derives
+derive_more = { workspace = true, features = ["as_ref"] }
+
+# General purpose
+anyhow = { workspace = true }
+
+# Async
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread"] }
+
+# Other
+clap = { workspace = true }
+libp2p-identity = { workspace = true }
+
+[lints]
+workspace = true

@@ -68,9 +68,19 @@ impl<S> Migration<S> {
 
     /// Returns the new [`Keyspace`] this [`Migration`] is migrating to (if in
     /// progress).
-    pub(crate) fn keyspace(&self) -> Option<&Keyspace<S>> {
+    pub fn keyspace(&self) -> Option<&Keyspace<S>> {
         match &self.state {
             State::Started { keyspace, .. } => Some(keyspace.as_ref()),
+            State::Aborted { .. } | State::Completed => None,
+        }
+    }
+
+    /// Returns a set of [`node_opearator`]s still pulling data.
+    pub fn pulling_operators(&self) -> Option<&HashSet<u8>> {
+        match &self.state {
+            State::Started {
+                pulling_operators, ..
+            } => Some(pulling_operators),
             State::Aborted { .. } | State::Completed => None,
         }
     }

@@ -3,7 +3,7 @@
 pub use event::Event;
 use {
     crate::{migration, node_operator},
-    alloy::{signers::local::PrivateKeySigner, transports::http::reqwest},
+    alloy::transports::http::reqwest,
     derive_more::From,
     derive_where::derive_where,
     futures::Stream,
@@ -249,10 +249,6 @@ impl fmt::Display for Address {
     }
 }
 
-/// RPC provider URL.
-#[derive(Clone, Debug)]
-pub struct RpcUrl(reqwest::Url);
-
 /// Error of [`Deployer::deploy`].
 #[derive(Debug, thiserror::Error)]
 #[error("{_0}")]
@@ -305,22 +301,8 @@ pub type WriteResult<T> = std::result::Result<T, WriteError>;
 pub type ReadResult<T> = std::result::Result<T, ReadError>;
 
 #[derive(Debug, thiserror::Error)]
-#[error("Invalid RPC URL: {0:?}")]
-pub struct InvalidRpcUrlError(String);
-
-#[derive(Debug, thiserror::Error)]
 #[error("Invalid address: {0:?}")]
 pub struct InvalidAddressError(String);
-
-impl FromStr for RpcUrl {
-    type Err = InvalidRpcUrlError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        reqwest::Url::from_str(s)
-            .map(Self)
-            .map_err(|err| InvalidRpcUrlError(err.to_string()))
-    }
-}
 
 impl FromStr for AccountAddress {
     type Err = InvalidAddressError;

@@ -6023,6 +6023,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "wcn_admin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "derive_more",
+ "libp2p-identity",
+ "tokio",
+ "wcn_cluster",
+]
+
+[[package]]
 name = "wcn_client"
 version = "0.1.0"
 dependencies = [
@@ -6241,6 +6253,18 @@ dependencies = [
  "wcn_rpc",
  "wcn_storage_api",
  "xxhash-rust",
+]
+
+[[package]]
+name = "wcn_operator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "derive_more",
+ "libp2p-identity",
+ "tokio",
+ "wcn_cluster",
 ]
 
 [[package]]

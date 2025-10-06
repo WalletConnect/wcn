@@ -83,7 +83,7 @@ pub struct Config {
     pub smart_contract_encryption_key: EncryptionKey,
 
     /// URL of the Optimism RPC provider.
-    pub rpc_provider_url: smart_contract::RpcUrl,
+    pub rpc_provider_url: smart_contract::evm::RpcUrl,
 
     /// [`ShutdownSignal`] to use for RPC servers.
     pub shutdown_signal: ShutdownSignal,

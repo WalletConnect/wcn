@@ -3,6 +3,7 @@
 pub use libp2p_identity::PeerId;
 use {
     arc_swap::ArcSwap,
+    base64::Engine as _,
     derive_where::derive_where,
     futures::Stream,
     itertools::Itertools,
@@ -772,3 +773,50 @@ impl FromStr for EncryptionKey {
         const_hex::decode_to_array(s).map(Self)
     }
 }
+
+/// ED25516 keypair used by [`Client`]s and [`Node`]s for authentication.
+#[derive(Clone, Debug)]
+pub struct PeerKeypair(libp2p_identity::Keypair);
+
+impl PeerKeypair {
+    /// Generates a new [`PeerKeypair`].
+    pub fn generate() -> Self {
+        PeerKeypair(libp2p_identity::Keypair::generate_ed25519())
+    }
+
+    /// Returns [`PeerId`] of this [`PeerKeypair`]
+    pub fn peer_id(&self) -> PeerId {
+        self.0.public().to_peer_id()
+    }
+
+    /// Returns base64-encoded secret key of this [`PeerKeypair`].
+    pub fn secret_key_base64(&self) -> String {
+        // NOTE(unwrap): only ed25519 is being constructed
+        let kp = self.0.clone().try_into_ed25519().unwrap();
+        base64::engine::general_purpose::STANDARD.encode(kp.secret().as_ref())
+    }
+
+    /// Converts this [`Keypair`] into [`libp2p_identity::Keypair`].
+    pub fn into_libp2p(self) -> libp2p_identity::Keypair {
+        self.0
+    }
+}
+
+impl FromStr for PeerKeypair {
+    type Err = InvalidSecretKeyError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let secret_key = base64::engine::general_purpose::STANDARD
+            .decode(s)
+            .map_err(|err| InvalidSecretKeyError(format!("base64 decode: {err}")))?;
+
+        libp2p_identity::Keypair::ed25519_from_bytes(secret_key)
+            .map(PeerKeypair)
+            .map_err(|err| InvalidSecretKeyError(format!("ed25515: {err}")))
+    }
+}
+
+/// Error of parsing [`Keypair`] [`FromStr`].
+#[derive(Clone, Debug, thiserror::Error)]
+#[error("Invalid secret key: {_0}")]
+pub struct InvalidSecretKeyError(String);

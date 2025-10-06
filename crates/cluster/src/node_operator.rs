@@ -7,6 +7,7 @@ use {
     serde::{Deserialize, Serialize},
     std::{
         net::Ipv4Addr,
+        str::FromStr,
         sync::{
             atomic::{self, AtomicUsize},
             Arc,
@@ -32,6 +33,14 @@ pub type Idx = u8;
 /// Expected to be unique within the cluster, but not enforced to.
 #[derive(Debug, Display, Clone, Serialize, Deserialize)]
 pub struct Name(String);
+
+impl FromStr for Name {
+    type Err = InvalidNameError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s).ok_or(InvalidNameError)
+    }
+}
 
 impl Name {
     /// Maximum allowed length of a [`Name`] (in bytes).
@@ -81,7 +90,7 @@ impl<N> NodeOperator<N> {
         clients: Vec<Client>,
     ) -> Result<Self, CreationError> {
         if nodes.len() < MIN_NODES {
-            return Err(CreationError::TooFewNodes(nodes.len()));
+            return Err(TooFewNodesError(nodes.len()).into());
         }
 
         Ok(Self {
@@ -158,6 +167,31 @@ impl<N> NodeOperator<N> {
         let n = self.counter.fetch_add(1, atomic::Ordering::Relaxed);
         let (left, right) = self.nodes.split_at(n % self.nodes.len());
         right.iter().chain(left.iter())
+    }
+
+    /// Adds a new [`Node`] to this [`NodeOperator`].
+    pub fn add_node(&mut self, node: N) {
+        self.nodes.push(node);
+    }
+
+    /// Updates a [`Node`] of this [`NodeOperator`].
+    pub fn update_node(&mut self, idx: usize, updated: N) {
+        if let Some(node) = self.nodes.get_mut(idx) {
+            *node = updated;
+        }
+    }
+
+    /// Removes a [`Node`] from this [`NodeOperator`].
+    pub fn remove_node(&mut self, idx: usize) -> Result<(), TooFewNodesError> {
+        if self.nodes.len() - 1 < MIN_NODES {
+            return Err(TooFewNodesError(self.nodes.len()));
+        }
+
+        if idx < self.nodes.len() {
+            self.nodes.remove(idx);
+        }
+
+        Ok(())
     }
 }
 
@@ -345,9 +379,13 @@ pub(super) fn validate_data(
 }
 
 #[derive(Debug, thiserror::Error)]
+#[error("Too few nodes: {_0} < {MIN_NODES}")]
+pub struct TooFewNodesError(usize);
+
+#[derive(Debug, thiserror::Error)]
 pub enum CreationError {
-    #[error("Too few nodes: {_0} < {MIN_NODES}")]
-    TooFewNodes(usize),
+    #[error(transparent)]
+    TooFewNodes(#[from] TooFewNodesError),
 }
 
 /// [`SerializedData`] size is too large.
@@ -365,3 +403,7 @@ pub struct NotFoundError(pub Id);
 #[derive(Debug, thiserror::Error)]
 #[error("Node operator (id: {0}) is already a member of the cluster")]
 pub struct AlreadyExistsError(pub Id);
+
+#[derive(Debug, thiserror::Error)]
+#[error("Name should not exceed {} bytes", Name::MAX_LENGTH)]
+pub struct InvalidNameError;

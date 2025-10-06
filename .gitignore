@@ -12,9 +12,7 @@ target/
 .direnv
 .env
 .envrc
-.env.nu
-.env.mainnet.nu
-.env.testnet.nu
+.env.*
 
 ### Terraform ###
 # Local .terraform directories
