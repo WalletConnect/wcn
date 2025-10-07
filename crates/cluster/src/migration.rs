@@ -75,7 +75,7 @@ impl<S> Migration<S> {
         }
     }
 
-    /// Returns a set of [`node_opearator`]s still pulling data.
+    /// Returns a set of [`node_operator`]s still pulling data.
     pub fn pulling_operators(&self) -> Option<&HashSet<u8>> {
         match &self.state {
             State::Started {
