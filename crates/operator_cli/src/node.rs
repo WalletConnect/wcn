@@ -116,7 +116,7 @@ async fn add_node(args: AddNodeArgs) -> anyhow::Result<()> {
 
     operator.add_node(node);
 
-    if args.auto_approve | crate::ask_approval()? {
+    if args.auto_approve || crate::ask_approval()? {
         cluster
             .update_node_operator(operator)
             .await
@@ -161,7 +161,7 @@ async fn update_node(args: UpdateNodeArgs) -> anyhow::Result<()> {
 
     operator.update_node(args.index, node);
 
-    if args.auto_approve | crate::ask_approval()? {
+    if args.auto_approve || crate::ask_approval()? {
         cluster
             .update_node_operator(operator)
             .await
@@ -186,7 +186,7 @@ async fn remove_node(args: RemoveNodeArgs) -> anyhow::Result<()> {
 
     operator.remove_node(args.index)?;
 
-    if args.auto_approve | crate::ask_approval()? {
+    if args.auto_approve || crate::ask_approval()? {
         cluster
             .update_node_operator(operator)
             .await
