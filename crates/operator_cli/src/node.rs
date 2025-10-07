@@ -181,7 +181,7 @@ async fn remove_node(args: RemoveNodeArgs) -> anyhow::Result<()> {
         .copied()
         .context("Wrong index")?;
 
-    println!("Romoving Node {}:", args.index);
+    println!("Removing Node {}:", args.index);
     crate::print_node(&node);
 
     operator.remove_node(args.index)?;
