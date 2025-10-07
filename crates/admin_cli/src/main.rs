@@ -116,5 +116,5 @@ fn ask_approval() -> anyhow::Result<bool> {
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
 
-    Ok(["y", "yes"].contains(&input.as_str()))
+    Ok(["y", "yes"].contains(&input.trim()))
 }
