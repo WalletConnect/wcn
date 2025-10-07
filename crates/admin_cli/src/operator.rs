@@ -72,7 +72,7 @@ async fn remove_operator(args: RemoveOperatorArgs) -> anyhow::Result<()> {
         .await?
         .remove_node_operator(args.id)
         .await
-        .context("Clutser::remove_node_operator")
+        .context("Cluster::remove_node_operator")
 }
 
 #[derive(Clone, Debug)]
