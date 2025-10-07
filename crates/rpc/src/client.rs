@@ -283,12 +283,19 @@ impl<API: Api> Connection<API> {
 
     /// Indicates whether this [`Connection`] is closed.
     pub fn is_closed(&self) -> bool {
-        self.inner
+        let is_closed = self
+            .inner
             .watch_rx
             .borrow()
             .as_ref()
             .map(|conn| conn.close_reason().is_some())
-            .unwrap_or(true)
+            .unwrap_or(true);
+
+        if is_closed {
+            self.reconnect(self.inner.client.config.reconnect_interval);
+        }
+
+        is_closed
     }
 
     /// Waits for this [`Connection`] to become open.
