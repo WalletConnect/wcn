@@ -9,6 +9,7 @@ use {
         primitives::{Address as AlloyAddress, U256},
         providers::{DynProvider, Provider, ProviderBuilder, WsConnect},
         rpc::types::{Filter, Log},
+        signers::local::PrivateKeySigner,
         sol_types::{SolCall, SolEventInterface, SolInterface},
     },
     futures::{Stream, StreamExt},
@@ -595,6 +596,32 @@ impl From<AlloyAddress> for AccountAddress {
     }
 }
 
+/// RPC provider URL.
+#[derive(Clone, Debug)]
+pub struct RpcUrl(reqwest::Url);
+
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid RPC URL: {0:?}")]
+pub struct InvalidRpcUrlError(String);
+
+impl FromStr for RpcUrl {
+    type Err = InvalidRpcUrlError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let url = reqwest::Url::from_str(s)
+            .map(Self)
+            .map_err(|err| InvalidRpcUrlError(err.to_string()))?;
+
+        if !["ws", "wss"].contains(&url.0.scheme()) {
+            return Err(InvalidRpcUrlError(
+                "Only ws:// and wss:// are supported".to_string(),
+            ));
+        }
+
+        Ok(url)
+    }
+}
+
 /// Transaction signer.
 #[derive(Clone)]
 #[derive_where(Debug)]
@@ -603,6 +630,14 @@ pub struct Signer {
 
     #[derive_where(skip)]
     kind: SignerKind,
+}
+
+impl FromStr for Signer {
+    type Err = InvalidPrivateKeyError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_from_private_key(s)
+    }
 }
 
 impl Signer {

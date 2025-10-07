@@ -156,7 +156,7 @@ impl From<Ipv4Addr> for Ipv4AddrNumeral {
     fn from(addr: Ipv4Addr) -> Self {
         addr.octets()
             .into_iter()
-            .map(|oct| oct as u16)
+            .map(|oct: u8| oct as u16)
             .collect::<Vec<_>>()
             .pipe(|vec| Self(vec.into()))
     }

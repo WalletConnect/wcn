@@ -88,6 +88,7 @@ axum = { version = "0.8", default-features = false, features = ["tokio", "http1"
 envy = { version = "0.4", default-features = false }
 vergen-pretty = { version = "1.0", default-features = false, features = ["trace"] }
 vergen = { version = "9", default-features = false, features = ["build", "cargo", "rustc", "si"] }
+clap = { version = "4.5", features = ["derive", "env"] }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
