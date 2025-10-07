@@ -812,7 +812,7 @@ impl FromStr for PeerKeypair {
 
         libp2p_identity::Keypair::ed25519_from_bytes(secret_key)
             .map(PeerKeypair)
-            .map_err(|err| InvalidSecretKeyError(format!("ed25515: {err}")))
+            .map_err(|err| InvalidSecretKeyError(format!("ed25519: {err}")))
     }
 }
 
