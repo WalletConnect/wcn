@@ -6010,6 +6010,7 @@ dependencies = [
  "serde_json",
  "sharding",
  "smallvec",
+ "strum",
  "tap",
  "thiserror 2.0.16",
  "time",

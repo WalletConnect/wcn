@@ -40,7 +40,7 @@ You can have a separate keypair per Node/Database, or you can use a single keypa
 To generate a keypair pull the repository and run the following:
 
 ```bash
- cargo run -p wcn_cluster -F cli key generate
+ cargo run -p wcn_operator -- key generate
 ```
 
 It will show you the following (**DO NOT use these example values for your deployments**)

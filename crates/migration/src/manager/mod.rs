@@ -50,10 +50,6 @@ pub trait Config:
         &self,
         node: &'a Self::Node,
     ) -> &'a Self::OutboundReplicaConnection;
-
-    /// Specifies how many shards migration [`Manager`] is allowed to transfer
-    /// at the same time.
-    fn concurrency(&self) -> usize;
 }
 
 /// WCN Migration Manager.
@@ -249,7 +245,7 @@ where
             })
             .pipe(stream::iter)
             .for_each_concurrent(
-                Some(self.manager.config.concurrency()),
+                Some(cluster_view.settings().migration_concurrency.into()),
                 |(shard_id, source)| {
                     retry(move || {
                         self.transfer_shard(shard_id, source, keyspace_version)

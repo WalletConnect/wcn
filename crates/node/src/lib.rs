@@ -284,10 +284,6 @@ impl wcn_migration::manager::Config for AppConfig {
     ) -> &'a Self::OutboundReplicaConnection {
         &node.replica_low_prio_connection
     }
-
-    fn concurrency(&self) -> usize {
-        100
-    }
 }
 
 impl wcn_metrics::aggregator::Config for AppConfig {

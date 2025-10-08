@@ -71,9 +71,10 @@ impl Context {
                 max_node_operator_data_bytes: 1024,
                 event_propagation_latency: Duration::from_secs(4),
                 clock_skew: Duration::from_secs(2),
+                migration_concurrency: 100,
             },
             (0..8)
-                .map(|idx| wcn_cluster::testing::node_operator(idx as u8))
+                .map(|idx: u8| wcn_cluster::testing::node_operator(idx))
                 .collect(),
         )
         .await
