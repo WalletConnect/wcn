@@ -13,7 +13,7 @@ The WalletConnect Network 2.0 architecture is organized as follows:
 First of all, you'll need to contact a WalletConnect team member and negotiate the region your Node Operator will be placed into.
 
 Currently we have Clusters located in Europe, North America, South America and Asia-Pacific.
-You may be able to choose your preffered region, or you may be assigned to a specific region, depending on the current state of the network.
+You may be able to choose your preferred region, or you may be assigned to a specific region, depending on the current state of the network.
 
 After your region is decided you will be provided with the address of the respective Smart-Contract, which you'll need later for the on-boarding process.
 Additionally, you will receive a symmetric key we use for encrypting semi-sensitive on-chain data (IP addresses).
@@ -125,7 +125,7 @@ It would be ideal if you can (or already do) host your own Optimism node.
 If you choose to use an external RPC provider prefer a paid one, with good reputation.
 
 If your RPC provider gets compromised or you end up using a malicious one, your Node Operator may experience downtime and your Database data may get corrupted.
-Therefore it's your resposibility to ensure RPC provider trustworthiness.
+Therefore it's your responsibility to ensure RPC provider trustworthiness.
 
 It is also recommended to use RPC providers supporting WebSocket connections (the RPC provider URLs starting with `wss://`).
 If you choose to use HTTPs expect your Nodes to issue substantial amount of requests, which may be undesirable if you are paying per request.
