@@ -276,7 +276,7 @@ where
             let operators = view.node_operators();
             let keyspace = &view.keyspace;
 
-            let mut new_operators: HashSet<_> = view.node_operators().occupied_indexes().collect();
+            let mut new_operators: HashSet<_> = keyspace.operators().collect();
 
             for id in plan.remove {
                 let idx = operators.require_idx(&id)?;
