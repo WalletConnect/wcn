@@ -98,11 +98,10 @@ async fn abort_migration(args: ClusterArgs) -> anyhow::Result<()> {
     let cluster = args.connect().await?;
     let cluster_view = cluster.view();
 
-    let migration = cluster_view.migration().ok_or_else(|| anyhow::anyhow!("No migration is currently running, so there is nothing to abort."))?;
-    let id = migration.id();
+    let migration = cluster_view.migration().context("No migration")?;
 
     cluster
-        .abort_migration(id)
+        .abort_migration(migration.id())
         .await
         .context("Cluster::abort_migration")
 }
