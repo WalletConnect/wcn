@@ -90,10 +90,11 @@ impl Context {
                 max_node_operator_data_bytes: 1024,
                 event_propagation_latency: Duration::from_secs(3),
                 clock_skew: Duration::from_secs(1),
+                migration_concurrency: 100,
             },
             (0..8)
-                .map(|idx| {
-                    wcn_cluster::testing::node_operator(idx as u8).tap_mut(|operator| {
+                .map(|idx: u8| {
+                    wcn_cluster::testing::node_operator(idx).tap_mut(|operator| {
                         if idx == 0 {
                             operator.clients = vec![Client {
                                 peer_id: client_peer_id,

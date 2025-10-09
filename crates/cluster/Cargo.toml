@@ -19,6 +19,7 @@ sharding = { path = "../sharding" }
 derive_more = { workspace = true, features = ["as_ref", "display", "from", "into", "try_from"] }
 derive-where = { workspace = true }
 thiserror = { workspace = true }
+strum = { workspace = true , features = ["derive"] }
 
 # General purpose
 base64.workspace = true

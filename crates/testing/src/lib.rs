@@ -92,6 +92,7 @@ impl TestCluster {
             max_node_operator_data_bytes: 4096,
             event_propagation_latency: Duration::from_secs(1),
             clock_skew: Duration::from_millis(100),
+            migration_concurrency: 100,
         };
 
         tracing::info!(port = %anvil.port(), "Anvil launched");

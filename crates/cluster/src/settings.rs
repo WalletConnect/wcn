@@ -4,6 +4,7 @@ use {
     crate::smart_contract,
     serde::{Deserialize, Serialize},
     std::{ops::RangeInclusive, time::Duration},
+    strum::{EnumDiscriminants, FromRepr, IntoDiscriminant, IntoStaticStr},
     time::OffsetDateTime,
 };
 
@@ -41,6 +42,21 @@ pub struct Settings {
     /// success rate of storage operations during a data migration process, due
     /// to `KeyspaceVersionMismatch` errors.
     pub clock_skew: Duration,
+
+    /// Specifies how many shards are allowed to be pulled by a
+    /// [`NodeOperator`] at the same time during data migration.
+    pub migration_concurrency: u16,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            max_node_operator_data_bytes: 4096,
+            event_propagation_latency: Duration::from_secs(5),
+            clock_skew: Duration::from_millis(500),
+            migration_concurrency: 10,
+        }
+    }
 }
 
 impl Settings {
@@ -57,6 +73,22 @@ impl Settings {
         time: OffsetDateTime,
     ) -> RangeInclusive<OffsetDateTime> {
         time - self.clock_skew..=time + self.clock_skew
+    }
+
+    fn extra(&self) -> [Setting; 3] {
+        [
+            Setting::EventPropagationLatency(self.event_propagation_latency),
+            Setting::ClockSkew(self.clock_skew),
+            Setting::MigrationConcurrency(self.migration_concurrency),
+        ]
+    }
+
+    fn apply_extra_setting(&mut self, setting: Setting) {
+        match setting {
+            Setting::EventPropagationLatency(setting) => self.event_propagation_latency = setting,
+            Setting::ClockSkew(setting) => self.clock_skew = setting,
+            Setting::MigrationConcurrency(setting) => self.migration_concurrency = setting,
+        };
     }
 }
 
@@ -95,13 +127,13 @@ impl TryFrom<smart_contract::Settings> for Settings {
         let schema_version = bytes[0];
         let bytes = &bytes[1..];
 
-        let extra = match schema_version {
-            0 => postcard::from_bytes::<ExtraV0>(bytes),
+        let mut settings = match schema_version {
+            0 => postcard::from_bytes::<ExtraV0>(bytes).map(Settings::from),
+            1 => postcard::from_bytes::<ExtraV1>(bytes).map(Settings::from),
             ver => return Err(TryFromSmartContractError::UnknownSchemaVersion(ver)),
         }
         .map_err(TryFromSmartContractError::from_postcard)?;
 
-        let mut settings = Settings::from(extra);
         settings.max_node_operator_data_bytes = sc_settings.max_node_operator_data_bytes;
 
         Ok(settings)
@@ -142,7 +174,108 @@ impl From<ExtraV0> for Settings {
                 extra.event_propagation_latency_ms.into(),
             ),
             clock_skew: Duration::from_millis(extra.clock_skew_ms.into()),
+            migration_concurrency: 10,
         }
+    }
+}
+
+// NOTE: The on-chain serialization is non self-describing!
+// This `struct` can not be changed, a `struct` with a new schema version should
+// be created instead.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct ExtraV1 {
+    // NOTE: Or
+    encoded: Vec<Vec<u8>>,
+}
+
+#[derive(EnumDiscriminants)]
+#[strum_discriminants(name(SettingId))]
+#[strum_discriminants(derive(IntoStaticStr, FromRepr))]
+#[repr(u8)]
+enum Setting {
+    EventPropagationLatency(Duration) = 0,
+    ClockSkew(Duration) = 1,
+    MigrationConcurrency(u16) = 2,
+}
+
+impl SettingId {
+    fn from_idx(idx: usize) -> Option<Self> {
+        Self::from_repr(u8::try_from(idx).ok()?)
+    }
+}
+
+impl Setting {
+    fn encode(&self) -> Vec<u8> {
+        let encode_duration = |value: &Duration| {
+            u32::try_from(value.as_millis())
+                .unwrap_or(u32::MAX)
+                .to_be_bytes()
+                .into()
+        };
+
+        match self {
+            Self::EventPropagationLatency(latency) => encode_duration(latency),
+            Self::ClockSkew(skew) => encode_duration(skew),
+            Self::MigrationConcurrency(concurrency) => concurrency.to_be_bytes().into(),
+        }
+    }
+
+    fn decode(id: SettingId, value: &[u8]) -> Option<Self> {
+        let decode_duration = || {
+            let millis = u32::from_be_bytes(value.try_into().ok()?);
+            Some(Duration::from_millis(millis.into()))
+        };
+
+        let decode_u16 = || Some(u16::from_be_bytes(value.try_into().ok()?));
+
+        Some(match id {
+            SettingId::EventPropagationLatency => Self::EventPropagationLatency(decode_duration()?),
+            SettingId::ClockSkew => Self::ClockSkew(decode_duration()?),
+            SettingId::MigrationConcurrency => Self::MigrationConcurrency(decode_u16()?),
+        })
+    }
+}
+
+impl From<Settings> for ExtraV1 {
+    fn from(settings: Settings) -> Self {
+        let extra_settings = settings.extra();
+
+        let highest_idx = extra_settings
+            .iter()
+            .map(|setting| setting.discriminant() as usize)
+            .max()
+            .unwrap_or_default();
+
+        let mut encoded = vec![vec![]; highest_idx + 1];
+
+        for setting in settings.extra() {
+            encoded[setting.discriminant() as usize] = setting.encode();
+        }
+
+        ExtraV1 { encoded }
+    }
+}
+
+impl From<ExtraV1> for Settings {
+    fn from(extra: ExtraV1) -> Self {
+        let mut settings = Settings::default();
+
+        for (idx, value) in extra.encoded.iter().enumerate() {
+            let Some(id) = SettingId::from_idx(idx) else {
+                tracing::warn!("Unknown SettingId({idx}), ignoring");
+                continue;
+            };
+
+            let Some(setting) = Setting::decode(id, value) else {
+                let name: &'static str = id.into();
+                tracing::warn!("Invalid value `{value:?}` for `{name}` setting, ignoring");
+                continue;
+            };
+
+            settings.apply_extra_setting(setting);
+        }
+
+        settings
     }
 }
 
@@ -175,5 +308,28 @@ pub enum TryFromSmartContractError {
 impl TryFromSmartContractError {
     fn from_postcard(err: postcard::Error) -> Self {
         Self::Codec(format!("{err:?}"))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn extra_v1() {
+        let max_node_operator_data_bytes = 10000;
+
+        let expected_settings = Settings {
+            max_node_operator_data_bytes,
+            event_propagation_latency: Duration::from_secs(42),
+            clock_skew: Duration::from_secs(10),
+            migration_concurrency: 1000,
+        };
+
+        let mut settings: Settings = ExtraV1::from(expected_settings).into();
+        // being set outside of `From` impl
+        settings.max_node_operator_data_bytes = max_node_operator_data_bytes;
+
+        assert_eq!(expected_settings, settings);
     }
 }
