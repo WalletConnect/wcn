@@ -10,6 +10,9 @@ use {
 pub(super) enum Command {
     /// Starts a new migration
     Start(StartMigrationArgs),
+
+    /// Aborts the current migration
+    Abort(ClusterArgs),
 }
 
 #[derive(Debug, Args)]
@@ -29,6 +32,7 @@ pub(super) struct StartMigrationArgs {
 pub(super) async fn execute(cmd: Command) -> anyhow::Result<()> {
     match cmd {
         Command::Start(args) => start_migration(args).await,
+        Command::Abort(args) => abort_migration(args).await,
     }
 }
 
@@ -88,6 +92,18 @@ async fn start_migration(args: StartMigrationArgs) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+async fn abort_migration(args: ClusterArgs) -> anyhow::Result<()> {
+    let cluster = args.connect().await?;
+    let cluster_view = cluster.view();
+
+    let migration = cluster_view.migration().context("No migration")?;
+
+    cluster
+        .abort_migration(migration.id())
+        .await
+        .context("Cluster::abort_migration")
 }
 
 #[derive(Clone, Debug)]
