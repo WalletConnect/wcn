@@ -2,6 +2,7 @@ use {
     anyhow::Context as _,
     futures::{future::FusedFuture as _, FutureExt as _},
     std::pin,
+    tokio::signal::unix::SignalKind,
     wc::metrics::exporter_prometheus::PrometheusBuilder,
     wcn_db::{config, Error},
 };
@@ -39,6 +40,8 @@ fn main() -> anyhow::Result<()> {
             let shutdown_signal = cfg.shutdown_signal.clone();
             let mut shutdown_fut = pin::pin!(tokio::signal::ctrl_c().fuse());
 
+            let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
+
             let db_srv_fut = wcn_db::run(cfg)?;
             let mut db_srv_fut = pin::pin!(db_srv_fut.fuse());
 
@@ -47,6 +50,10 @@ fn main() -> anyhow::Result<()> {
                     biased;
 
                     _ = &mut shutdown_fut, if !shutdown_fut.is_terminated() => {
+                        shutdown_signal.emit();
+                    }
+
+                    _ = sigterm.recv() => {
                         shutdown_signal.emit();
                     }
 
