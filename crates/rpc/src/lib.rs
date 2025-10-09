@@ -1,7 +1,15 @@
 use {
     derive_more::Display,
+    governor::DefaultDirectRateLimiter,
     serde::{de::DeserializeOwned, Serialize},
-    std::{borrow::Cow, fmt::Debug, marker::PhantomData, time::Duration},
+    std::{
+        borrow::Cow,
+        fmt::Debug,
+        marker::PhantomData,
+        num::NonZeroU32,
+        sync::Arc,
+        time::Duration,
+    },
     transport::Codec,
 };
 pub use {libp2p_identity::PeerId, wcn_rpc_derive::Message};
@@ -22,6 +30,34 @@ pub mod transport;
 
 const PROTOCOL_VERSION: u32 = 0;
 
+#[derive(Clone)]
+pub struct BandwidthLimiter {
+    inner: Arc<DefaultDirectRateLimiter>,
+    burst: NonZeroU32,
+}
+
+impl BandwidthLimiter {
+    pub fn new(bytes_per_second: usize) -> Self {
+        // TODO: Remove unwrap.
+        let burst = (bytes_per_second as u32).try_into().unwrap();
+
+        Self {
+            inner: Arc::new(DefaultDirectRateLimiter::direct(
+                governor::Quota::per_second(burst),
+            )),
+            burst,
+        }
+    }
+
+    fn inner(&self) -> &DefaultDirectRateLimiter {
+        &self.inner
+    }
+
+    fn burst(&self) -> NonZeroU32 {
+        self.burst
+    }
+}
+
 /// RPC API specification.
 pub trait Api: Clone + Send + Sync + 'static {
     /// [`ApiName`] of this [`Api`].
@@ -32,6 +68,14 @@ pub trait Api: Clone + Send + Sync + 'static {
 
     /// Returns the timeout to use for the specified RPC.
     fn rpc_timeout(&self, rpc_id: Self::RpcId) -> Option<Duration>;
+
+    fn send_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        None
+    }
+
+    fn recv_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        None
+    }
 }
 
 /// [`Rpc`] ID.

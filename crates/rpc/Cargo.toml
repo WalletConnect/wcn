@@ -34,6 +34,8 @@ rand = { workspace = true, features = ["small_rng"] }
 # Async
 futures = { workspace = true }
 futures-concurrency = { workspace = true }
+futures-util = { version = "0.3" }
+futures-timer = { version = "3.0" }
 tokio = { workspace = true, features = ["io-util"] }
 tokio-util = { version = "0.7", features = ["compat", "codec"] }
 tokio-serde = { workspace = true, features = ["json"] }
@@ -43,7 +45,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 postcard = { workspace = true, features = ["alloc"] }
 
-# Other 
+# Other
 libp2p-identity = { workspace = true, default-features = false }
 libp2p-tls = { version = "0.6", default-features = false }
 quinn = { version = "0.11.8", default-features = false, features = ["rustls", "runtime-tokio"] }

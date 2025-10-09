@@ -357,10 +357,22 @@ impl<API: Api> Connection<API> {
                 .try_into()
                 .map_err(|_| Error::new(ErrorInner::InvalidRpcId(RPC::ID)))?;
 
-            let rpc = self.send_::<RPC>()?;
+            let api = &self.inner.client.api;
+            let mut rpc = self.send_::<RPC>()?;
+
+            rpc.request_sink
+                .send_stream
+                .get_mut()
+                .set_limiter(api.send_limiter(rpc_id));
+
+            rpc.response_stream
+                .recv_stream
+                .get_mut()
+                .set_limiter(api.recv_limiter(rpc_id));
+
             let fut = f(rpc);
 
-            if let Some(timeout) = self.inner.client.api.rpc_timeout(rpc_id) {
+            if let Some(timeout) = api.rpc_timeout(rpc_id) {
                 fut.with_timeout(timeout)
                     .await
                     .map_err(|_| Error::new(ErrorInner::Timeout))?

@@ -6,6 +6,9 @@ use {
     tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec},
 };
 
+mod sink;
+mod stream;
+
 /// Tranport priority. Transports with higher priority take precedence during
 /// network congestion.
 #[derive(Clone, Copy, Debug)]
@@ -98,11 +101,16 @@ pub(crate) struct BiDirectionalStream {
     pub tx: SendStream,
 }
 
-pub(crate) type SendStream = FramedWrite<quinn::SendStream, LengthDelimitedCodec>;
-pub(crate) type RecvStream = FramedRead<quinn::RecvStream, LengthDelimitedCodec>;
+pub(crate) type SendStream =
+    FramedWrite<sink::ThrottledSink<quinn::SendStream>, LengthDelimitedCodec>;
+pub(crate) type RecvStream =
+    FramedRead<stream::ThrottledStream<quinn::RecvStream>, LengthDelimitedCodec>;
 
 impl BiDirectionalStream {
     pub fn new(tx: quinn::SendStream, rx: quinn::RecvStream) -> Self {
+        let tx = sink::ThrottledSink::new(tx);
+        let rx = stream::ThrottledStream::new(rx);
+
         Self {
             tx: FramedWrite::new(tx, LengthDelimitedCodec::new()),
             rx: FramedRead::new(rx, LengthDelimitedCodec::new()),

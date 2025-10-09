@@ -606,9 +606,19 @@ impl<API: Api> InboundRpc<API> {
             )
         };
 
-        let (api, rpc_handler, rpc) = self.upgrade();
+        let (api, rpc_handler, mut rpc) = self.upgrade();
 
         async {
+            rpc.response_sink
+                .send_stream
+                .get_mut()
+                .set_limiter(api.send_limiter(id));
+
+            rpc.request_stream
+                .recv_stream
+                .get_mut()
+                .set_limiter(api.recv_limiter(id));
+
             if let Some(timeout) = api.rpc_timeout(id) {
                 handler(rpc_handler, rpc)
                     .with_timeout(timeout)
@@ -955,7 +965,12 @@ where
 impl<RPC: Rpc> ResponseSink<RPC> {
     /// Waits until this [`ResponseSink`] is closed.
     pub async fn wait_closed(&mut self) {
-        self.send_stream.get_mut().stopped().map(drop).await
+        self.send_stream
+            .get_mut()
+            .get_mut()
+            .stopped()
+            .map(drop)
+            .await
     }
 
     /// Sends all RPC responses from the provided [`Stream`] into this
