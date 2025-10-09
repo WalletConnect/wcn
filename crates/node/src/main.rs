@@ -90,7 +90,8 @@ fn main() -> anyhow::Result<()> {
                         return FutureOutput::SIGTERM;
                     }
                 }
-            });
+            }
+            .fuse());
 
             let mut node_fut = pin!(wcn_node::run(cfg).await?.map(|_| FutureOutput::Node));
 
