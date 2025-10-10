@@ -18,8 +18,8 @@ use {
     tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec},
 };
 
-mod sink;
-mod stream;
+mod read;
+mod write;
 
 /// Tranport priority. Transports with higher priority take precedence during
 /// network congestion.
