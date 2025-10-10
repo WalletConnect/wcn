@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
         .block_on(async move {
             enum FutureOutput {
                 CtrlC,
-                SIGTERM,
+                SigTerm,
                 Node,
             }
 
@@ -84,14 +84,7 @@ fn main() -> anyhow::Result<()> {
                 pin!(tokio::signal::ctrl_c().map(|_| FutureOutput::CtrlC).fuse());
 
             let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
-            let mut sigterm_fut = pin!(async {
-                loop {
-                    if let Some(_) = sigterm.recv().await {
-                        return FutureOutput::SIGTERM;
-                    }
-                }
-            }
-            .fuse());
+            let mut sigterm_fut = pin!(sigterm.recv().map(|_| FutureOutput::SigTerm).fuse());
 
             let mut node_fut = pin!(wcn_node::run(cfg).await?.map(|_| FutureOutput::Node));
 
@@ -101,7 +94,7 @@ fn main() -> anyhow::Result<()> {
                     .await
                 {
                     FutureOutput::CtrlC => shutdown_signal.emit(),
-                    FutureOutput::SIGTERM => shutdown_signal.emit(),
+                    FutureOutput::SigTerm => shutdown_signal.emit(),
                     FutureOutput::Node => return Ok(()),
                 }
             }
