@@ -295,7 +295,7 @@ impl<C: Config> View<C> {
             Event::NodeOperatorAdded(evt) => evt.apply(cfg, &mut self),
             Event::NodeOperatorUpdated(evt) => evt.apply(cfg, &mut self),
             Event::NodeOperatorRemoved(evt) => evt.apply(&mut self),
-            Event::SettingsUpdated(evt) => evt.apply(&mut self),
+            Event::SettingsUpdated(evt) => evt.apply(cfg, &mut self),
         }?;
 
         self.cluster_version = new_version;
@@ -320,6 +320,7 @@ impl<C: Config> View<C> {
 
         let ownership = Ownership::new(view.owner);
         let settings = view.settings.try_into()?;
+        cfg.update_settings(&settings);
 
         let is_migration_in_progress = !view.migration.pulling_operators.is_empty();
 
@@ -488,8 +489,9 @@ impl smart_contract::event::NodeOperatorRemoved {
 }
 
 impl smart_contract::event::SettingsUpdated {
-    pub(super) fn apply<C: Config>(self, view: &mut View<C>) -> Result<()> {
+    pub(super) fn apply<C: Config>(self, cfg: &C, view: &mut View<C>) -> Result<()> {
         view.settings = self.settings.try_into()?;
+        cfg.update_settings(&view.settings);
 
         Ok(())
     }

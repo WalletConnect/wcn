@@ -80,8 +80,8 @@ pub trait Config: AsRef<EncryptionKey> + Send + Sync + 'static {
 
     /// Updates [`Settings`]-related options of this [`Config`].
     ///
-    /// This function will be called each time [`Settings`] are being updated
-    /// on-chain.
+    /// This function will be called each time [`Settings`] may have been
+    /// updated on-chain.
     fn update_settings(&self, settings: &Settings);
 }
 
