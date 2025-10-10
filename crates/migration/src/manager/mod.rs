@@ -186,7 +186,7 @@ where
                     .context("Manager::await_migration_completion"),
                 State::Idle => future::pending().await,
             }
-            .tap_err(|err| tracing::error!(%err))
+            .tap_err(|err| tracing::error!(?err))
         })
         .map(Event::StateTransition)
         .await

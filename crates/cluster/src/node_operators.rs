@@ -221,13 +221,6 @@ impl<N> NodeOperators<N> {
         self.id_to_idx.get(id).copied()
     }
 
-    pub(super) fn occupied_indexes(&self) -> impl Iterator<Item = node_operator::Idx> + '_ {
-        self.slots
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, slot)| slot.is_some().then_some(idx as u8))
-    }
-
     pub(super) fn require_idx(
         &self,
         id: &node_operator::Id,

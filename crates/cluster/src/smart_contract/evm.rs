@@ -223,38 +223,52 @@ impl smart_contract::Read for SmartContract {
         &self,
     ) -> ReadResult<impl Stream<Item = ReadResult<Event>> + Send + 'static + use<>> {
         let filter = Filter::new().address(*self.alloy.address());
+        let provider = self.alloy.provider().clone();
 
-        Ok(self
-            .alloy
-            .provider()
+        Ok(provider
             .subscribe_logs(&filter)
             .await?
             .into_stream()
-            .filter_map(|log| async move { Event::try_from(log).transpose() }))
+            .filter_map(move |log| {
+                let provider = provider.clone();
+                async move { Event::try_from(log, &provider).await.transpose() }
+            }))
     }
 }
 
+async fn get_block_timestamp(log: &Log, provider: &DynProvider) -> ReadResult<u64> {
+    if let Some(ts) = log.block_timestamp {
+        return Ok(ts);
+    }
+
+    let Some(number) = log.block_number else {
+        return Err(ReadError::Other("Missing block number".into()));
+    };
+
+    let block = provider
+        .get_block_by_number(number.into())
+        .await?
+        .ok_or_else(|| ReadError::Other(format!("Block(number: {number}) not found")))?;
+
+    Ok(block.into_header().timestamp)
+}
+
 impl Event {
-    fn try_from(log: Log) -> ReadResult<Option<Event>> {
+    async fn try_from(log: Log, provider: &DynProvider) -> ReadResult<Option<Event>> {
         use bindings::Cluster::ClusterEvents as Event;
 
         let evt =
             Event::decode_log(&log.inner).map_err(|err| ReadError::InvalidData(err.to_string()))?;
 
-        let block_timestamp = || {
-            log.block_timestamp
-                .ok_or_else(|| ReadError::Other("Missing block timestamp".into()))
-        };
-
         Ok(Some(match evt.data {
             Event::MaintenanceToggled(evt) => evt.into(),
             Event::MigrationAborted(evt) => {
-                self::Event::from_migration_aborted(evt, block_timestamp()?)
+                self::Event::from_migration_aborted(evt, get_block_timestamp(&log, provider).await?)
             }
             Event::MigrationCompleted(evt) => evt.into(),
             Event::MigrationDataPullCompleted(evt) => evt.into(),
             Event::MigrationStarted(evt) => {
-                self::Event::from_migration_started(evt, block_timestamp()?)
+                self::Event::from_migration_started(evt, get_block_timestamp(&log, provider).await?)
             }
             Event::NodeOperatorAdded(evt) => evt.into(),
             Event::NodeOperatorRemoved(evt) => evt.into(),
