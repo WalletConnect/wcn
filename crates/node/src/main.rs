@@ -10,6 +10,7 @@ use {
         pin::pin,
         time::Duration,
     },
+    tokio::signal::unix::SignalKind,
     wc::metrics::exporter_prometheus::{PrometheusBuilder, PrometheusHandle},
     wcn_cluster::smart_contract,
     wcn_node::Config,
@@ -73,6 +74,7 @@ fn main() -> anyhow::Result<()> {
         .block_on(async move {
             enum FutureOutput {
                 CtrlC,
+                SigTerm,
                 Node,
             }
 
@@ -81,11 +83,18 @@ fn main() -> anyhow::Result<()> {
             let mut shutdown_fut =
                 pin!(tokio::signal::ctrl_c().map(|_| FutureOutput::CtrlC).fuse());
 
+            let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
+            let mut sigterm_fut = pin!(sigterm.recv().map(|_| FutureOutput::SigTerm).fuse());
+
             let mut node_fut = pin!(wcn_node::run(cfg).await?.map(|_| FutureOutput::Node));
 
             loop {
-                match (&mut shutdown_fut, &mut node_fut).race().await {
+                match (&mut shutdown_fut, &mut sigterm_fut, &mut node_fut)
+                    .race()
+                    .await
+                {
                     FutureOutput::CtrlC => shutdown_signal.emit(),
+                    FutureOutput::SigTerm => shutdown_signal.emit(),
                     FutureOutput::Node => return Ok(()),
                 }
             }
