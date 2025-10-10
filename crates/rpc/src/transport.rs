@@ -1,8 +1,19 @@
 use {
     crate::{BorrowedMessage, Message},
     bytes::{BufMut as _, Bytes, BytesMut},
+    futures_timer::Delay,
+    governor::clock::ReasonablyRealtime as _,
+    pin_project::pin_project,
     serde::{Deserialize, Serialize},
-    std::{error::Error as StdError, io, pin::Pin},
+    std::{
+        error::Error as StdError,
+        future::Future as _,
+        io,
+        num::NonZeroU32,
+        pin::Pin,
+        sync::Arc,
+        task::{self, Poll},
+    },
     tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec},
 };
 
@@ -101,19 +112,130 @@ pub(crate) struct BiDirectionalStream {
     pub tx: SendStream,
 }
 
-pub(crate) type SendStream =
-    FramedWrite<sink::ThrottledSink<quinn::SendStream>, LengthDelimitedCodec>;
-pub(crate) type RecvStream =
-    FramedRead<stream::ThrottledStream<quinn::RecvStream>, LengthDelimitedCodec>;
+pub(crate) type SendStream = FramedWrite<Throttled<quinn::SendStream>, LengthDelimitedCodec>;
+pub(crate) type RecvStream = FramedRead<Throttled<quinn::RecvStream>, LengthDelimitedCodec>;
 
 impl BiDirectionalStream {
     pub fn new(tx: quinn::SendStream, rx: quinn::RecvStream) -> Self {
-        let tx = sink::ThrottledSink::new(tx);
-        let rx = stream::ThrottledStream::new(rx);
+        let tx = Throttled::new(tx, None);
+        let rx = Throttled::new(rx, None);
 
         Self {
             tx: FramedWrite::new(tx, LengthDelimitedCodec::new()),
             rx: FramedRead::new(rx, LengthDelimitedCodec::new()),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct BandwidthLimiter {
+    governor: Arc<governor::DefaultDirectRateLimiter>,
+    bytes_per_second: u32,
+}
+
+impl BandwidthLimiter {
+    pub fn new(bytes_per_second: u32) -> Self {
+        // Not sure what else to do here, except falling back to some small value.
+        let bps = NonZeroU32::new(bytes_per_second).unwrap_or(NonZeroU32::new(4096).unwrap());
+
+        Self {
+            governor: Arc::new(governor::DefaultDirectRateLimiter::direct(
+                governor::Quota::per_second(bps),
+            )),
+            bytes_per_second: u32::from(bps),
+        }
+    }
+}
+
+#[pin_project(project = ThrottledProj)]
+pub(crate) struct Throttled<T> {
+    #[pin]
+    inner: T,
+
+    limiter: Option<BandwidthLimiter>,
+    delay: Option<Delay>,
+    balance: isize,
+}
+
+impl<T> Throttled<T> {
+    fn new(inner: T, limiter: Option<BandwidthLimiter>) -> Self {
+        Self {
+            inner,
+            limiter,
+            delay: None,
+            balance: 0,
+        }
+    }
+
+    pub(crate) fn set_limiter(&mut self, limiter: Option<BandwidthLimiter>) {
+        self.limiter = limiter;
+    }
+
+    pub(crate) fn get_mut(&mut self) -> &mut T {
+        &mut self.inner
+    }
+}
+
+impl<'a, T> ThrottledProj<'a, T> {
+    /// Tries to reserve the requested `amount` of byte credits for later use.
+    ///
+    /// Blocks ([`Poll::Pending`]) if the credits cannot be acquired from the
+    /// underlying [`BandwidthLimiter`] immediately.
+    ///
+    /// If the credit balance is negative it will try to "repay" it.
+    fn poll_reserve(&mut self, cx: &mut task::Context<'_>, amount: usize) -> Poll<usize> {
+        let Some(limiter) = self.limiter else {
+            return Poll::Ready(amount);
+        };
+
+        let amount = isize::try_from(amount).unwrap_or(isize::MAX);
+
+        let mut amount = if *self.balance >= amount {
+            // NOTE(unwrap): `amount` is always a positive number
+            return Poll::Ready(usize::try_from(amount).unwrap());
+        } else {
+            let deficit = u32::try_from(self.balance.abs_diff(amount)).unwrap_or(u32::MAX);
+            // NOTE(unwrap): `deficit` cannot be zero as `balance` < `amount` in this branch
+            NonZeroU32::new(deficit).unwrap()
+        };
+
+        loop {
+            if let Some(delay) = self.delay {
+                match Pin::new(delay).poll(cx) {
+                    Poll::Pending => return Poll::Pending,
+                    Poll::Ready(_) => *self.delay = None,
+                }
+            };
+
+            match limiter.governor.check_n(amount) {
+                Ok(Ok(())) => {
+                    *self.balance += isize::try_from(u32::from(amount)).unwrap_or(isize::MAX);
+                    return Poll::Ready(usize::try_from(*self.balance).unwrap_or_default());
+                }
+
+                Ok(Err(negative)) => {
+                    let now = limiter.governor.clock().reference_point();
+                    *self.delay = Some(Delay::new(negative.wait_time_from(now)));
+                }
+
+                Err(governor::InsufficientCapacity(capacity)) => {
+                    // NOTE(unwrap): `capacity` cannot be zero
+                    amount = NonZeroU32::new(capacity).unwrap();
+                }
+            };
+        }
+    }
+
+    /// Spends the specified `amount` of byte credits.
+    fn spend(&mut self, amount: usize) {
+        *self.balance = self
+            .balance
+            .saturating_sub(isize::try_from(amount).unwrap_or(isize::MAX));
+    }
+
+    fn limiter_bps(&self) -> Option<usize> {
+        self.limiter
+            .as_ref()
+            .map(|limiter| limiter.bytes_per_second as usize)
     }
 }
