@@ -42,6 +42,8 @@ impl wcn_cluster::Config for Config {
     fn new_node(&self, _operator_id: node_operator::Id, node: Node) -> Node {
         node
     }
+
+    fn update_settings(&self, _settings: &wcn_cluster::Settings) {}
 }
 
 impl super::Config for Config {
@@ -72,6 +74,7 @@ impl Context {
                 event_propagation_latency: Duration::from_secs(4),
                 clock_skew: Duration::from_secs(2),
                 migration_concurrency: 100,
+                ..wcn_cluster::Settings::default()
             },
             (0..8)
                 .map(|idx: u8| wcn_cluster::testing::node_operator(idx))

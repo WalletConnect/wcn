@@ -6,7 +6,7 @@ use {
     strum::IntoStaticStr,
     wcn_rpc::{
         metrics::{ErrorResponse, FallibleResponse},
-        transport::PostcardCodec,
+        transport::{BandwidthLimiter, PostcardCodec},
         ApiName,
         Message,
     },
@@ -46,9 +46,12 @@ impl From<Id> for u8 {
 }
 
 /// `wcn_rpc` implementation of [`StorageApi`](super::StorageApi).
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Api<Kind, S = ()> {
     rpc_timeout: Option<Duration>,
+    tx_bandwidth_limiter: Option<BandwidthLimiter>,
+    rx_bandwidth_limiter: Option<BandwidthLimiter>,
+
     kind: PhantomData<Kind>,
     state: S,
 }
@@ -58,6 +61,8 @@ impl<Kind> Api<Kind> {
     pub fn new() -> Self {
         Self {
             rpc_timeout: None,
+            tx_bandwidth_limiter: None,
+            rx_bandwidth_limiter: None,
             kind: PhantomData,
             state: (),
         }
@@ -69,10 +74,24 @@ impl<Kind> Api<Kind> {
         self
     }
 
+    /// Adds outbound [`BandwidthLimiter`].
+    pub fn with_tx_bandwidth_limit(mut self, limiter: BandwidthLimiter) -> Self {
+        self.tx_bandwidth_limiter = Some(limiter);
+        self
+    }
+
+    /// Adds inbound [`BandwidthLimiter`].
+    pub fn with_rx_bandwidth_limit(mut self, limiter: BandwidthLimiter) -> Self {
+        self.rx_bandwidth_limiter = Some(limiter);
+        self
+    }
+
     /// Adds `state` to this [`Api`].
     pub fn with_state<S>(self, state: S) -> Api<Kind, S> {
         Api {
             rpc_timeout: self.rpc_timeout,
+            tx_bandwidth_limiter: self.tx_bandwidth_limiter,
+            rx_bandwidth_limiter: self.rx_bandwidth_limiter,
             kind: PhantomData,
             state,
         }
@@ -122,6 +141,14 @@ where
     fn rpc_timeout(&self, rpc_id: Id) -> Option<Duration> {
         self.rpc_timeout_(rpc_id)
     }
+
+    fn send_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        self.tx_bandwidth_limiter.clone()
+    }
+
+    fn recv_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        self.rx_bandwidth_limiter.clone()
+    }
 }
 
 pub type ReplicaApi<S = ()> = Api<api_kind::Replica, S>;
@@ -136,6 +163,14 @@ where
     fn rpc_timeout(&self, rpc_id: Id) -> Option<Duration> {
         self.rpc_timeout_(rpc_id)
     }
+
+    fn send_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        self.tx_bandwidth_limiter.clone()
+    }
+
+    fn recv_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        self.rx_bandwidth_limiter.clone()
+    }
 }
 
 pub type DatabaseApi<S = ()> = Api<api_kind::Database, S>;
@@ -149,6 +184,14 @@ where
 
     fn rpc_timeout(&self, rpc_id: Id) -> Option<Duration> {
         self.rpc_timeout_(rpc_id)
+    }
+
+    fn send_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        self.tx_bandwidth_limiter.clone()
+    }
+
+    fn recv_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        self.rx_bandwidth_limiter.clone()
     }
 }
 

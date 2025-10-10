@@ -60,7 +60,7 @@ mod test {
     async fn single() {
         let limiter = BandwidthLimiter::new(5);
         let writer = Cursor::new(vec![]);
-        let mut sink = Throttled::new(writer, Some(limiter));
+        let mut sink = Throttled::new(writer, limiter);
         let expected = vec![1u8; 35];
 
         let time = Instant::now();
@@ -90,9 +90,9 @@ mod test {
         let writer2 = Cursor::new(vec![]);
         let writer3 = Cursor::new(vec![]);
 
-        let mut sink1 = Throttled::new(writer1, Some(limiter.clone()));
-        let mut sink2 = Throttled::new(writer2, Some(limiter.clone()));
-        let mut sink3 = Throttled::new(writer3, Some(limiter));
+        let mut sink1 = Throttled::new(writer1, limiter.clone());
+        let mut sink2 = Throttled::new(writer2, limiter.clone());
+        let mut sink3 = Throttled::new(writer3, limiter);
 
         let time = Instant::now();
 

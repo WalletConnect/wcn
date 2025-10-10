@@ -107,6 +107,8 @@ impl wcn_cluster::Config for ClusterConfig {
     ) -> Self::Node {
         node
     }
+
+    fn update_settings(&self, _settings: &wcn_cluster::Settings) {}
 }
 
 fn ask_approval() -> anyhow::Result<bool> {

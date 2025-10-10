@@ -120,6 +120,8 @@ where
             data: D::new(&operator_id, &node),
         }
     }
+
+    fn update_settings(&self, _settings: &wcn_cluster::Settings) {}
 }
 
 async fn select_open_connection<D>(

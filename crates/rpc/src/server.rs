@@ -609,15 +609,16 @@ impl<API: Api> InboundRpc<API> {
         let (api, rpc_handler, mut rpc) = self.upgrade();
 
         async {
-            rpc.response_sink
-                .send_stream
-                .get_mut()
-                .set_limiter(api.send_limiter(id));
+            if let Some(limiter) = api.send_limiter(id) {
+                rpc.response_sink.send_stream.get_mut().set_limiter(limiter);
+            }
 
-            rpc.request_stream
-                .recv_stream
-                .get_mut()
-                .set_limiter(api.recv_limiter(id));
+            if let Some(limiter) = api.recv_limiter(id) {
+                rpc.request_stream
+                    .recv_stream
+                    .get_mut()
+                    .set_limiter(limiter);
+            }
 
             if let Some(timeout) = api.rpc_timeout(id) {
                 handler(rpc_handler, rpc)

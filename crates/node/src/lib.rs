@@ -25,6 +25,7 @@ use {
     wcn_rpc::{
         client::{self as rpc_client, Api as _},
         server::{self as rpc_server, Api as _, Server as _, ShutdownSignal},
+        transport::BandwidthLimiter,
     },
     wcn_storage_api::rpc::client as storage_api_client,
 };
@@ -115,6 +116,9 @@ impl Config {
     }
 
     fn try_into_app(&self) -> Result<AppConfig, ErrorInner> {
+        let migration_tx_bandwidth_limiter = BandwidthLimiter::new(0);
+        let migration_rx_bandwidth_limiter = BandwidthLimiter::new(0);
+
         let replica_client_cfg = rpc_client::Config {
             keypair: self.keypair.clone(),
             connection_timeout: Duration::from_secs(2),
@@ -163,6 +167,8 @@ impl Config {
         let database_client = self.database_api().try_into_client(database_client_cfg)?;
         let database_low_prio_client = self
             .database_api()
+            .with_tx_bandwidth_limit(migration_tx_bandwidth_limiter.clone())
+            .with_rx_bandwidth_limit(migration_rx_bandwidth_limiter.clone())
             .try_into_client(database_low_prio_client_cfg)?;
 
         let metrics_client = self.metrics_api().try_into_client(metrics_client_cfg)?;
@@ -173,6 +179,8 @@ impl Config {
             replica_client: self.replica_api().try_into_client(replica_client_cfg)?,
             replica_low_prio_client: self
                 .replica_api()
+                .with_tx_bandwidth_limit(migration_tx_bandwidth_limiter.clone())
+                .with_rx_bandwidth_limit(migration_rx_bandwidth_limiter.clone())
                 .try_into_client(replica_low_prio_client_cfg)?,
 
             database_connection: database_client.new_connection(
@@ -193,6 +201,9 @@ impl Config {
                 (),
             ),
             metrics_client,
+
+            migration_tx_bandwidth_limiter,
+            migration_rx_bandwidth_limiter,
         })
     }
 
@@ -224,6 +235,9 @@ struct AppConfig {
 
     database_metrics_connection: wcn_metrics_api::rpc::client::Connection,
     metrics_client: wcn_metrics_api::rpc::Client,
+
+    migration_tx_bandwidth_limiter: BandwidthLimiter,
+    migration_rx_bandwidth_limiter: BandwidthLimiter,
 }
 
 #[derive(AsRef, Clone)]
@@ -263,6 +277,14 @@ impl wcn_cluster::Config for AppConfig {
                 (),
             ),
         }
+    }
+
+    fn update_settings(&self, settings: &wcn_cluster::Settings) {
+        self.migration_tx_bandwidth_limiter
+            .set_bps(settings.migration_tx_bandwidth);
+
+        self.migration_rx_bandwidth_limiter
+            .set_bps(settings.migration_rx_bandwidth);
     }
 }
 
@@ -311,6 +333,18 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
         config.smart_contract_address,
     )
     .await?;
+
+    cluster.using_view(|view| {
+        let settings = view.settings();
+
+        app_cfg
+            .migration_tx_bandwidth_limiter
+            .set_bps(settings.migration_tx_bandwidth);
+
+        app_cfg
+            .migration_rx_bandwidth_limiter
+            .set_bps(settings.migration_rx_bandwidth);
+    });
 
     let coordinator = wcn_replication::Coordinator::new(app_cfg.clone(), cluster.clone());
 

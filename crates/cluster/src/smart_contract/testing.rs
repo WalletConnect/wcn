@@ -153,6 +153,8 @@ impl crate::Config for Config {
     fn new_node(&self, _operator_id: node_operator::Id, node: Node) -> Self::Node {
         node
     }
+
+    fn update_settings(&self, _settings: &cluster::Settings) {}
 }
 
 #[derive(Clone)]

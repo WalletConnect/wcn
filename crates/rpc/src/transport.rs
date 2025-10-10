@@ -1,5 +1,6 @@
 use {
     crate::{BorrowedMessage, Message},
+    arc_swap::ArcSwap,
     bytes::{BufMut as _, Bytes, BytesMut},
     futures_timer::Delay,
     governor::clock::ReasonablyRealtime as _,
@@ -117,8 +118,8 @@ pub(crate) type RecvStream = FramedRead<Throttled<quinn::RecvStream>, LengthDeli
 
 impl BiDirectionalStream {
     pub fn new(tx: quinn::SendStream, rx: quinn::RecvStream) -> Self {
-        let tx = Throttled::new(tx, None);
-        let rx = Throttled::new(rx, None);
+        let tx = Throttled::new(tx, BandwidthLimiter::new(0));
+        let rx = Throttled::new(rx, BandwidthLimiter::new(0));
 
         Self {
             tx: FramedWrite::new(tx, LengthDelimitedCodec::new()),
@@ -127,23 +128,67 @@ impl BiDirectionalStream {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BandwidthLimiter {
-    governor: Arc<governor::DefaultDirectRateLimiter>,
+    inner: Arc<ArcSwap<Option<BandwidthLimiterInner>>>,
+}
+
+#[derive(Debug)]
+struct BandwidthLimiterInner {
+    governor: governor::DefaultDirectRateLimiter,
     bytes_per_second: u32,
 }
 
 impl BandwidthLimiter {
+    /// Creates a new [`BandwidthLimiter`] with the specified bytes per second
+    /// limit.
+    ///
+    /// If `bytes_per_second` is `0` the [`BandwidthLimiter`] will be disabled.
     pub fn new(bytes_per_second: u32) -> Self {
-        // Not sure what else to do here, except falling back to some small value.
-        let bps = NonZeroU32::new(bytes_per_second).unwrap_or(NonZeroU32::new(4096).unwrap());
+        let this = Self {
+            inner: Default::default(),
+        };
 
-        Self {
-            governor: Arc::new(governor::DefaultDirectRateLimiter::direct(
-                governor::Quota::per_second(bps),
-            )),
-            bytes_per_second: u32::from(bps),
+        if bytes_per_second == 0 {
+            return this;
+        };
+
+        this.set_bps(bytes_per_second);
+        this
+    }
+
+    /// Gets the current bytes per second limit of this [`BandwidthLimiter`].
+    ///
+    /// `0` means that limiting is disabled.
+    pub fn bps(&self) -> u32 {
+        Option::as_ref(&self.inner.load())
+            .map(|inner| inner.bytes_per_second)
+            .unwrap_or_default()
+    }
+
+    /// Sets maximum bytes per second limit of this [`BandwidthLimiter`].
+    ///
+    /// Providing `0` disables the limiting.
+    pub fn set_bps(&self, bytes_per_second: u32) {
+        if self.bps() == bytes_per_second {
+            return;
         }
+
+        let governor = if bytes_per_second == 0 {
+            None
+        } else {
+            // NOTE(unwrap): we just checked that it's not `0`
+            let bps = NonZeroU32::new(bytes_per_second).unwrap();
+            let quota = governor::Quota::per_second(bps);
+
+            Some(governor::DefaultDirectRateLimiter::direct(quota))
+        };
+
+        self.inner
+            .store(Arc::new(governor.map(|governor| BandwidthLimiterInner {
+                governor,
+                bytes_per_second,
+            })));
     }
 }
 
@@ -152,13 +197,13 @@ pub(crate) struct Throttled<T> {
     #[pin]
     inner: T,
 
-    limiter: Option<BandwidthLimiter>,
+    limiter: BandwidthLimiter,
     delay: Option<Delay>,
     balance: isize,
 }
 
 impl<T> Throttled<T> {
-    fn new(inner: T, limiter: Option<BandwidthLimiter>) -> Self {
+    fn new(inner: T, limiter: BandwidthLimiter) -> Self {
         Self {
             inner,
             limiter,
@@ -167,7 +212,7 @@ impl<T> Throttled<T> {
         }
     }
 
-    pub(crate) fn set_limiter(&mut self, limiter: Option<BandwidthLimiter>) {
+    pub(crate) fn set_limiter(&mut self, limiter: BandwidthLimiter) {
         self.limiter = limiter;
     }
 
@@ -184,7 +229,9 @@ impl<'a, T> ThrottledProj<'a, T> {
     ///
     /// If the credit balance is negative it will try to "repay" it.
     fn poll_reserve(&mut self, cx: &mut task::Context<'_>, amount: usize) -> Poll<usize> {
-        let Some(limiter) = self.limiter else {
+        let limiter = self.limiter.inner.load();
+
+        let Some(limiter) = limiter.as_ref() else {
             return Poll::Ready(amount);
         };
 
@@ -231,11 +278,5 @@ impl<'a, T> ThrottledProj<'a, T> {
         *self.balance = self
             .balance
             .saturating_sub(isize::try_from(amount).unwrap_or(isize::MAX));
-    }
-
-    fn limiter_bps(&self) -> Option<usize> {
-        self.limiter
-            .as_ref()
-            .map(|limiter| limiter.bytes_per_second as usize)
     }
 }

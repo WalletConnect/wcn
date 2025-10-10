@@ -19,17 +19,19 @@ where
     ) -> Poll<io::Result<()>> {
         let mut this = self.project();
 
+        let limiter_bps = this.limiter.bps() as usize;
+
         // If limiter is off, just poll `inner`
-        let Some(max_buffer_size) = this.limiter_bps() else {
+        if limiter_bps == 0 {
             return this.inner.poll_read(cx, buf);
-        };
+        }
 
         let Poll::Ready(_) = this.poll_reserve(cx, 0) else {
             return Poll::Pending;
         };
 
-        let mut new_buf = ReadBuf::new(if buf.remaining() >= max_buffer_size {
-            buf.initialize_unfilled_to(max_buffer_size)
+        let mut new_buf = ReadBuf::new(if buf.remaining() >= limiter_bps {
+            buf.initialize_unfilled_to(limiter_bps)
         } else {
             buf.initialize_unfilled()
         });
@@ -63,7 +65,7 @@ mod test {
         let expected = vec![1u8; 35];
         let limiter = BandwidthLimiter::new(5);
         let reader = Cursor::new(expected.clone());
-        let mut stream = Throttled::new(reader, Some(limiter));
+        let mut stream = Throttled::new(reader, limiter);
 
         let time = Instant::now();
         let mut actual = Vec::new();
@@ -89,9 +91,9 @@ mod test {
         let reader2 = Cursor::new(expected2.clone());
         let reader3 = Cursor::new(expected3.clone());
 
-        let mut stream1 = Throttled::new(reader1, Some(limiter.clone()));
-        let mut stream2 = Throttled::new(reader2, Some(limiter.clone()));
-        let mut stream3 = Throttled::new(reader3, Some(limiter));
+        let mut stream1 = Throttled::new(reader1, limiter.clone());
+        let mut stream2 = Throttled::new(reader2, limiter.clone());
+        let mut stream3 = Throttled::new(reader3, limiter);
 
         let time = Instant::now();
 
