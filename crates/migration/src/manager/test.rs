@@ -45,6 +45,8 @@ impl cluster::Config for Config {
             storage: self.storage_registry.get(operator_id),
         }
     }
+
+    fn update_settings(&self, _settings: &wcn_cluster::Settings) {}
 }
 
 impl super::Config for Config {
@@ -95,6 +97,7 @@ async fn transfers_data_and_writes_to_smart_contract() {
             event_propagation_latency: Duration::from_secs(1),
             clock_skew: Duration::from_millis(100),
             migration_concurrency: 100,
+            ..cluster::Settings::default()
         },
         (0..8)
             .map(|idx: u8| cluster::testing::node_operator(idx))

@@ -46,6 +46,14 @@ pub struct Settings {
     /// Specifies how many shards are allowed to be pulled by a
     /// [`NodeOperator`] at the same time during data migration.
     pub migration_concurrency: u16,
+
+    /// Maximum number of bytes per second transmitted by a single [`Node`]
+    /// during data migration.
+    pub migration_tx_bandwidth: u32,
+
+    /// Maximum number of bytes per second received by a single [`Node`] during
+    /// data migration.
+    pub migration_rx_bandwidth: u32,
 }
 
 impl Default for Settings {
@@ -54,7 +62,9 @@ impl Default for Settings {
             max_node_operator_data_bytes: 4096,
             event_propagation_latency: Duration::from_secs(5),
             clock_skew: Duration::from_millis(500),
-            migration_concurrency: 10,
+            migration_concurrency: Setting::DEFAULT_MIGRATION_CONCURRENCY,
+            migration_tx_bandwidth: Setting::DEFAULT_MIGRATION_TX_BANDWIDTH,
+            migration_rx_bandwidth: Setting::DEFAULT_MIGRATION_RX_BANDWIDTH,
         }
     }
 }
@@ -75,11 +85,13 @@ impl Settings {
         time - self.clock_skew..=time + self.clock_skew
     }
 
-    fn extra(&self) -> [Setting; 3] {
+    fn extra(&self) -> [Setting; 5] {
         [
             Setting::EventPropagationLatency(self.event_propagation_latency),
             Setting::ClockSkew(self.clock_skew),
             Setting::MigrationConcurrency(self.migration_concurrency),
+            Setting::MigrationTxBandwidth(self.migration_tx_bandwidth),
+            Setting::MigrationRxBandwidth(self.migration_rx_bandwidth),
         ]
     }
 
@@ -88,6 +100,8 @@ impl Settings {
             Setting::EventPropagationLatency(setting) => self.event_propagation_latency = setting,
             Setting::ClockSkew(setting) => self.clock_skew = setting,
             Setting::MigrationConcurrency(setting) => self.migration_concurrency = setting,
+            Setting::MigrationTxBandwidth(setting) => self.migration_tx_bandwidth = setting,
+            Setting::MigrationRxBandwidth(setting) => self.migration_rx_bandwidth = setting,
         };
     }
 }
@@ -174,7 +188,9 @@ impl From<ExtraV0> for Settings {
                 extra.event_propagation_latency_ms.into(),
             ),
             clock_skew: Duration::from_millis(extra.clock_skew_ms.into()),
-            migration_concurrency: 10,
+            migration_concurrency: Setting::DEFAULT_MIGRATION_CONCURRENCY,
+            migration_tx_bandwidth: Setting::DEFAULT_MIGRATION_TX_BANDWIDTH,
+            migration_rx_bandwidth: Setting::DEFAULT_MIGRATION_RX_BANDWIDTH,
         }
     }
 }
@@ -196,6 +212,8 @@ enum Setting {
     EventPropagationLatency(Duration) = 0,
     ClockSkew(Duration) = 1,
     MigrationConcurrency(u16) = 2,
+    MigrationTxBandwidth(u32) = 3,
+    MigrationRxBandwidth(u32) = 4,
 }
 
 impl SettingId {
@@ -205,6 +223,10 @@ impl SettingId {
 }
 
 impl Setting {
+    const DEFAULT_MIGRATION_CONCURRENCY: u16 = 10;
+    const DEFAULT_MIGRATION_TX_BANDWIDTH: u32 = 10_000_000;
+    const DEFAULT_MIGRATION_RX_BANDWIDTH: u32 = 10_000_000;
+
     fn encode(&self) -> Vec<u8> {
         let encode_duration = |value: &Duration| {
             u32::try_from(value.as_millis())
@@ -217,6 +239,8 @@ impl Setting {
             Self::EventPropagationLatency(latency) => encode_duration(latency),
             Self::ClockSkew(skew) => encode_duration(skew),
             Self::MigrationConcurrency(concurrency) => concurrency.to_be_bytes().into(),
+            Self::MigrationTxBandwidth(bandwidth) => bandwidth.to_be_bytes().into(),
+            Self::MigrationRxBandwidth(bandwidth) => bandwidth.to_be_bytes().into(),
         }
     }
 
@@ -227,11 +251,14 @@ impl Setting {
         };
 
         let decode_u16 = || Some(u16::from_be_bytes(value.try_into().ok()?));
+        let decode_u32 = || Some(u32::from_be_bytes(value.try_into().ok()?));
 
         Some(match id {
             SettingId::EventPropagationLatency => Self::EventPropagationLatency(decode_duration()?),
             SettingId::ClockSkew => Self::ClockSkew(decode_duration()?),
             SettingId::MigrationConcurrency => Self::MigrationConcurrency(decode_u16()?),
+            SettingId::MigrationTxBandwidth => Self::MigrationTxBandwidth(decode_u32()?),
+            SettingId::MigrationRxBandwidth => Self::MigrationRxBandwidth(decode_u32()?),
         })
     }
 }
@@ -324,6 +351,8 @@ mod test {
             event_propagation_latency: Duration::from_secs(42),
             clock_skew: Duration::from_secs(10),
             migration_concurrency: 1000,
+            migration_tx_bandwidth: 555,
+            migration_rx_bandwidth: 666,
         };
 
         let mut settings: Settings = ExtraV1::from(expected_settings).into();

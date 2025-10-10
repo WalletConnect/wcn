@@ -6237,11 +6237,14 @@ dependencies = [
 name = "wcn_rpc"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "bytes",
  "derive-where",
  "derive_more",
  "futures",
  "futures-concurrency",
+ "futures-timer",
+ "futures-util",
  "governor",
  "libp2p-identity",
  "libp2p-tls",

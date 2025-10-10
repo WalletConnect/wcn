@@ -77,6 +77,12 @@ pub trait Config: AsRef<EncryptionKey> + Send + Sync + 'static {
 
     /// Creates a new [`Config::Node`].
     fn new_node(&self, operator_id: node_operator::Id, node: Node) -> Self::Node;
+
+    /// Updates [`Settings`]-related options of this [`Config`].
+    ///
+    /// This function will be called each time [`Settings`] may have been
+    /// updated on-chain.
+    fn update_settings(&self, settings: &Settings);
 }
 
 /// WCN cluster.

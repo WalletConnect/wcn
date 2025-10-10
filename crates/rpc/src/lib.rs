@@ -1,4 +1,5 @@
 use {
+    crate::transport::BandwidthLimiter,
     derive_more::Display,
     serde::{de::DeserializeOwned, Serialize},
     std::{borrow::Cow, fmt::Debug, marker::PhantomData, time::Duration},
@@ -32,6 +33,14 @@ pub trait Api: Clone + Send + Sync + 'static {
 
     /// Returns the timeout to use for the specified RPC.
     fn rpc_timeout(&self, rpc_id: Self::RpcId) -> Option<Duration>;
+
+    fn send_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        None
+    }
+
+    fn recv_limiter(&self, _rpc_id: Self::RpcId) -> Option<BandwidthLimiter> {
+        None
+    }
 }
 
 /// [`Rpc`] ID.

@@ -53,6 +53,8 @@ impl wcn_cluster::Config for DeploymentConfig {
     fn new_node(&self, _operator_id: node_operator::Id, node: wcn_cluster::Node) -> Self::Node {
         node
     }
+
+    fn update_settings(&self, _settings: &wcn_cluster::Settings) {}
 }
 
 pub struct TestCluster {
@@ -93,6 +95,8 @@ impl TestCluster {
             event_propagation_latency: Duration::from_secs(1),
             clock_skew: Duration::from_millis(100),
             migration_concurrency: 100,
+            migration_tx_bandwidth: 10_000_000,
+            migration_rx_bandwidth: 10_000_000,
         };
 
         tracing::info!(port = %anvil.port(), "Anvil launched");

@@ -116,6 +116,8 @@ impl wcn_cluster::Config for ClusterConfig {
     ) -> Self::Node {
         node
     }
+
+    fn update_settings(&self, _settings: &wcn_cluster::Settings) {}
 }
 
 fn current_operator(cluster: &Cluster) -> anyhow::Result<NodeOperator<wcn_cluster::Node>> {

@@ -57,6 +57,8 @@ impl wcn_cluster::Config for Config {
             storage: self.storage_registry.get(operator_id),
         }
     }
+
+    fn update_settings(&self, _settings: &wcn_cluster::Settings) {}
 }
 
 impl super::Config for Config {
@@ -91,6 +93,7 @@ impl Context {
                 event_propagation_latency: Duration::from_secs(3),
                 clock_skew: Duration::from_secs(1),
                 migration_concurrency: 100,
+                ..wcn_cluster::Settings::default()
             },
             (0..8)
                 .map(|idx: u8| {
