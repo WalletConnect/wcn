@@ -95,8 +95,8 @@ impl TestCluster {
             event_propagation_latency: Duration::from_secs(1),
             clock_skew: Duration::from_millis(100),
             migration_concurrency: 100,
-            migration_tx_bandwidth: 20_000_000,
-            migration_rx_bandwidth: 20_000_000,
+            migration_tx_bandwidth: 100_000_000,
+            migration_rx_bandwidth: 100_000_000,
         };
 
         tracing::info!(port = %anvil.port(), "Anvil launched");
