@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 # Local
-wcn_cluster = { workspace = true }
+wcn_cluster = { workspace = true, features = ["evm"] }
 
 # Derives
 derive_more = { workspace = true, features = ["as_ref"] }
