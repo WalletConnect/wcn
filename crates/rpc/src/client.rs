@@ -214,7 +214,7 @@ impl<API: Api> Client<API> {
                 remote_peer_id: *peer_id,
                 watch_rx: rx,
                 watch_tx: Arc::new(tokio::sync::Mutex::new((tx, params))),
-                cancelation_token: CancellationToken::new(),
+                cancellation_token: CancellationToken::new(),
             }),
         }
     }
@@ -271,12 +271,12 @@ struct ConnectionInner<API: Api> {
     watch_rx: watch::Receiver<Option<quinn::Connection>>,
     watch_tx: Arc<ConnectionMutex<API::ConnectionParameters>>,
 
-    cancelation_token: CancellationToken,
+    cancellation_token: CancellationToken,
 }
 
 impl<API: Api> Drop for ConnectionInner<API> {
     fn drop(&mut self) {
-        self.cancelation_token.cancel();
+        self.cancellation_token.cancel();
     }
 }
 
@@ -448,7 +448,7 @@ impl<API: Api> Connection<API> {
         };
 
         let this = self.inner.clone();
-        let cancellation_token = this.cancelation_token.clone();
+        let cancellation_token = this.cancellation_token.clone();
 
         async move {
             let mut interval = tokio::time::interval(interval);
