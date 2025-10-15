@@ -5,8 +5,9 @@ edition = "2021"
 publish = false
 
 [features]
-default = []
+default = ["evm"]
 testing = []
+evm = ["dep:alloy"]
 
 [lints]
 workspace = true
@@ -34,7 +35,7 @@ tracing = { workspace = true }
 
 # Collections
 indexmap = { workspace = true }
-smallvec = { workspace = true }
+smallvec = { workspace = true, features = ["serde"] }
 
 # Serialization
 serde = { workspace = true }
@@ -48,13 +49,13 @@ aes = { version = "0.8", default-features = false }
 # Async
 futures = { workspace = true }
 tokio = { workspace = true, features = ["time", "rt"] }
-tokio-stream = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"] }
 
 # Domain specific
 libp2p-identity = { workspace = true, features = ["serde", "rand"] }
 xxhash-rust = { workspace = true }
 multihash = { version = "0.19", default-features = false }
-alloy = { workspace = true, features = [
+alloy = { workspace = true, optional = true, features = [
     "contract",
     "signer-local",
     "reqwest",

@@ -11,7 +11,9 @@ use {
         rpc::types::{Filter, Log},
         signers::local::PrivateKeySigner,
         sol_types::{SolCall, SolEventInterface, SolInterface},
+        transports::http::reqwest,
     },
+    derive_where::derive_where,
     futures::{Stream, StreamExt},
     std::{collections::HashSet, fmt, time::Duration},
 };

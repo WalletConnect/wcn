@@ -3,15 +3,14 @@
 pub use event::Event;
 use {
     crate::{migration, node_operator},
-    alloy::transports::http::reqwest,
     derive_more::From,
-    derive_where::derive_where,
     futures::Stream,
     serde::{Deserialize, Serialize},
     std::{collections::HashSet, fmt, future::Future, str::FromStr},
 };
 
 pub mod event;
+#[cfg(feature = "evm")]
 pub mod evm;
 #[cfg(feature = "testing")]
 pub mod testing;

@@ -14,7 +14,7 @@ rpc_server = ["wcn_rpc/server"]
 
 [dependencies]
 # Local
-wcn_cluster = { workspace = true }
+wcn_cluster = { workspace = true, default-features = false }
 wcn_rpc = { workspace = true }
 
 # Org
@@ -33,7 +33,7 @@ tracing = "0.1"
 # Serialization
 serde = "1"
 
-# Async 
+# Async
 futures = "0.3"
 futures-concurrency = { workspace = true }
 

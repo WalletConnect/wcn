@@ -19,7 +19,7 @@ workspace = true
 # Local
 wcn_logging = { workspace = true }
 wcn_rpc = { workspace = true, features = ["client", "server"] }
-wcn_cluster = { workspace = true }
+wcn_cluster = { workspace = true, features = ["evm"] }
 wcn_storage_api = { workspace = true, features = ["rpc_client", "rpc_server"] }
 wcn_cluster_api = { workspace = true, features = ["rpc_server"] }
 wcn_metrics_api = { workspace = true, features = ["rpc_client", "rpc_server"] }
