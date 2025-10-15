@@ -33,6 +33,7 @@ use {
         sync::{watch, Mutex},
     },
     tokio_serde::Deserializer,
+    tokio_util::{future::FutureExt as _, sync::CancellationToken},
     tracing::Instrument,
     wc::{
         future::FutureExt as _,
@@ -213,6 +214,7 @@ impl<API: Api> Client<API> {
                 remote_peer_id: *peer_id,
                 watch_rx: rx,
                 watch_tx: Arc::new(tokio::sync::Mutex::new((tx, params))),
+                cancelation_token: CancellationToken::new(),
             }),
         }
     }
@@ -268,6 +270,14 @@ struct ConnectionInner<API: Api> {
 
     watch_rx: watch::Receiver<Option<quinn::Connection>>,
     watch_tx: Arc<ConnectionMutex<API::ConnectionParameters>>,
+
+    cancelation_token: CancellationToken,
+}
+
+impl<API: Api> Drop for ConnectionInner<API> {
+    fn drop(&mut self) {
+        self.cancelation_token.cancel();
+    }
 }
 
 impl<API: Api> Connection<API> {
@@ -438,6 +448,7 @@ impl<API: Api> Connection<API> {
         };
 
         let this = self.inner.clone();
+        let cancellation_token = this.cancelation_token.clone();
 
         async move {
             let mut interval = tokio::time::interval(interval);
@@ -474,6 +485,7 @@ impl<API: Api> Connection<API> {
             }
         }
         .instrument(tracing::debug_span!("reconnect", api = %API::NAME))
+        .with_cancellation_token_owned(cancellation_token)
         .pipe(tokio::spawn);
     }
 
