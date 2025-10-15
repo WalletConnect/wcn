@@ -55,7 +55,7 @@ pub(super) struct UpdateNodeArgs {
     index: usize,
 
     /// New Peer ID
-    #[arg(long, short = 'i')]
+    #[arg(long)]
     peer_id: Option<PeerId>,
 
     /// New IPv4 address
