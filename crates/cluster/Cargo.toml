@@ -5,8 +5,9 @@ edition = "2021"
 publish = false
 
 [features]
-default = []
+default = ["evm"]
 testing = []
+evm = ["dep:alloy"]
 
 [lints]
 workspace = true
@@ -54,7 +55,7 @@ tokio-stream = { workspace = true }
 libp2p-identity = { workspace = true, features = ["serde", "rand"] }
 xxhash-rust = { workspace = true }
 multihash = { version = "0.19", default-features = false }
-alloy = { workspace = true, features = [
+alloy = { workspace = true, optional = true, features = [
     "contract",
     "signer-local",
     "reqwest",

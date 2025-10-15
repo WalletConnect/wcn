@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 # Local
-wcn_cluster = { workspace = true }
+wcn_cluster = { workspace = true, default-features = false }
 wcn_cluster_api = { workspace = true, features = ["rpc_client"] }
 wcn_rpc = { workspace = true, features = ["client"] }
 wcn_storage_api = { workspace = true, features = ["rpc_client"] }
