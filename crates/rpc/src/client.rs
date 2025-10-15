@@ -214,6 +214,8 @@ impl<API: Api> Client<API> {
                 remote_peer_id: *peer_id,
                 watch_rx: rx,
                 watch_tx: Arc::new(tokio::sync::Mutex::new((tx, params))),
+            }),
+            guard: Arc::new(ConnectionGuard {
                 cancellation_token: CancellationToken::new(),
             }),
         }
@@ -258,9 +260,20 @@ pub struct Outbound<API: Api, RPC: Rpc> {
 #[derive_where(Clone)]
 pub struct Connection<API: Api> {
     inner: Arc<ConnectionInner<API>>,
+    guard: Arc<ConnectionGuard>,
 }
 
 type ConnectionMutex<Params> = Mutex<(watch::Sender<Option<quinn::Connection>>, Params)>;
+
+struct ConnectionGuard {
+    cancellation_token: CancellationToken,
+}
+
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        self.cancellation_token.cancel();
+    }
+}
 
 struct ConnectionInner<API: Api> {
     client: Client<API>,
@@ -270,14 +283,6 @@ struct ConnectionInner<API: Api> {
 
     watch_rx: watch::Receiver<Option<quinn::Connection>>,
     watch_tx: Arc<ConnectionMutex<API::ConnectionParameters>>,
-
-    cancellation_token: CancellationToken,
-}
-
-impl<API: Api> Drop for ConnectionInner<API> {
-    fn drop(&mut self) {
-        self.cancellation_token.cancel();
-    }
 }
 
 impl<API: Api> Connection<API> {
@@ -447,8 +452,8 @@ impl<API: Api> Connection<API> {
             return;
         };
 
+        let cancellation_token = self.guard.cancellation_token.clone();
         let this = self.inner.clone();
-        let cancellation_token = this.cancellation_token.clone();
 
         async move {
             let mut interval = tokio::time::interval(interval);
