@@ -35,7 +35,7 @@ tracing = { workspace = true }
 
 # Collections
 indexmap = { workspace = true }
-smallvec = { workspace = true }
+smallvec = { workspace = true, features = ["serde"] }
 
 # Serialization
 serde = { workspace = true }
@@ -49,7 +49,7 @@ aes = { version = "0.8", default-features = false }
 # Async
 futures = { workspace = true }
 tokio = { workspace = true, features = ["time", "rt"] }
-tokio-stream = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"] }
 
 # Domain specific
 libp2p-identity = { workspace = true, features = ["serde", "rand"] }

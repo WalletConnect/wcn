@@ -4,7 +4,6 @@ pub use event::Event;
 use {
     crate::{migration, node_operator},
     derive_more::From,
-    derive_where::derive_where,
     futures::Stream,
     serde::{Deserialize, Serialize},
     std::{collections::HashSet, fmt, future::Future, str::FromStr},
