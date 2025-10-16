@@ -50,12 +50,12 @@ pub(super) struct RemoveClientArgs {
 
 pub(super) async fn execute(cmd: Command) -> anyhow::Result<()> {
     match cmd {
-        Command::Set(args) => add_client(args).await,
+        Command::Set(args) => set_client(args).await,
         Command::Remove(args) => remove_client(args).await,
     }
 }
 
-async fn add_client(args: SetClientArgs) -> anyhow::Result<()> {
+async fn set_client(args: SetClientArgs) -> anyhow::Result<()> {
     let cluster = args.cluster_args.connect().await?;
     let mut operator = crate::current_operator(&cluster)?;
 
