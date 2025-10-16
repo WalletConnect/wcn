@@ -6,6 +6,7 @@ use {
     wcn_cluster::{NodeOperator, smart_contract::Write as _},
 };
 
+mod client;
 mod key;
 mod maintenance;
 mod node;
@@ -33,6 +34,10 @@ enum Command {
     /// Node management
     #[command(subcommand)]
     Node(node::Command),
+
+    /// Client management
+    #[command(subcommand)]
+    Client(client::Command),
 
     /// Maintenance scheduling
     #[command(subcommand)]
@@ -92,6 +97,7 @@ async fn main() -> anyhow::Result<()> {
         Command::View(args) => view::execute(args).await?,
         Command::Key(cmd) => key::execute(cmd),
         Command::Node(cmd) => node::execute(cmd).await?,
+        Command::Client(cmd) => client::execute(cmd).await?,
         Command::Maintenance(cmd) => maintenance::execute(cmd).await?,
     }
 
@@ -140,6 +146,15 @@ fn print_node(node: &wcn_cluster::Node) {
     }
     println!("\tPrimary port: {}", node.primary_port);
     println!("\tSecondary port: {}", node.secondary_port);
+    println!();
+}
+
+fn print_client(client: &wcn_cluster::Client) {
+    println!("\tPeer ID: {}", client.peer_id);
+    println!(
+        "\tAuthorized namespaces: {:?}",
+        client.authorized_namespaces
+    );
     println!();
 }
 
