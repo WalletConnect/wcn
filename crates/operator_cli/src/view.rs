@@ -9,12 +9,7 @@ pub(super) async fn execute(args: ClusterArgs) -> anyhow::Result<()> {
     println!("Name: {}", operator.name);
     println!("Clients:");
     for client in &operator.clients {
-        println!("\tPeer ID: {}", client.peer_id);
-        println!(
-            "\tAuthorized namespaces: {:?}",
-            client.authorized_namespaces
-        );
-        println!();
+        crate::print_client(client);
     }
     println!("Nodes:");
     for (idx, node) in operator.nodes().iter().enumerate() {
