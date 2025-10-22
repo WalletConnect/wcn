@@ -6017,6 +6017,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "wc",
  "xxhash-rust",
 ]
 

@@ -337,12 +337,6 @@ async fn run_(config: Config) -> Result<impl Future<Output = ()>, ErrorInner> {
     cluster.using_view(|view| {
         let settings = view.settings();
 
-        wc::metrics::gauge!("wcn_node_cluster_version")
-            .set(u32::try_from(view.cluster_version()).unwrap_or(u32::MAX));
-
-        wc::metrics::gauge!("wcn_node_keyspace_version")
-            .set(u32::try_from(view.keyspace_version()).unwrap_or(u32::MAX));
-
         app_cfg
             .migration_tx_bandwidth_limiter
             .set_bps(settings.migration_tx_bandwidth);
