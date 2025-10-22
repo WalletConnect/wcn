@@ -28,6 +28,15 @@ impl Drop for Guard {
     }
 }
 
+// Emits the cluster and keyspace version metrics
+fn cluster_keyspace_metrics<C: Config>(view: &crate::View<C>) {
+    wc::metrics::gauge!("wcn_node_cluster_version")
+        .set(u32::try_from(view.cluster_version).unwrap_or(u32::MAX));
+
+    wc::metrics::gauge!("wcn_node_keyspace_version")
+        .set(u32::try_from(view.keyspace_version).unwrap_or(u32::MAX));
+}
+
 impl<C: Config, Events> Task<C, Events>
 where
     Events: Stream<Item = smart_contract::ReadResult<smart_contract::Event>> + Send + 'static,
@@ -67,6 +76,7 @@ where
         let new_view = self.inner.smart_contract.cluster_view().await?;
         if self.inner.view.load().cluster_version != new_view.cluster_version {
             let new_view = Arc::new(crate::View::try_from_sc(new_view, &self.inner.config).await?);
+            cluster_keyspace_metrics(&new_view);
             self.inner.view.store(new_view);
             let _ = self.watch.send(());
         }
@@ -88,6 +98,7 @@ where
             let cfg = &self.inner.config;
             let view = self.inner.view.load_full();
             let view = Arc::new((*view).clone().apply_event(cfg, event).await?);
+            cluster_keyspace_metrics(&view);
             self.inner.view.store(view);
             let _ = self.watch.send(());
         }

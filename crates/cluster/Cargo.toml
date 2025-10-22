@@ -16,6 +16,9 @@ workspace = true
 # Local
 sharding = { path = "../sharding" }
 
+# Org
+wc = { workspace = true, features = ["metrics"] }
+
 # Derives
 derive_more = { workspace = true, features = ["as_ref", "display", "from", "into", "try_from"] }
 derive-where = { workspace = true }
