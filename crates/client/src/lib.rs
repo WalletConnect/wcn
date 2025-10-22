@@ -457,24 +457,47 @@ impl metrics::Enum for OperationName {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Route {
+    Any,
+    Private,
+}
+
 pub(crate) struct Connector<API: Api> {
     public_conn: Connection<API>,
     private_conn: Option<Connection<API>>,
 }
 
 impl<API: Api> Connector<API> {
-    pub(crate) fn is_open(&self) -> bool {
+    pub(crate) fn is_open(&self, route: Route) -> bool {
+        match route {
+            Route::Any => self.is_any_open(),
+            Route::Private => self.is_private_open(),
+        }
+    }
+
+    fn is_any_open(&self) -> bool {
         let public_open = !self.public_conn.is_closed();
-        let private_open = self
-            .private_conn
-            .as_ref()
-            .map(|conn| !conn.is_closed())
-            .unwrap_or(false);
+        let private_open = self.is_private_open();
 
         public_open || private_open
     }
 
+    fn is_private_open(&self) -> bool {
+        self.private_conn
+            .as_ref()
+            .map(|conn| !conn.is_closed())
+            .unwrap_or(false)
+    }
+
     pub(crate) async fn wait_open(&self) -> &Connection<API> {
+        // Prefer private connection if it's available.
+        if let Some(conn) = &self.private_conn
+            && !conn.is_closed()
+        {
+            return conn;
+        }
+
         let public_fut = self.public_conn.wait_open().map(|_| &self.public_conn);
 
         if let Some(private) = &self.private_conn {

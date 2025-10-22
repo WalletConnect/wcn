@@ -519,7 +519,7 @@ impl Node {
         wcn_cluster::Node {
             peer_id: self.config.keypair.public().to_peer_id(),
             ipv4_addr: Ipv4Addr::LOCALHOST,
-            private_ipv4_addr: None,
+            private_ipv4_addr: Some(Ipv4Addr::LOCALHOST),
             primary_port: self.config.primary_rpc_server_socket.port().unwrap(),
             secondary_port: self.config.secondary_rpc_server_socket.port().unwrap(),
         }

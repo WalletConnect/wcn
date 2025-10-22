@@ -6,6 +6,7 @@ use {
         Error,
         OperationName,
         RequestObserver,
+        Route,
         cluster,
         encryption::{self, Encrypt as _},
     },
@@ -122,7 +123,13 @@ where
             let mut attempt = 0;
 
             while attempt < self.max_attempts {
-                match self.execute_internal(&op).await {
+                let route = if attempt == 0 {
+                    Route::Any
+                } else {
+                    Route::Private
+                };
+
+                match self.execute_internal(&op, route).await {
                     Ok(data) => return Ok(data),
 
                     Err(err) => match err {
@@ -134,12 +141,16 @@ where
 
             Err(Error::RetriesExhausted)
         } else {
-            self.execute_internal(&op).await
+            self.execute_internal(&op, Route::Any).await
         }
     }
 
-    async fn execute_internal(&self, op: &op::Operation<'_>) -> Result<op::Output, Error> {
-        let (conn, node_data) = self.find_next_node();
+    async fn execute_internal(
+        &self,
+        op: &op::Operation<'_>,
+        route: Route,
+    ) -> Result<op::Output, Error> {
+        let (conn, node_data) = self.find_next_node(route);
 
         let Ok(conn) = conn.wait_open().with_timeout(self.connection_timeout).await else {
             // Getting to this point means we've tried every operator to find a connected
@@ -167,7 +178,7 @@ where
         result
     }
 
-    fn find_next_node(&self) -> (Connector<CoordinatorApi>, T::NodeData) {
+    fn find_next_node(&self, route: Route) -> (Connector<CoordinatorApi>, T::NodeData) {
         // Constraints:
         // - Each next request should go to a different operator.
         // - Find an available (i.e. connected) node of the next operator, filtering out
@@ -182,7 +193,9 @@ where
                 operator.find_next_node(|node| {
                     let connector = node.coordinator_api();
 
-                    connector.is_open().then(|| (connector, node.data.clone()))
+                    connector
+                        .is_open(route)
+                        .then(|| (connector, node.data.clone()))
                 })
             });
 
