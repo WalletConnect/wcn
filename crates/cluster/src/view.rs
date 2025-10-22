@@ -43,6 +43,13 @@ pub struct View<C: Config> {
     pub(super) cluster_version: cluster::Version,
 }
 
+impl<C: Config> View<C> {
+    /// Returns the expected cluster [`cluster::Version`]
+    pub fn cluster_version(&self) -> cluster::Version {
+        self.cluster_version
+    }
+}
+
 impl<C: Config<KeyspaceShards = keyspace::Shards>> View<C> {
     pub fn primary_replica_set(&self, key: u64) -> keyspace::ReplicaSet<&NodeOperator<C::Node>> {
         // NOTE(unwrap): we use `Keyspace::validate` every time it enters the system,
