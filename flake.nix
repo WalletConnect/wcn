@@ -80,17 +80,9 @@
 
             solc
             foundry
-          ];
 
-          shellHook = ''
-            alias ga="$(which git) add"
-            alias gst="$(which git) status"
-            alias gc="$(which git) commit"
-            alias gco="$(which git) checkout -b"
-            alias glog="$(which git) log"
-            alias lsa="ls -lah"
-            alias prettyup="cargo fmt --all && cargo clippy --all-features --fix --allow-dirty"
-          '';
+            terraform
+          ];
         };
       }
     );
