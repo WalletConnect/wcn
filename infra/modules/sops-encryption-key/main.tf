@@ -15,8 +15,10 @@ resource "aws_kms_key_policy" "this" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/TerraformCloud"
+          AWS = [
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root",
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/TerraformCloud"
+          ]
         },
         Action   = "kms:*"
         Resource = "*"
@@ -37,7 +39,7 @@ resource "aws_kms_key_policy" "this" {
         Resource = "*",
         "Condition" : {
           "ArnLike" : {
-            "aws:PrincipalArn" : "arn:aws:sts::${data.aws_caller_identity.current.account_id}:assumed-role/AWSReservedSSO_Read-Only*"
+            "aws:PrincipalArn" : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/AWSReservedSSO_Read-Only*"
           }
         }
       }
