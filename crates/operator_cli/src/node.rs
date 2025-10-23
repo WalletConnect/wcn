@@ -69,7 +69,7 @@ pub(super) struct UpdateNodeArgs {
     #[arg(long, short = 'a')]
     ip_address: Option<Ipv4Addr>,
 
-    /// New private IPv4 address
+    /// New private IPv4 address. Specify "None" to remove it.
     #[arg(long)]
     private_ip_address: Option<OptionalIpv4Addr>,
 
