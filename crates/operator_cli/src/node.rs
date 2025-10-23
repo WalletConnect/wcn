@@ -160,7 +160,7 @@ async fn update_node(args: UpdateNodeArgs) -> anyhow::Result<()> {
     }
 
     if let Some(addr) = args.private_ip_address {
-        node.private_ipv4_addr = addr.0
+        node.private_ipv4_addr = addr.0;
     }
 
     if let Some(port) = args.primary_port {
