@@ -596,6 +596,7 @@ impl NodeOperator {
                     rpc_provider_url: rpc_provider_url.clone().parse().unwrap(),
                     shutdown_signal: shutdown_signal.clone(),
                     prometheus_handle: prometheus_handle.clone(),
+                    public_address: None,
                 };
 
                 Node {
@@ -698,6 +699,7 @@ fn clone_node_config(cfg: &wcn_node::Config) -> wcn_node::Config {
         rpc_provider_url: cfg.rpc_provider_url.clone(),
         shutdown_signal: cfg.shutdown_signal.clone(),
         prometheus_handle: cfg.prometheus_handle.clone(),
+        public_address: cfg.public_address,
     }
 }
 

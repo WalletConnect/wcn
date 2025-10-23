@@ -92,6 +92,9 @@ pub struct Config {
     /// [`PrometheusHandle`] to use for getting metrics in metrics server.
     #[derive_where(skip)]
     pub prometheus_handle: PrometheusHandle,
+
+    /// Address of this node.
+    pub public_address: Option<SocketAddrV4>,
 }
 
 impl Config {
@@ -204,6 +207,8 @@ impl Config {
 
             migration_tx_bandwidth_limiter,
             migration_rx_bandwidth_limiter,
+
+            public_address: self.public_address,
         })
     }
 
@@ -238,6 +243,8 @@ struct AppConfig {
 
     migration_tx_bandwidth_limiter: BandwidthLimiter,
     migration_rx_bandwidth_limiter: BandwidthLimiter,
+
+    public_address: Option<SocketAddrV4>,
 }
 
 #[derive(AsRef, Clone)]
@@ -259,20 +266,30 @@ impl wcn_cluster::Config for AppConfig {
     type Node = Node;
 
     fn new_node(&self, _operator_id: node_operator::Id, node: wcn_cluster::Node) -> Self::Node {
+        let primary_socket_addr = node.primary_socket_addr();
+        let primary_socket_addr = match self.public_address {
+            Some(public_address) if public_address == primary_socket_addr => SocketAddrV4::new(Ipv4Addr::LOCALHOST, primary_socket_addr.port()),
+            _ => primary_socket_addr,
+        };
+        let secondary_socket_addr = node.secondary_socket_addr();
+        let secondary_socket_addr = match self.public_address {
+            Some(public_address) if public_address == secondary_socket_addr => SocketAddrV4::new(Ipv4Addr::LOCALHOST, secondary_socket_addr.port()),
+            _ => secondary_socket_addr,
+        };
         Node {
             peer_id: node.peer_id,
             replica_connection: self.replica_client.new_connection(
-                node.primary_socket_addr(),
+                primary_socket_addr,
                 &node.peer_id,
                 (),
             ),
             replica_low_prio_connection: self.replica_low_prio_client.new_connection(
-                node.secondary_socket_addr(),
+                secondary_socket_addr,
                 &node.peer_id,
                 (),
             ),
             metrics_connection: self.metrics_client.new_connection(
-                node.secondary_socket_addr(),
+                secondary_socket_addr,
                 &node.peer_id,
                 (),
             ),
