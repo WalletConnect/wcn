@@ -1,3 +1,3 @@
 creation_rules:
     - path_regex: ^infra/testnet/
-      kms: 
+      kms: arn:aws:kms:eu-central-1:260477932319:key/mrk-b1e6810605c34402bb2db341187cf7ca 

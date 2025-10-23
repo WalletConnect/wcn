@@ -37,7 +37,7 @@ resource "aws_kms_key_policy" "this" {
         Resource = "*",
         "Condition" : {
           "ArnLike" : {
-            "aws:PrincipalArn" : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/AWSReservedSSO_Read-Only*"
+            "aws:PrincipalArn" : "arn:aws:sts::${data.aws_caller_identity.current.account_id}:assumed-role/AWSReservedSSO_Read-Only*"
           }
         }
       }
