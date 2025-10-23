@@ -43,5 +43,8 @@ resource "aws_kms_key_policy" "this" {
       }
     ]
   })
+}
 
+output "arn" {
+  value = aws_kms_key.this.arn
 }

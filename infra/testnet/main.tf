@@ -35,3 +35,7 @@ provider "aws" {
 module "sops-encryption-key" {
   source = "../modules/sops-encryption-key"
 }
+
+output "sops-encryption-key-arn" {
+  value = module.sops-encryption-key.arn
+}
