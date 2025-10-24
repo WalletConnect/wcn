@@ -49,5 +49,6 @@ output "sops-encryption-key-arn" {
 }
 
 output "sops-test-value" {
-  value = data.sops_file.test.data["example_key"] 
+  value = data.sops_file.test.data["example_key"]
+  sensitive = true
 }
