@@ -3,7 +3,11 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 6.0"
+      version = "~> 6.0"
+    }
+    sops = {
+      source = "carlpett/sops"
+      version = "~> 0.5"
     }
   }
 }
@@ -34,6 +38,10 @@ provider "aws" {
 
 module "sops-encryption-key" {
   source = "../modules/sops-encryption-key"
+}
+
+data "sops_file" "test" {
+  source_file = "test.yaml"
 }
 
 output "sops-encryption-key-arn" {
