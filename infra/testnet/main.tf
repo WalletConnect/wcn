@@ -6,7 +6,7 @@ terraform {
       version = "~> 6.0"
     }
     sops = {
-      source = "carlpett/sops"
+      source  = "carlpett/sops"
       version = "~> 0.5"
     }
   }
@@ -40,6 +40,15 @@ module "sops-encryption-key" {
   source = "../modules/sops-encryption-key"
 }
 
+module "eu-central-1-node-operator-1" {
+  source = "../modules/node-operator"
+  name   = "wallet-connect-1"
+
+  providers = {
+    aws = aws.eu
+  }
+}
+
 data "sops_file" "test" {
   source_file = "test.yaml"
 }
@@ -49,6 +58,6 @@ output "sops-encryption-key-arn" {
 }
 
 output "sops-test-value" {
-  value = data.sops_file.test.data["example_key"]
+  value     = data.sops_file.test.data["example_key"]
   sensitive = true
 }
