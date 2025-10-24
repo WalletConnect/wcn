@@ -47,3 +47,7 @@ data "sops_file" "test" {
 output "sops-encryption-key-arn" {
   value = module.sops-encryption-key.arn
 }
+
+output "sops-test-value" {
+  value = data.sops_file.test.data["example_key"] 
+}
