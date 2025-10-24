@@ -266,16 +266,19 @@ impl wcn_cluster::Config for AppConfig {
     type Node = Node;
 
     fn new_node(&self, _operator_id: node_operator::Id, node: wcn_cluster::Node) -> Self::Node {
+        fn same_socket_addr(ip: &Ipv4Addr, port: u16, expected_socket_addr: &SocketAddrV4) -> bool {
+            ip == expected_socket_addr.ip() && port == expected_socket_addr.port()
+        }
         let primary_socket_addr = node.primary_socket_addr();
         let primary_socket_addr = match &self.public_address {
-            Some(public_address) if public_address == primary_socket_addr.ip() => {
+            Some(addr) if same_socket_addr(addr, node.primary_port, &primary_socket_addr) => {
                 SocketAddrV4::new(Ipv4Addr::LOCALHOST, primary_socket_addr.port())
             }
             _ => primary_socket_addr,
         };
         let secondary_socket_addr = node.secondary_socket_addr();
         let secondary_socket_addr = match &self.public_address {
-            Some(public_address) if public_address == secondary_socket_addr.ip() => {
+            Some(addr) if same_socket_addr(addr, node.secondary_port, &secondary_socket_addr) => {
                 SocketAddrV4::new(Ipv4Addr::LOCALHOST, secondary_socket_addr.port())
             }
             _ => secondary_socket_addr,
