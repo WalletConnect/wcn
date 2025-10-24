@@ -153,7 +153,11 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
 
     let database_peer_id = env.database_peer_id.parse().context("DATABASE_PEER_ID")?;
 
-    let public_address = env.public_address.as_ref().map(|a| a.parse().context("PUBLIC_ADDRESS")).transpose()?;
+    let public_address = env
+        .public_address
+        .as_ref()
+        .map(|a| a.parse().context("PUBLIC_ADDRESS"))
+        .transpose()?;
 
     Ok(Config {
         keypair,
