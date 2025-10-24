@@ -2,7 +2,10 @@ use {
     crate::ClusterArgs,
     anyhow::Context,
     clap::{Args, Subcommand},
-    std::net::Ipv4Addr,
+    std::{
+        net::{self, Ipv4Addr},
+        str::FromStr,
+    },
     wcn_cluster::PeerId,
 };
 
@@ -30,6 +33,10 @@ pub(super) struct AddNodeArgs {
     /// IPv4 address of the Node
     #[arg(long, short = 'a')]
     ip_address: Ipv4Addr,
+
+    /// Private IPv4 address of the Node
+    #[arg(long)]
+    private_ip_address: Option<Ipv4Addr>,
 
     /// Primary RPC server port
     #[arg(long, short)]
@@ -61,6 +68,10 @@ pub(super) struct UpdateNodeArgs {
     /// New IPv4 address
     #[arg(long, short = 'a')]
     ip_address: Option<Ipv4Addr>,
+
+    /// New private IPv4 address. Specify "None" to remove it.
+    #[arg(long)]
+    private_ip_address: Option<OptionalIpv4Addr>,
 
     /// New Primary RPC server port
     #[arg(long, short)]
@@ -106,7 +117,7 @@ async fn add_node(args: AddNodeArgs) -> anyhow::Result<()> {
     let node = wcn_cluster::Node {
         peer_id: args.peer_id,
         ipv4_addr: args.ip_address,
-        private_ipv4_addr: None,
+        private_ipv4_addr: args.private_ip_address,
         primary_port: args.primary_port,
         secondary_port: args.secondary_port,
     };
@@ -146,6 +157,10 @@ async fn update_node(args: UpdateNodeArgs) -> anyhow::Result<()> {
 
     if let Some(addr) = args.ip_address {
         node.ipv4_addr = addr;
+    }
+
+    if let Some(addr) = args.private_ip_address {
+        node.private_ipv4_addr = addr.0;
     }
 
     if let Some(port) = args.primary_port {
@@ -194,4 +209,19 @@ async fn remove_node(args: RemoveNodeArgs) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(Clone, Debug)]
+struct OptionalIpv4Addr(Option<Ipv4Addr>);
+
+impl FromStr for OptionalIpv4Addr {
+    type Err = net::AddrParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "None" {
+            return Ok(Self(None));
+        }
+
+        Ipv4Addr::from_str(s).map(Some).map(Self)
+    }
 }
