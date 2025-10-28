@@ -41,6 +41,8 @@ struct EnvConfig {
     smart_contract_signer_private_key: Option<String>,
     smart_contract_encryption_key: String,
     rpc_provider_url: String,
+
+    public_address: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -151,6 +153,12 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
 
     let database_peer_id = env.database_peer_id.parse().context("DATABASE_PEER_ID")?;
 
+    let public_address = env
+        .public_address
+        .as_ref()
+        .map(|a| a.parse().context("PUBLIC_ADDRESS"))
+        .transpose()?;
+
     Ok(Config {
         keypair,
         primary_rpc_server_socket,
@@ -167,5 +175,6 @@ fn new_config(env: &EnvConfig, prometheus_handle: PrometheusHandle) -> anyhow::R
         database_secondary_rpc_server_port: env.database_secondary_rpc_server_port,
         shutdown_signal: ShutdownSignal::new(),
         prometheus_handle,
+        public_address,
     })
 }
