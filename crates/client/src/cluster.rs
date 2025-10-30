@@ -273,7 +273,7 @@ pub(crate) async fn update_task<D>(
     };
 
     let metrics_fut = async {
-        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        let mut interval = tokio::time::interval(Duration::from_secs(15));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         loop {
