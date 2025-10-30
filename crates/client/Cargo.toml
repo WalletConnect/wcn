@@ -29,6 +29,8 @@ strum = { workspace = true }
 futures = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 futures-concurrency = { workspace = true }
+tokio-util = { workspace = true }
+tokio-stream = { workspace = true, features = ["time"] }
 
 # O11y
 tracing = { workspace = true }
@@ -38,6 +40,7 @@ ring = "0.17"
 
 # Other
 libp2p-identity = { workspace = true }
+phi-accrual-failure-detector = "0.1"
 
 [lints]
 workspace = true
