@@ -70,6 +70,7 @@ async fn test_client_encryption(cluster: &TestCluster) {
                 })
                 .collect(),
             trusted_operators: Default::default(),
+            authorized_namespace: ns,
         })
     };
 

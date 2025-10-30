@@ -3885,6 +3885,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "phi-accrual-failure-detector"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a17e92239adff6bff617bf20f858704505272069d8785be40d5662dbf8bdaa51"
+dependencies = [
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5971,12 +5980,15 @@ dependencies = [
  "futures",
  "futures-concurrency",
  "libp2p-identity",
+ "phi-accrual-failure-detector",
  "rand 0.9.2",
  "ring",
  "strum",
  "tap",
  "thiserror 2.0.16",
  "tokio",
+ "tokio-stream",
+ "tokio-util",
  "tracing",
  "wc",
  "wcn_cluster",

@@ -386,6 +386,7 @@ impl Client {
             max_retries: 3,
             nodes,
             trusted_operators: Default::default(),
+            authorized_namespace: self.authorized_namespace(),
         })
         .with_encryption(wcn_client::EncryptionKey::new(&encryption_secret).unwrap())
         .build()

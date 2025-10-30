@@ -117,6 +117,10 @@ pub struct Config {
     /// List of trusted node operators to use with the cluster API. If the list
     /// is empty, all nodes in the cluster may be used.
     pub trusted_operators: HashSet<NodeOperatorId>,
+
+    /// Namespace, authorized for this client. Used to monitor connection
+    /// liveness.
+    pub authorized_namespace: Namespace,
 }
 
 #[derive(Debug, Clone)]

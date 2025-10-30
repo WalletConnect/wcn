@@ -84,6 +84,7 @@ where
             config.cluster_key,
             cluster_api_client,
             coordinator_api_client,
+            config.authorized_namespace,
         );
 
         let bootstrap_sc = cluster::SmartContract::Static(initial_cluster_view);

@@ -3,10 +3,21 @@ use {
     arc_swap::ArcSwap,
     derive_more::derive::AsRef,
     derive_where::derive_where,
-    futures::{Stream, StreamExt as _, TryStreamExt as _, future::Either, stream},
-    std::{collections::HashSet, marker::PhantomData, sync::Arc, time::Duration},
+    futures::{FutureExt as _, Stream, StreamExt as _, TryStreamExt as _, future::Either, stream},
+    futures_concurrency::future::Race as _,
+    monitoring::{ConnectionState, NodeState},
+    std::{
+        collections::HashSet,
+        marker::PhantomData,
+        net::SocketAddrV4,
+        sync::Arc,
+        time::Duration,
+    },
     tokio::sync::oneshot,
-    wc::future::FutureExt as _,
+    wc::{
+        future::FutureExt as _,
+        metrics::{self, StringLabel},
+    },
     wcn_cluster::{
         EncryptionKey,
         PeerId,
@@ -23,11 +34,16 @@ use {
             client::{Cluster as ClusterClient, ClusterConnection},
         },
     },
-    wcn_storage_api::rpc::{
-        CoordinatorApi,
-        client::{Coordinator as CoordinatorClient, CoordinatorConnection},
+    wcn_storage_api::{
+        Namespace,
+        rpc::{
+            CoordinatorApi,
+            client::{Coordinator as CoordinatorClient, CoordinatorConnection},
+        },
     },
 };
+
+mod monitoring;
 
 #[derive(Clone)]
 pub struct Node<D> {
@@ -37,6 +53,7 @@ pub struct Node<D> {
     pub private_cluster_conn: Option<ClusterConnection>,
     pub private_coordinator_conn: Option<CoordinatorConnection>,
     pub data: D,
+    state: Arc<NodeState>,
 }
 
 impl<D> Node<D> {
@@ -68,6 +85,7 @@ pub(super) struct Config<D> {
     encryption_key: EncryptionKey,
     cluster_api: ClusterClient,
     coordinator_api: CoordinatorClient,
+    authorized_namespace: Namespace,
     _marker: PhantomData<D>,
 }
 
@@ -76,11 +94,13 @@ impl<D> Config<D> {
         encryption_key: EncryptionKey,
         cluster_api: ClusterClient,
         coordinator_api: CoordinatorClient,
+        authorized_namespace: Namespace,
     ) -> Self {
         Self {
             encryption_key,
             cluster_api,
             coordinator_api,
+            authorized_namespace,
             _marker: PhantomData,
         }
     }
@@ -111,6 +131,12 @@ where
             })
             .unzip();
 
+        let state = Arc::new(NodeState::new(
+            public_coordinator_conn.clone(),
+            private_coordinator_conn.clone(),
+            self.authorized_namespace,
+        ));
+
         Node {
             peer_id: node.peer_id,
             public_cluster_conn,
@@ -118,6 +144,7 @@ where
             private_cluster_conn,
             private_coordinator_conn,
             data: D::new(&operator_id, &node),
+            state,
         }
     }
 
@@ -241,10 +268,52 @@ pub(crate) async fn update_task<D>(
         }
     };
 
-    tokio::select! {
-        _ = cluster_update_fut => {},
-        _ = shutdown_rx => {},
+    let metrics_fut = async {
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        loop {
+            interval.tick().await;
+
+            view.load().node_operators().find_next_operator(|op| {
+                op.find_next_node(|node| {
+                    let operator_name = op.name.as_str();
+
+                    let conn_metrics = |state: &ConnectionState| {
+                        let remote_addr = state.remote_addr();
+                        let peer_id = &node.peer_id;
+
+                        metrics::histogram!(
+                            "wcn_connection_latency",
+                            StringLabel<"operator"> => operator_name,
+                            StringLabel<"peer_id", PeerId> => peer_id,
+                            StringLabel<"remote_addr", SocketAddrV4> => remote_addr
+                        )
+                        .record(state.latency());
+
+                        metrics::gauge!(
+                            "wcn_connection_suspicion_score",
+                            StringLabel<"operator"> => operator_name,
+                            StringLabel<"peer_id", PeerId> => peer_id,
+                            StringLabel<"remote_addr", SocketAddrV4> => remote_addr
+                        )
+                        .set(state.suspicion_score());
+                    };
+
+                    let state = node.state.as_ref();
+
+                    conn_metrics(state.public_state());
+                    state.private_state().map(conn_metrics);
+
+                    None::<()>
+                })
+            });
+        }
     };
+
+    let shutdown_fut = shutdown_rx.map(|_| ());
+
+    (cluster_update_fut, metrics_fut, shutdown_fut).race().await;
 }
 
 pub(crate) async fn fetch_cluster_view(
