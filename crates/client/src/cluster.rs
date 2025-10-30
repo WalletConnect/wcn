@@ -70,6 +70,10 @@ impl<D> Node<D> {
             private_conn: self.private_coordinator_conn.clone(),
         }
     }
+
+    pub(crate) fn is_available(&self) -> bool {
+        self.state.is_available()
+    }
 }
 
 impl<D> AsRef<PeerId> for Node<D> {

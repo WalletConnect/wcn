@@ -4,7 +4,11 @@ use {
     std::{
         collections::VecDeque,
         net::SocketAddrV4,
-        sync::{Arc, Mutex},
+        sync::{
+            Arc,
+            RwLock,
+            atomic::{AtomicBool, Ordering},
+        },
         time::{Duration, Instant},
     },
     tap::Pipe as _,
@@ -28,33 +32,39 @@ pub(super) struct ConnectionState {
     conn: CoordinatorConnection,
     ns: Namespace,
     detector: SyncDetector,
-    latency: Mutex<LatencyHistory>,
+    latency: RwLock<LatencyHistory>,
+    is_available: AtomicBool,
 }
 
 impl ConnectionState {
-    pub fn new(conn: CoordinatorConnection, ns: Namespace) -> Self {
+    pub(super) fn new(conn: CoordinatorConnection, ns: Namespace) -> Self {
         Self {
             conn,
             ns,
             detector: SyncDetector::default(),
-            latency: Mutex::new(LatencyHistory::new(5)),
+            latency: RwLock::new(LatencyHistory::new(5)),
+            is_available: true.into(),
         }
     }
 
-    pub fn remote_addr(&self) -> &SocketAddrV4 {
+    pub(super) fn remote_addr(&self) -> &SocketAddrV4 {
         self.conn.remote_peer_addr()
     }
 
-    pub fn latency(&self) -> f64 {
+    pub(super) fn latency(&self) -> f64 {
         // Safe unwrap, as it can't panic.
-        self.latency.lock().unwrap().mean()
+        self.latency.read().unwrap().mean()
     }
 
-    pub fn suspicion_score(&self) -> f64 {
+    pub(super) fn suspicion_score(&self) -> f64 {
         self.detector.phi()
     }
 
-    pub async fn heartbeat(&self) {
+    pub(super) fn is_available(&self) -> bool {
+        self.is_available.load(Ordering::Relaxed)
+    }
+
+    pub(super) async fn heartbeat(&self) {
         let time = Instant::now();
 
         let op = op::GetBorrowed {
@@ -74,16 +84,21 @@ impl ConnectionState {
 
         // We're only interested in successful requests here. The errors will cause
         // missed heartbeats.
-        if matches!(res, Ok(Ok(_))) {
+        if let Ok(Ok(_)) = res {
             let elapsed = time.elapsed();
 
             // Safe unwrap, as it can't panic.
-            self.latency.lock().unwrap().update(elapsed.as_secs_f64());
+            self.latency.write().unwrap().update(elapsed.as_secs_f64());
             self.detector.heartbeat();
         }
+
+        // Default to available if not monitoring yet.
+        let is_available = !self.detector.is_monitoring() || self.detector.is_available();
+
+        self.is_available.store(is_available, Ordering::Relaxed);
     }
 
-    pub fn spawn_monitor(self: Arc<Self>) -> DropGuard {
+    pub(super) fn spawn_monitor(self: Arc<Self>) -> DropGuard {
         let token = CancellationToken::new();
 
         async move {
@@ -111,7 +126,7 @@ pub(super) struct NodeState {
 }
 
 impl NodeState {
-    pub fn new(
+    pub(super) fn new(
         public_conn: CoordinatorConnection,
         private_conn: Option<CoordinatorConnection>,
         ns: Namespace,
@@ -129,12 +144,23 @@ impl NodeState {
         }
     }
 
-    pub fn public_state(&self) -> &ConnectionState {
+    pub(super) fn public_state(&self) -> &ConnectionState {
         &self.public_conn
     }
 
-    pub fn private_state(&self) -> Option<&ConnectionState> {
+    pub(super) fn private_state(&self) -> Option<&ConnectionState> {
         self.private_conn.as_ref().map(AsRef::as_ref)
+    }
+
+    pub(super) fn is_available(&self) -> bool {
+        let private_available = self
+            .private_state()
+            .map(|state| state.is_available())
+            .unwrap_or(false);
+
+        let public_available = self.public_state().is_available();
+
+        private_available || public_available
     }
 }
 

@@ -6,7 +6,6 @@ use {
         Error,
         OperationName,
         RequestObserver,
-        Route,
         cluster,
         encryption::{self, Encrypt as _},
     },
@@ -124,13 +123,7 @@ where
             let mut attempt = 0;
 
             while attempt < self.max_attempts {
-                let route = if attempt == 0 {
-                    Route::Any
-                } else {
-                    Route::Private
-                };
-
-                match self.execute_internal(&op, route).await {
+                match self.execute_internal(&op).await {
                     Ok(data) => return Ok(data),
 
                     Err(err) => match err {
@@ -142,16 +135,12 @@ where
 
             Err(Error::RetriesExhausted)
         } else {
-            self.execute_internal(&op, Route::Any).await
+            self.execute_internal(&op).await
         }
     }
 
-    async fn execute_internal(
-        &self,
-        op: &op::Operation<'_>,
-        route: Route,
-    ) -> Result<op::Output, Error> {
-        let (conn, node_data) = self.find_next_node(route);
+    async fn execute_internal(&self, op: &op::Operation<'_>) -> Result<op::Output, Error> {
+        let (conn, node_data) = self.find_next_node();
 
         let Ok(conn) = conn.wait_open().with_timeout(self.connection_timeout).await else {
             // Getting to this point means we've tried every operator to find a connected
@@ -179,7 +168,7 @@ where
         result
     }
 
-    fn find_next_node(&self, route: Route) -> (Connector<CoordinatorApi>, T::NodeData) {
+    fn find_next_node(&self) -> (Connector<CoordinatorApi>, T::NodeData) {
         // Constraints:
         // - Each next request should go to a different operator.
         // - Find an available (i.e. connected) node of the next operator, filtering out
@@ -192,11 +181,16 @@ where
             // Iterate over all of the operators to find one with a connected node.
             let result = operators.find_next_operator(|operator| {
                 operator.find_next_node(|node| {
+                    // Filter out unhealthy connections. The availability score is not very precise,
+                    // so below we're double checking that the connection is actually open before
+                    // selecting the node.
+                    if !node.is_available() {
+                        return None;
+                    }
+
                     let connector = node.coordinator_api();
 
-                    connector
-                        .is_open(route)
-                        .then(|| (connector, node.data.clone()))
+                    connector.is_open().then(|| (connector, node.data.clone()))
                 })
             });
 
