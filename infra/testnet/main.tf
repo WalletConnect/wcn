@@ -67,7 +67,7 @@ module "eu-central-1-node-operator-1" {
     db      = local.db_config
   }
 
-  secrets = ephemeral.sops_file.secrets.data["operators"][0]
+  secrets = jsondecode(data.sops_file.secrets.raw)["operators"][0]
 
   providers = {
     aws = aws.eu
