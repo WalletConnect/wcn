@@ -25,6 +25,9 @@ variable "config" {
     metrics_server_port       = number
 
     secret_key_arn = string
+
+    # Force ECS task update when secrets change
+    secrets_version = string
   })
 }
 
@@ -80,6 +83,7 @@ resource "aws_ecs_task_definition" "this" {
         { name = "SECONDARY_RPC_SERVER_PORT", value = "${var.config.secondary_rpc_server_port}" },
         { name = "METRICS_SERVER_PORT", value = "${var.config.metrics_server_port}" },
         { name = "ROCKSDB_DIR", value = "/data" },
+        { name = "SECRETS_VERSION", value = var.config.secrets_version },
       ]
       secrets = [
         { name = "SECRET_KEY", valueFrom = var.config.secret_key_arn }

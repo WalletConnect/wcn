@@ -61,6 +61,10 @@ module "db" {
 
     vpc    = module.vpc
     subnet = module.vpc.private_subnet_objects[0]
+
+    secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
+    secrets_version = sha1({
+      secret_key = var.secrets.ed25519_secret_key
+    })
   })
-  secrets = var.secrets
 }
