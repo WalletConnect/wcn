@@ -40,24 +40,40 @@ module "sops-encryption-key" {
   source = "../modules/sops-encryption-key"
 }
 
+ephemeral "sops_file" "secrets" {
+  source_file = "secrets.yaml"
+}
+
+locals {
+  db_config = {
+    # 2 vCPU / 4 GiB RAM, x86_64
+    ec2_instance_type = "c5a.large"
+
+    ebs_volume_size = 50 # GiB
+
+    ecs_task_container_image = "ghcr.io/walletconnect/wcn-db:251024.0"
+    ecs_task_cpu             = 2048
+    # 512 MiB are system reserved
+    ecs_task_memory = 4096 - 512
+  }
+}
+
 module "eu-central-1-node-operator-1" {
   source = "../modules/node-operator"
-  name   = "wallet-connect-1"
+
+  config = {
+    name    = "wallet-connect-1"
+    peer_id = "12D3KooWKpZ7ch5k4ggZHAKKMmu1oNnBxM5u1VZpGiopPZQmrLHT"
+    db      = local.db_config
+  }
+
+  secrets = data.sops_file.secrets.data["operators"][0]
 
   providers = {
     aws = aws.eu
   }
 }
 
-data "sops_file" "test" {
-  source_file = "test.yaml"
-}
-
 output "sops-encryption-key-arn" {
   value = module.sops-encryption-key.arn
-}
-
-output "sops-test-value" {
-  value     = data.sops_file.test.data["example_key"]
-  sensitive = true
 }
