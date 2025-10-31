@@ -3,7 +3,7 @@ variable "config" {
     name    = string
     peer_id = string
 
-    db = {
+    db = object({
       ec2_instance_type = string
 
       ebs_volume_size = number
@@ -11,7 +11,7 @@ variable "config" {
       ecs_task_container_image = string
       ecs_task_cpu             = number
       ecs_task_memory          = number
-    }
+    })
   })
 }
 
