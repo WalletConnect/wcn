@@ -31,13 +31,15 @@ locals {
     secondary_rpc_server_port = 3001
     metrics_server_port       = 3002
   }
+
+  ed25519_secret_key_hash = sha1(var.secrets.ed25519_secret_key)
 }
 
 resource "aws_ssm_parameter" "ed25519_secret_key" {
   name             = "${var.config.name}-ed25519-secret-key"
   type             = "SecureString"
   value_wo         = var.secrets.ed25519_secret_key
-  value_wo_version = parseint(substr(sha1(var.secrets.ed25519_secret_key), 0, 8), 16)
+  value_wo_version = parseint(substr(local.ed25519_secret_key_hash, 0, 8), 16)
 }
 
 data "aws_region" "current" {}
