@@ -1,13 +1,11 @@
 use {
     client::BaseClient,
+    connection::{ConnectionPool, Connector},
     derive_where::derive_where,
-    futures::FutureExt as _,
-    futures_concurrency::future::Race as _,
     std::{collections::HashSet, net::SocketAddrV4, sync::Arc, time::Duration},
     tap::Pipe,
     wc::metrics::{self, enum_ordinalize::Ordinalize},
     wcn_cluster::smart_contract,
-    wcn_rpc::client::{Api, Connection},
     wcn_storage_api::{
         MapEntryBorrowed,
         Record,
@@ -40,6 +38,7 @@ pub use {
 
 mod client;
 mod cluster;
+mod connection;
 mod encryption;
 
 #[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
@@ -70,6 +69,9 @@ pub enum Error {
 
     #[error("Invalid response type")]
     InvalidResponseType,
+
+    #[error("Invalid pool size")]
+    InvalidPoolSize,
 
     #[error("Internal error: {0}")]
     Internal(String),
@@ -457,46 +459,6 @@ impl metrics::Enum for OperationName {
             Self::HSetExp => "hset_exp",
             Self::HCard => "hcard",
             Self::HScan => "hscan",
-        }
-    }
-}
-
-pub(crate) struct Connector<API: Api> {
-    public_conn: Connection<API>,
-    private_conn: Option<Connection<API>>,
-}
-
-impl<API: Api> Connector<API> {
-    pub(crate) fn is_open(&self) -> bool {
-        let public_open = !self.public_conn.is_closed();
-        let private_open = self.is_private_open();
-
-        public_open || private_open
-    }
-
-    fn is_private_open(&self) -> bool {
-        self.private_conn
-            .as_ref()
-            .map(|conn| !conn.is_closed())
-            .unwrap_or(false)
-    }
-
-    pub(crate) async fn wait_open(&self) -> &Connection<API> {
-        // Prefer private connection if it's available.
-        if let Some(conn) = &self.private_conn
-            && !conn.is_closed()
-        {
-            return conn;
-        }
-
-        let public_fut = self.public_conn.wait_open().map(|_| &self.public_conn);
-
-        if let Some(private) = &self.private_conn {
-            let private_fut = private.wait_open().map(|_| private);
-
-            (public_fut, private_fut).race().await
-        } else {
-            public_fut.await
         }
     }
 }

@@ -42,7 +42,7 @@ where
 
         let cluster_api_client_cfg = wcn_rpc::client::Config {
             keypair: config.keypair.clone(),
-            connection_timeout: config.connection_timeout,
+            connection_timeout: config.connection_timeout * 2,
             reconnect_interval: config.reconnect_interval,
             max_concurrent_rpcs: 50,
             max_idle_connection_timeout: config.max_idle_connection_timeout,
@@ -190,7 +190,9 @@ where
 
                     let connector = node.coordinator_api();
 
-                    connector.is_open().then(|| (connector, node.data.clone()))
+                    connector
+                        .is_open()
+                        .then(|| (connector.clone(), node.data().clone()))
                 })
             });
 
@@ -202,7 +204,7 @@ where
                 // be established during the request.
                 let node = operators.next().next_node();
 
-                (node.coordinator_api(), node.data.clone())
+                (node.coordinator_api().clone(), node.data().clone())
             }
         })
     }
