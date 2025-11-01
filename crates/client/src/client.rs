@@ -190,7 +190,9 @@ where
 
                     let connector = node.coordinator_api();
 
-                    connector.is_open().then(|| (connector, node.data.clone()))
+                    connector
+                        .is_open()
+                        .then(|| (connector.clone(), node.data().clone()))
                 })
             });
 
@@ -202,7 +204,7 @@ where
                 // be established during the request.
                 let node = operators.next().next_node();
 
-                (node.coordinator_api(), node.data.clone())
+                (node.coordinator_api().clone(), node.data().clone())
             }
         })
     }

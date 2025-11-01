@@ -1,5 +1,5 @@
 use {
-    crate::{Connector, Error, NodeData, PeerAddr},
+    crate::{ConnectionPool, Connector, Error, NodeData, PeerAddr},
     arc_swap::ArcSwap,
     derive_more::derive::AsRef,
     derive_where::derive_where,
@@ -36,10 +36,7 @@ use {
     },
     wcn_storage_api::{
         Namespace,
-        rpc::{
-            CoordinatorApi,
-            client::{Coordinator as CoordinatorClient, CoordinatorConnection},
-        },
+        rpc::{CoordinatorApi, client::Coordinator as CoordinatorClient},
     },
 };
 
@@ -47,32 +44,28 @@ mod monitoring;
 
 #[derive(Clone)]
 pub struct Node<D> {
-    pub peer_id: PeerId,
-    pub public_cluster_conn: ClusterConnection,
-    pub public_coordinator_conn: CoordinatorConnection,
-    pub private_cluster_conn: Option<ClusterConnection>,
-    pub private_coordinator_conn: Option<CoordinatorConnection>,
-    pub data: D,
+    peer_id: PeerId,
+    data: D,
+    cluster_conn: Connector<ClusterApi>,
+    coordinator_conn: Arc<ConnectionPool<CoordinatorApi>>,
     state: Arc<NodeState>,
 }
 
 impl<D> Node<D> {
-    pub(crate) fn cluster_api(&self) -> Connector<ClusterApi> {
-        Connector {
-            public_conn: self.public_cluster_conn.clone(),
-            private_conn: self.private_cluster_conn.clone(),
-        }
+    pub(crate) fn cluster_api(&self) -> &Connector<ClusterApi> {
+        &self.cluster_conn
     }
 
-    pub(crate) fn coordinator_api(&self) -> Connector<CoordinatorApi> {
-        Connector {
-            public_conn: self.public_coordinator_conn.clone(),
-            private_conn: self.private_coordinator_conn.clone(),
-        }
+    pub(crate) fn coordinator_api(&self) -> &Connector<CoordinatorApi> {
+        self.coordinator_conn.next()
     }
 
     pub(crate) fn is_available(&self) -> bool {
         self.state.is_available()
+    }
+
+    pub(crate) fn data(&self) -> &D {
+        &self.data
     }
 }
 
@@ -121,12 +114,12 @@ where
     fn new_node(&self, operator_id: node_operator::Id, node: wcn_cluster::Node) -> Self::Node {
         let id = &node.peer_id;
         let public_addr = node.primary_socket_addr();
+        let private_addr = node.primary_socket_addr_private();
 
         let public_cluster_conn = self.cluster_api.new_connection(public_addr, id, ());
         let public_coordinator_conn = self.coordinator_api.new_connection(public_addr, id, ());
 
-        let (private_cluster_conn, private_coordinator_conn) = node
-            .primary_socket_addr_private()
+        let (private_cluster_conn, private_coordinator_conn) = private_addr
             .map(|addr| {
                 let cluster_conn = self.cluster_api.new_connection(addr, id, ());
                 let coordinator_conn = self.coordinator_api.new_connection(addr, id, ());
@@ -136,17 +129,20 @@ where
             .unzip();
 
         let state = Arc::new(NodeState::new(
-            public_coordinator_conn.clone(),
-            private_coordinator_conn.clone(),
+            public_coordinator_conn,
+            private_coordinator_conn,
             self.authorized_namespace,
         ));
 
+        let cluster_conn = Connector::new(public_cluster_conn, private_cluster_conn);
+        let coordinator_conn = Arc::new(
+            ConnectionPool::new(&self.coordinator_api, id, public_addr, private_addr, 10).unwrap(),
+        );
+
         Node {
             peer_id: node.peer_id,
-            public_cluster_conn,
-            public_coordinator_conn,
-            private_cluster_conn,
-            private_coordinator_conn,
+            cluster_conn,
+            coordinator_conn,
             data: D::new(&operator_id, &node),
             state,
         }
@@ -163,7 +159,14 @@ where
     D: NodeData,
 {
     let cluster = cluster.load();
-    let next_node = || cluster.node_operators().next().next_node().cluster_api();
+    let next_node = || {
+        cluster
+            .node_operators()
+            .next()
+            .next_node()
+            .cluster_api()
+            .clone()
+    };
 
     loop {
         // Empty trusted operators list means all nodes are allowed to be used.
@@ -176,7 +179,7 @@ where
                 .find_next_operator(|operator| {
                     trusted_operators
                         .contains(&operator.id)
-                        .then(|| operator.next_node().cluster_api())
+                        .then(|| operator.next_node().cluster_api().clone())
                 })
                 .unwrap_or_else(next_node)
         };
