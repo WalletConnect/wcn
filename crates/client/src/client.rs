@@ -37,6 +37,10 @@ where
         observer: T,
         encryption_key: Option<EncryptionKey>,
     ) -> Result<Self, Error> {
+        if config.connection_pool_size == 0 {
+            return Err(Error::InvalidPoolSize);
+        }
+
         let cluster_api =
             wcn_cluster_api::rpc::ClusterApi::new().with_rpc_timeout(Duration::from_secs(5));
 
@@ -84,6 +88,7 @@ where
             cluster_api_client,
             coordinator_api_client,
             config.authorized_namespace,
+            config.connection_pool_size,
         );
 
         let bootstrap_sc = cluster::SmartContract::Static(initial_cluster_view);

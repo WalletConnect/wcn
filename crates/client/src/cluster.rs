@@ -83,6 +83,7 @@ pub(super) struct Config<D> {
     cluster_api: ClusterClient,
     coordinator_api: CoordinatorClient,
     authorized_namespace: Namespace,
+    connection_pool_size: usize,
     _marker: PhantomData<D>,
 }
 
@@ -92,12 +93,14 @@ impl<D> Config<D> {
         cluster_api: ClusterClient,
         coordinator_api: CoordinatorClient,
         authorized_namespace: Namespace,
+        connection_pool_size: usize,
     ) -> Self {
         Self {
             encryption_key,
             cluster_api,
             coordinator_api,
             authorized_namespace,
+            connection_pool_size,
             _marker: PhantomData,
         }
     }
@@ -136,7 +139,14 @@ where
 
         let cluster_conn = Connector::new(public_cluster_conn, private_cluster_conn);
         let coordinator_conn = Arc::new(
-            ConnectionPool::new(&self.coordinator_api, id, public_addr, private_addr, 10).unwrap(),
+            ConnectionPool::new(
+                &self.coordinator_api,
+                id,
+                public_addr,
+                private_addr,
+                self.connection_pool_size,
+            )
+            .unwrap(),
         );
 
         Node {

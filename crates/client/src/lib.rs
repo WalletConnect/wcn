@@ -123,6 +123,8 @@ pub struct Config {
     /// Namespace, authorized for this client. Used to monitor connection
     /// liveness.
     pub authorized_namespace: Namespace,
+
+    pub connection_pool_size: usize,
 }
 
 #[derive(Debug, Clone)]
