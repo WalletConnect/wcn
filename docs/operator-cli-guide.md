@@ -1,6 +1,6 @@
 ## Operator CLI
 
-The `wcn_operator` application allows node operators to manage their nodes. The application can be run from the repository via:
+The `wcn_operator` application allows node operators to manage their smart-contract state. The application can be run from the repository via:
 
 ```bash
 $ cargo run --bin wcn_operator -- --help
@@ -67,7 +67,7 @@ $ cargo run --bin wcn_operator -- node remove <options>
 
 ### Maintenance
 
-Maintenance mode allows you to signal the cluster that your setup should not be used. This is useful for e.g. updating the database.
+Maintenance mode allows you to signal the cluster that your setup could be offline while under maintenance. This is useful for e.g. updating the database.
 
 > **NOTE**: only one Node Operator is allowed to be in maintenance mode at a given time.
 
