@@ -387,6 +387,7 @@ impl Client {
             nodes,
             trusted_operators: Default::default(),
             authorized_namespace: self.authorized_namespace(),
+            connection_pool_size: 2,
         })
         .with_encryption(wcn_client::EncryptionKey::new(&encryption_secret).unwrap())
         .build()
