@@ -217,7 +217,7 @@ impl<N> NodeOperators<N> {
     }
 
     /// Gets an [`Idx`] by [`Id`].
-    pub(super) fn get_idx(&self, id: &node_operator::Id) -> Option<node_operator::Idx> {
+    pub fn get_idx(&self, id: &node_operator::Id) -> Option<node_operator::Idx> {
         self.id_to_idx.get(id).copied()
     }
 
