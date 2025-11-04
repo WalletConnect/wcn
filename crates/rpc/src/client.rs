@@ -43,6 +43,7 @@ use {
             future_metrics,
             EnumLabel,
             FutureExt as _,
+            Gauge,
             StringLabel,
         },
     },
@@ -217,6 +218,7 @@ impl<API: Api> Client<API> {
             }),
             guard: Arc::new(ConnectionGuard {
                 cancellation_token: CancellationToken::new(),
+                _metrics: ConnectionMetrics::new(API::NAME, addr),
             }),
         }
     }
@@ -265,8 +267,35 @@ pub struct Connection<API: Api> {
 
 type ConnectionMutex<Params> = Mutex<(watch::Sender<Option<quinn::Connection>>, Params)>;
 
+struct ConnectionMetrics {
+    api: ApiName,
+    addr: SocketAddrV4,
+}
+
+impl ConnectionMetrics {
+    fn new(api: ApiName, addr: SocketAddrV4) -> Self {
+        let this = Self { api, addr };
+        this.meter().increment(1);
+        this
+    }
+
+    fn meter(&self) -> &Gauge {
+        metrics::gauge!("wcn_rpc_client_outbound_connections",
+            StringLabel<"remote_addr", SocketAddrV4> => &self.addr,
+            StringLabel<"api", ApiName> => &self.api
+        )
+    }
+}
+
+impl Drop for ConnectionMetrics {
+    fn drop(&mut self) {
+        self.meter().decrement(1);
+    }
+}
+
 struct ConnectionGuard {
     cancellation_token: CancellationToken,
+    _metrics: ConnectionMetrics,
 }
 
 impl Drop for ConnectionGuard {
