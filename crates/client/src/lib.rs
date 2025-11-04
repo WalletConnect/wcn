@@ -412,9 +412,16 @@ pub trait NodeData: Send + Sync + Clone + 'static {
 pub trait RequestObserver {
     type NodeData: NodeData;
 
-    fn observe(
+    fn request_attempt(
         &self,
         node: &Self::NodeData,
+        duration: Duration,
+        operation: OperationName,
+        result: &Result<OperationOutput, Error>,
+    );
+
+    fn request_result(
+        &self,
         duration: Duration,
         operation: OperationName,
         result: &Result<OperationOutput, Error>,
@@ -428,7 +435,7 @@ impl NodeData for () {
 impl RequestObserver for () {
     type NodeData = ();
 
-    fn observe(
+    fn request_attempt(
         &self,
         _: &Self::NodeData,
         _: Duration,
@@ -436,6 +443,8 @@ impl RequestObserver for () {
         _: &Result<OperationOutput, Error>,
     ) {
     }
+
+    fn request_result(&self, _: Duration, _: OperationName, _: &Result<OperationOutput, Error>) {}
 }
 
 impl metrics::Enum for OperationName {
