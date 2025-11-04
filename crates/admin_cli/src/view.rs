@@ -10,28 +10,7 @@ pub(super) async fn execute(args: ClusterArgs) -> anyhow::Result<()> {
             continue;
         };
 
-        println!("operator[{idx}]: {} {}", operator.name, operator.id);
-
-        for (idx, node) in operator.nodes().iter().enumerate() {
-            let id = node.peer_id;
-            let addr = node.ipv4_addr;
-            let priv_addr = node
-                .private_ipv4_addr
-                .map(|addr| addr.to_string())
-                .unwrap_or_else(|| "None".to_string());
-            let port0 = node.primary_port;
-            let port1 = node.secondary_port;
-
-            println!("\tnode[{idx}]: {id} {addr} {priv_addr} {port0} {port1}");
-        }
-
-        if !operator.clients.is_empty() {
-            for (idx, client) in operator.clients.iter().enumerate() {
-                let id = client.peer_id;
-                let namespaces = &client.authorized_namespaces;
-                println!("\tclient[{idx}]: {id} {namespaces:?}");
-            }
-        }
+        crate::print_node_operator(Some(idx as u8), operator);
 
         println!();
     }

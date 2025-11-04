@@ -3,6 +3,7 @@ use {
     clap::{Args, Parser, Subcommand},
     derive_more::AsRef,
     std::io::{self, Write as _},
+    wcn_cluster::NodeOperator,
 };
 
 mod migration;
@@ -119,4 +120,33 @@ fn ask_approval() -> anyhow::Result<bool> {
     io::stdin().read_line(&mut input)?;
 
     Ok(["y", "yes"].contains(&input.trim()))
+}
+
+fn print_node_operator(idx: Option<u8>, operator: &NodeOperator) {
+    let idx = idx.map(|idx| idx.to_string()).unwrap_or("?".to_string());
+
+    println!("operator[{idx}]: {} {}", operator.name, operator.id);
+
+    for (idx, node) in operator.nodes().iter().enumerate() {
+        let id = node.peer_id;
+        let addr = node.ipv4_addr;
+        let priv_addr = node
+            .private_ipv4_addr
+            .map(|addr| addr.to_string())
+            .unwrap_or_else(|| "None".to_string());
+        let port0 = node.primary_port;
+        let port1 = node.secondary_port;
+
+        println!("\tnode[{idx}]: {id} {addr} {priv_addr} {port0} {port1}");
+    }
+
+    if !operator.clients.is_empty() {
+        for (idx, client) in operator.clients.iter().enumerate() {
+            let id = client.peer_id;
+            let namespaces = &client.authorized_namespaces;
+            println!("\tclient[{idx}]: {id} {namespaces:?}");
+        }
+    }
+
+    println!()
 }
