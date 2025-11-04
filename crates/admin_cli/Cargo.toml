@@ -16,6 +16,7 @@ anyhow = { workspace = true }
 
 # Async
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread"] }
+futures = { workspace = true }
 
 # Other
 clap = { workspace = true }
