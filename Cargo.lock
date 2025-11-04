@@ -5956,6 +5956,7 @@ dependencies = [
  "anyhow",
  "clap",
  "derive_more",
+ "futures",
  "libp2p-identity",
  "tokio",
  "wcn_cluster",
