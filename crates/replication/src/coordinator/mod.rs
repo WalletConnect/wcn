@@ -215,7 +215,7 @@ impl<C: Config> StorageApi for InboundConnection<C> {
         }
         .unwrap_or_else(|| {
             metrics::counter!("wcn_replication_coordinator_inconsistent_results").increment(1);
-            tracing::warn!(?responses, "Inconsistent results");
+            tracing::debug!(?responses, "Inconsistent results");
             const { &Err(Error::new(ErrorKind::Internal)) }
         });
 
