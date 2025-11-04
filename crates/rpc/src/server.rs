@@ -431,7 +431,15 @@ fn accept_connection<R: sealed::ConnectionRouter>(
             status_tx: &mut tx,
         };
 
-        let res = router.route_connection(&api_name, conn).await;
+        let res = router
+            .route_connection(&api_name, conn)
+            .with_metrics(future_metrics!(
+                "wcn_rpc_server_inbound_connection",
+                StringLabel<"server_name"> => server_name,
+                StringLabel<"api"> => api_name.as_str()
+            ))
+            .in_current_span()
+            .await;
 
         if res.as_ref().err().is_some_and(Error::is_unknown_api) {
             tx.write_i32(ConnectionStatus::UnknownApi.code())
@@ -442,8 +450,6 @@ fn accept_connection<R: sealed::ConnectionRouter>(
         res
     }
     .map_err(|err| tracing::debug!(?err, "Inbound connection handler failed"))
-    .with_metrics(future_metrics!("wcn_rpc_server_inbound_connection"))
-    .in_current_span()
     .pipe(tokio::spawn);
 }
 
