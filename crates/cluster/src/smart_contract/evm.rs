@@ -52,7 +52,7 @@ impl RpcProvider {
         let builder = ProviderBuilder::new().wallet(wallet);
 
         let provider = match url.0.scheme() {
-            "ws" | "wss" => builder.connect_ws(WsConnect::new(url.0)).await?,
+            "ws" | "wss" => builder.connect_ws(Self::alloy_ws_connect(url)).await?,
             "http" | "https" => builder.connect_http(url.0),
             _ => {
                 return Err(RpcProviderCreationError(format!(
@@ -71,13 +71,18 @@ impl RpcProvider {
     /// Creates a new read-only [`RpcProvider`].
     pub async fn new_ro(url: RpcUrl) -> Result<RpcProvider, RpcProviderCreationError> {
         let provider = ProviderBuilder::new()
-            .connect_ws(WsConnect::new(url.0))
+            .connect_ws(Self::alloy_ws_connect(url))
             .await?;
 
         Ok(RpcProvider {
             signer: None,
             alloy: DynProvider::new(provider),
         })
+    }
+
+    fn alloy_ws_connect(url: RpcUrl) -> WsConnect {
+        // make sure that it "never" stops retrying
+        WsConnect::new(url.0).with_max_retries(u32::MAX)
     }
 }
 

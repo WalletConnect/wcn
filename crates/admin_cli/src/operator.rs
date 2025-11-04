@@ -2,20 +2,21 @@ use {
     crate::ClusterArgs,
     anyhow::Context,
     clap::{Args, Subcommand},
+    futures::FutureExt as _,
     std::str::FromStr,
 };
 
 #[derive(Debug, Subcommand)]
 pub(super) enum Command {
-    /// Add a new Node Operator
-    Add(AddOperatorArgs),
+    /// Add a new or update an existing Node Operator
+    Set(SetOperatorArgs),
 
     /// Remove an existing Node Operator
     Remove(RemoveOperatorArgs),
 }
 
 #[derive(Debug, Args)]
-pub(super) struct AddOperatorArgs {
+pub(super) struct SetOperatorArgs {
     #[command(flatten)]
     cluster_args: ClusterArgs,
 
@@ -44,12 +45,12 @@ pub(super) struct RemoveOperatorArgs {
 
 pub(super) async fn execute(cmd: Command) -> anyhow::Result<()> {
     match cmd {
-        Command::Add(args) => add_operator(args).await,
+        Command::Set(args) => set_operator(args).await,
         Command::Remove(args) => remove_operator(args).await,
     }
 }
 
-async fn add_operator(args: AddOperatorArgs) -> anyhow::Result<()> {
+async fn set_operator(args: SetOperatorArgs) -> anyhow::Result<()> {
     let node_operator = wcn_cluster::NodeOperator::new(
         args.id,
         args.name,
@@ -58,12 +59,34 @@ async fn add_operator(args: AddOperatorArgs) -> anyhow::Result<()> {
     )
     .context("NodeOperator::new")?;
 
-    args.cluster_args
-        .connect()
-        .await?
-        .add_node_operator(node_operator)
-        .await
-        .context("Cluster::add_node_operator")
+    let cluster = args.cluster_args.connect().await?;
+    let cluster_view = cluster.view();
+
+    let fut = if let Some(old) = cluster_view.node_operators().get(&args.id) {
+        let idx = cluster_view.node_operators().get_idx(&args.id).unwrap();
+        println!("Old:");
+        crate::print_node_operator(Some(idx), old);
+        println!("New:");
+        crate::print_node_operator(Some(idx), &node_operator);
+
+        cluster
+            .update_node_operator(node_operator)
+            .map(|res| res.context("Cluster::update_node_operator"))
+            .boxed()
+    } else {
+        crate::print_node_operator(None, &node_operator);
+
+        cluster
+            .add_node_operator(node_operator)
+            .map(|res| res.context("Cluster::add_node_operator"))
+            .boxed()
+    };
+
+    if crate::ask_approval()? {
+        fut.await?
+    }
+
+    Ok(())
 }
 
 async fn remove_operator(args: RemoveOperatorArgs) -> anyhow::Result<()> {

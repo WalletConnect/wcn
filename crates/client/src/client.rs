@@ -113,36 +113,47 @@ where
     }
 
     pub async fn execute(&self, op: op::Operation<'_>) -> Result<op::Output, Error> {
+        let start_time = Instant::now();
+
         let op = if let Some(key) = &self.encryption_key {
             op.encrypt(key)?
         } else {
             op
         };
 
-        if self.max_attempts > 1 {
-            let mut attempt = 0;
-
-            while attempt < self.max_attempts {
-                let route = if attempt == 0 {
-                    Route::Any
-                } else {
-                    Route::Private
-                };
-
-                match self.execute_internal(&op, route).await {
-                    Ok(data) => return Ok(data),
-
-                    Err(err) => match err {
-                        Error::CoordinatorApi(err) if err.is_transient() => attempt += 1,
-                        err => return Err(err),
-                    },
-                }
-            }
-
-            Err(Error::RetriesExhausted)
+        let result = if self.max_attempts > 1 {
+            self.execute_with_retries(&op).await
         } else {
             self.execute_internal(&op, Route::Any).await
+        };
+
+        self.observer
+            .request_result(start_time.elapsed(), op_name(&op), &result);
+
+        result
+    }
+
+    async fn execute_with_retries(&self, op: &op::Operation<'_>) -> Result<op::Output, Error> {
+        let mut attempt = 0;
+
+        while attempt < self.max_attempts {
+            let route = if attempt == 0 {
+                Route::Any
+            } else {
+                Route::Private
+            };
+
+            match self.execute_internal(op, route).await {
+                Ok(data) => return Ok(data),
+
+                Err(err) => match err {
+                    Error::CoordinatorApi(err) if err.is_transient() => attempt += 1,
+                    err => return Err(err),
+                },
+            }
         }
+
+        Err(Error::RetriesExhausted)
     }
 
     async fn execute_internal(
@@ -173,7 +184,7 @@ where
         .await;
 
         self.observer
-            .observe(&node_data, start_time.elapsed(), op_name(op), &result);
+            .request_attempt(&node_data, start_time.elapsed(), op_name(op), &result);
 
         result
     }

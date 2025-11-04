@@ -206,7 +206,7 @@ After everything mentioned above is setup, contact WalletConnect team and provid
 - Peer IDs of your Nodes, their IPv4 addresses and `PRIMARY_RPC_SERVER_PORT`/`SECONDARY_RPC_SERVER_PORT` ports
 
 The data you provide will be written to the Smart-Contract.
-After this initial write you will be able to update the list of your Nodes yourself using our CLI tool.
+After this initial write you will be able to update the list of your Nodes yourself using our [CLI tool](operator-cli-guide.md).
 
 ## Availability
 
@@ -222,4 +222,4 @@ If your Database is offline you as a Node Operator (organization) are considered
 
 In case if you need to restart your Database (re-configuration / update) a "permit" needs to be acquired from the WCN Cluster smart-contract, 
 by announcing that you’re about to start a *Maintenance*. Only one Node Operator is allowed to be under *Maintenance* at any given time.
-(TODO: Docs on how to use CLI to enter maintenance)
+The [Maintenance section of the CLI tool documentation](operator-cli-guide.md#maintenance) explains how to start and finish maintenance.
