@@ -4137,6 +4137,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "quinn-test-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "libp2p-identity",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wcn_logging",
+ "wcn_rpc",
+ "wcn_storage_api",
+]
+
+[[package]]
+name = "quinn-test-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "libp2p-identity",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wcn_logging",
+ "wcn_rpc",
+ "wcn_storage_api",
+]
+
+[[package]]
 name = "quinn-udp"
 version = "0.5.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
