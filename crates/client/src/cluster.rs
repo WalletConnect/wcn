@@ -98,14 +98,22 @@ where
         let id = &node.peer_id;
         let public_addr = node.primary_socket_addr();
 
-        let public_cluster_conn = self.cluster_api.new_connection(public_addr, id, ());
-        let public_coordinator_conn = self.coordinator_api.new_connection(public_addr, id, ());
+        let public_cluster_conn =
+            self.cluster_api
+                .new_connection(public_addr, id, (), "public_cluster");
+        let public_coordinator_conn =
+            self.coordinator_api
+                .new_connection(public_addr, id, (), "public_coordinator");
 
         let (private_cluster_conn, private_coordinator_conn) = node
             .primary_socket_addr_private()
             .map(|addr| {
-                let cluster_conn = self.cluster_api.new_connection(addr, id, ());
-                let coordinator_conn = self.coordinator_api.new_connection(addr, id, ());
+                let cluster_conn = self
+                    .cluster_api
+                    .new_connection(addr, id, (), "private_cluster");
+                let coordinator_conn =
+                    self.coordinator_api
+                        .new_connection(addr, id, (), "private_coordinator");
 
                 (cluster_conn, coordinator_conn)
             })
@@ -274,7 +282,7 @@ async fn try_fetch_cluster_view(
     peer_addr: &PeerAddr,
 ) -> Result<ClusterView, Error> {
     let view = client
-        .connect(peer_addr.addr, &peer_addr.id, ())
+        .connect(peer_addr.addr, &peer_addr.id, (), "initial_cluster_view")
         .await
         .map_err(Error::internal)?
         .cluster_view()

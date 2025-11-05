@@ -190,18 +190,21 @@ impl Config {
                 self.database_primary_socket_addr(),
                 &self.database_peer_id,
                 (),
+                None,
             ),
 
             database_low_prio_connection: database_low_prio_client.new_connection(
                 self.database_secondary_socket_addr(),
                 &self.database_peer_id,
                 (),
+                None,
             ),
 
             database_metrics_connection: metrics_client.new_connection(
                 self.database_secondary_socket_addr(),
                 &self.database_peer_id,
                 (),
+                None,
             ),
             metrics_client,
 
@@ -289,16 +292,19 @@ impl wcn_cluster::Config for AppConfig {
                 primary_socket_addr,
                 &node.peer_id,
                 (),
+                None,
             ),
             replica_low_prio_connection: self.replica_low_prio_client.new_connection(
                 secondary_socket_addr,
                 &node.peer_id,
                 (),
+                None,
             ),
             metrics_connection: self.metrics_client.new_connection(
                 secondary_socket_addr,
                 &node.peer_id,
                 (),
+                None,
             ),
         }
     }
