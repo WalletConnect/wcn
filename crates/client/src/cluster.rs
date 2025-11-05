@@ -4,9 +4,18 @@ use {
     derive_more::derive::AsRef,
     derive_where::derive_where,
     futures::{Stream, StreamExt as _, TryStreamExt as _, future::Either, stream},
-    std::{collections::HashSet, marker::PhantomData, sync::Arc, time::Duration},
+    std::{
+        collections::HashSet,
+        marker::PhantomData,
+        net::SocketAddrV4,
+        sync::Arc,
+        time::Duration,
+    },
     tokio::sync::oneshot,
-    wc::future::FutureExt as _,
+    wc::{
+        future::FutureExt as _,
+        metrics::{self, Gauge, StringLabel},
+    },
     wcn_cluster::{
         EncryptionKey,
         PeerId,
@@ -29,6 +38,30 @@ use {
     },
 };
 
+struct NodeMetrics {
+    addr: SocketAddrV4,
+}
+
+impl NodeMetrics {
+    fn new(addr: SocketAddrV4) -> Self {
+        let this = Self { addr };
+        this.meter().increment(1);
+        this
+    }
+
+    fn meter(&self) -> &Gauge {
+        metrics::gauge!("wcn_client_live_nodes",
+            StringLabel<"remote_addr", SocketAddrV4> => &self.addr
+        )
+    }
+}
+
+impl Drop for NodeMetrics {
+    fn drop(&mut self) {
+        self.meter().decrement(1);
+    }
+}
+
 #[derive(Clone)]
 pub struct Node<D> {
     pub peer_id: PeerId,
@@ -37,6 +70,7 @@ pub struct Node<D> {
     pub private_cluster_conn: Option<ClusterConnection>,
     pub private_coordinator_conn: Option<CoordinatorConnection>,
     pub data: D,
+    _metrics: Arc<NodeMetrics>,
 }
 
 impl<D> Node<D> {
@@ -126,6 +160,7 @@ where
             private_cluster_conn,
             private_coordinator_conn,
             data: D::new(&operator_id, &node),
+            _metrics: Arc::new(NodeMetrics::new(public_addr)),
         }
     }
 
