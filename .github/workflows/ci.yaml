@@ -194,6 +194,24 @@ jobs:
           rust-version: ${{ env.RUST_STABLE }}
           command: check license
 
+  cargo-build-realease:
+    needs: [changed-files]
+    # if: needs.changed-files.outputs.rust == 'true'
+    runs-on:
+      group: ubuntu-runners
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash .github/install-deps.sh 
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target x86_64-unknown-linux-musl -p wcn_db 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wcn_db-musl
+          path: target/x86_64-unknown-linux-musl/release/wcn_db
+
   docker-build-push:
     needs:
       [
