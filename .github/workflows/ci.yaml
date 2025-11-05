@@ -194,7 +194,7 @@ jobs:
           rust-version: ${{ env.RUST_STABLE }}
           command: check license
 
-  cargo-build-realease:
+  cargo-build-release:
     needs: [changed-files]
     # if: needs.changed-files.outputs.rust == 'true'
     runs-on:
@@ -205,6 +205,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE }}
+          targets: x86_64-unknown-linux-musl 
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --target x86_64-unknown-linux-musl -p wcn_db 
       - uses: actions/upload-artifact@v4
