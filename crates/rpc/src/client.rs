@@ -44,6 +44,7 @@ use {
             EnumLabel,
             FutureExt as _,
             Gauge,
+            OptionalStringLabel,
             StringLabel,
         },
     },
@@ -130,6 +131,7 @@ impl<API: Api> Client<API> {
         addr: SocketAddrV4,
         peer_id: &PeerId,
         params: API::ConnectionParameters,
+        tag: impl Into<Option<&'static str>>,
     ) -> Result<Connection<API>> {
         async {
             // `libp2p_tls` uses this "l" placeholder as server_name.
@@ -154,7 +156,7 @@ impl<API: Api> Client<API> {
             tx.write_all(&API::NAME.0).await?;
             check_connection_status(rx.read_i32().await?)?;
 
-            let conn = self.new_connection_inner(addr, peer_id, params, Some(conn));
+            let conn = self.new_connection_inner(addr, peer_id, params, Some(conn), tag);
 
             // we just created the `Connection`, the lock can't be locked
             // NOTE: by holding this guard here we are also making sure that
@@ -191,10 +193,11 @@ impl<API: Api> Client<API> {
         addr: SocketAddrV4,
         peer_id: &PeerId,
         params: API::ConnectionParameters,
+        tag: impl Into<Option<&'static str>>,
     ) -> Connection<API> {
         tracing::debug!(%addr, %peer_id, "Connecting to");
 
-        let conn = self.new_connection_inner(addr, peer_id, params, None);
+        let conn = self.new_connection_inner(addr, peer_id, params, None, tag);
         conn.reconnect(self.config.reconnect_interval);
         conn
     }
@@ -205,6 +208,7 @@ impl<API: Api> Client<API> {
         peer_id: &PeerId,
         params: API::ConnectionParameters,
         quic: Option<quinn::Connection>,
+        tag: impl Into<Option<&'static str>>,
     ) -> Connection<API> {
         let (tx, rx) = watch::channel(quic);
 
@@ -218,7 +222,7 @@ impl<API: Api> Client<API> {
             }),
             guard: Arc::new(ConnectionGuard {
                 cancellation_token: CancellationToken::new(),
-                _metrics: ConnectionMetrics::new(API::NAME, addr),
+                metrics: ConnectionMetrics::new(API::NAME, addr, tag),
             }),
         }
     }
@@ -270,11 +274,16 @@ type ConnectionMutex<Params> = Mutex<(watch::Sender<Option<quinn::Connection>>, 
 struct ConnectionMetrics {
     api: ApiName,
     addr: SocketAddrV4,
+    tag: Option<&'static str>,
 }
 
 impl ConnectionMetrics {
-    fn new(api: ApiName, addr: SocketAddrV4) -> Self {
-        let this = Self { api, addr };
+    fn new(api: ApiName, addr: SocketAddrV4, tag: impl Into<Option<&'static str>>) -> Self {
+        let this = Self {
+            api,
+            addr,
+            tag: tag.into(),
+        };
         this.meter().increment(1);
         this
     }
@@ -282,7 +291,8 @@ impl ConnectionMetrics {
     fn meter(&self) -> &Gauge {
         metrics::gauge!("wcn_rpc_client_outbound_connections",
             StringLabel<"remote_addr", SocketAddrV4> => &self.addr,
-            StringLabel<"api", ApiName> => &self.api
+            StringLabel<"api", ApiName> => &self.api,
+            OptionalStringLabel<"tag"> => self.tag
         )
     }
 }
@@ -295,7 +305,7 @@ impl Drop for ConnectionMetrics {
 
 struct ConnectionGuard {
     cancellation_token: CancellationToken,
-    _metrics: ConnectionMetrics,
+    metrics: ConnectionMetrics,
 }
 
 impl Drop for ConnectionGuard {
@@ -482,6 +492,7 @@ impl<API: Api> Connection<API> {
         };
 
         let cancellation_token = self.guard.cancellation_token.clone();
+        let tag = self.guard.metrics.tag;
         let this = self.inner.clone();
 
         async move {
@@ -493,7 +504,7 @@ impl<API: Api> Connection<API> {
 
                 let res = this
                     .client
-                    .connect(this.remote_addr, &this.remote_peer_id, guard.1.clone())
+                    .connect(this.remote_addr, &this.remote_peer_id, guard.1.clone(), tag)
                     .await;
 
                 match res {
