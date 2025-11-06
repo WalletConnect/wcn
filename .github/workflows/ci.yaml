@@ -204,7 +204,7 @@ jobs:
       - uses: jirutka/setup-alpine@v1
         with:
           branch: v3.22
-        packages: build-base pkgconf lld rustup
+          packages: build-base pkgconf lld rustup
       - run: rustup-init --default-toolchain stable --profile minimal -y
         shell: alpine.sh {0}
       - name: Build statically linked binary
