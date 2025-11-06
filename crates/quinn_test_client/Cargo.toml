@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = { workspace = true }
+clap = { workspace = true }
 futures = { version = "0.3", default-features = false }
 libp2p-identity = { version = "0.2", default-features = false, features = ["ed25519", "rand"] }
 wcn_logging = { workspace = true }
