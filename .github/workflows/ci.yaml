@@ -201,17 +201,30 @@ jobs:
       group: ubuntu-runners
     steps:
       - uses: actions/checkout@v4
-      - run: bash .github/install-deps.sh 
-      - uses: dtolnay/rust-toolchain@master
+      - uses: jirutka/setup-alpine@v1
         with:
-          toolchain: ${{ env.RUST_STABLE }}
-          targets: x86_64-unknown-linux-musl 
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --target x86_64-unknown-linux-musl -p wcn_db 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wcn_db-musl
-          path: target/x86_64-unknown-linux-musl/release/wcn_db
+          branch: v3.22
+        packages: build-base pkgconf lld rustup
+      - run: rustup-init --default-toolchain stable --profile minimal -y
+        shell: alpine.sh {0}
+      - name: Build statically linked binary
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.rust-target }}
+          CARGO_PROFILE_RELEASE_STRIP: symbols
+          PKG_CONFIG_ALL_STATIC: '1'
+          PKG_CONFIG_LIBDIR: ${{ env.CROSS_SYSROOT }}/usr/lib/pkgconfig
+          RUSTFLAGS: -C linker=/usr/bin/ld.lld
+          SYSROOT: /dummy  # workaround for https://github.com/rust-lang/pkg-config-rs/issues/102
+        run: |
+          # Workaround for https://github.com/rust-lang/pkg-config-rs/issues/102.
+          echo -e '#!/bin/sh\nPKG_CONFIG_SYSROOT_DIR=${{ env.CROSS_SYSROOT }} exec pkgconf "$@"' \
+              | install -m755 /dev/stdin pkg-config
+          export PKG_CONFIG="$(pwd)/pkg-config"
+          cargo build --release --locked --verbose -p wcn_db
+        shell: alpine.sh {0}
+
+      - run: ldd target/release/wcn_db
+        shell: alpine.sh {0}
 
   docker-build-push:
     needs:
