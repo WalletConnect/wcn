@@ -209,18 +209,9 @@ jobs:
         shell: alpine.sh {0}
       - name: Build statically linked binary
         env:
-          CARGO_BUILD_TARGET: ${{ matrix.rust-target }}
-          CARGO_PROFILE_RELEASE_STRIP: symbols
           PKG_CONFIG_ALL_STATIC: '1'
-          PKG_CONFIG_LIBDIR: ${{ env.CROSS_SYSROOT }}/usr/lib/pkgconfig
           RUSTFLAGS: -C linker=/usr/bin/ld.lld
-          SYSROOT: /dummy  # workaround for https://github.com/rust-lang/pkg-config-rs/issues/102
-        run: |
-          # Workaround for https://github.com/rust-lang/pkg-config-rs/issues/102.
-          echo -e '#!/bin/sh\nPKG_CONFIG_SYSROOT_DIR=${{ env.CROSS_SYSROOT }} exec pkgconf "$@"' \
-              | install -m755 /dev/stdin pkg-config
-          export PKG_CONFIG="$(pwd)/pkg-config"
-          cargo build --release --locked --verbose -p wcn_db
+        run: cargo build --release --locked --verbose -p wcn_db
         shell: alpine.sh {0}
 
       - run: ldd target/release/wcn_db
