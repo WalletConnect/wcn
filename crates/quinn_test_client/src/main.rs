@@ -73,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
         total_failures += failures;
         merge_connection_stats(&mut total_connection_stats, connection_stats);
     }
-    info!("total {:?}", total_connection_stats);
+    println!("{:#?}", total_connection_stats);
     info!(
         "total successes:{} failures:{} num_concurrent_clients:{} num_messages_per_client:{}",
         total_successes,
