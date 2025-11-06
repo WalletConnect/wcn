@@ -15,6 +15,7 @@ use {
     futures::{FutureExt, Sink, SinkExt, Stream, StreamExt as _, TryStream as _},
     libp2p_identity::PeerId,
     pin_project::pin_project,
+    quinn::ConnectionStats,
     std::{
         error::Error as StdError,
         future::Future,
@@ -261,6 +262,12 @@ pub struct Outbound<API: Api, RPC: Rpc> {
 pub struct Connection<API: Api> {
     inner: Arc<ConnectionInner<API>>,
     guard: Arc<ConnectionGuard>,
+}
+
+impl<API: Api> Connection<API> {
+    pub fn quinn_stats(&self) -> Option<ConnectionStats> {
+        self.inner.watch_rx.borrow().as_ref().map(|c| c.stats())
+    }
 }
 
 type ConnectionMutex<Params> = Mutex<(watch::Sender<Option<quinn::Connection>>, Params)>;

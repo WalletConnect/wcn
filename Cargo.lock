@@ -4144,6 +4144,7 @@ dependencies = [
  "clap",
  "futures",
  "libp2p-identity",
+ "quinn-proto",
  "tokio",
  "tracing",
  "tracing-subscriber",

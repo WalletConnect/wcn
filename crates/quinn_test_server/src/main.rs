@@ -1,9 +1,13 @@
-use std::time::Duration;
-
-use clap::Parser;
-use libp2p_identity::ed25519::Keypair;
-use wcn_rpc::{server::{self, Server, ShutdownSignal, Socket}, transport::Priority};
-use wcn_storage_api::{Operation, Result, StorageApi, operation::Output, rpc};
+use {
+    clap::Parser,
+    libp2p_identity::ed25519::Keypair,
+    std::time::Duration,
+    wcn_rpc::{
+        server::{self, Server, ShutdownSignal, Socket},
+        transport::Priority,
+    },
+    wcn_storage_api::{Operation, Result, StorageApi, operation::Output, rpc},
+};
 
 #[derive(Parser)]
 struct Config {
@@ -33,10 +37,7 @@ struct Config {
 struct TestServer;
 
 impl StorageApi for TestServer {
-    fn execute(
-        &self,
-        _operation: Operation<'_>,
-    ) -> impl Future<Output = Result<Output>> + Send {
+    fn execute(&self, _operation: Operation<'_>) -> impl Future<Output = Result<Output>> + Send {
         async { Ok(Output::none()) }
     }
 }
