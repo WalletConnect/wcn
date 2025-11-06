@@ -209,8 +209,8 @@ jobs:
         shell: alpine.sh {0}
       - name: Build statically linked binary
         env:
-          PKG_CONFIG_ALL_STATIC: '1'
-          RUSTFLAGS: -C linker=/usr/bin/ld.lld
+          # PKG_CONFIG_ALL_STATIC: '1'
+          # RUSTFLAGS: -C linker=/usr/bin/ld.lld
         run: cargo build --release --locked --verbose -p wcn_db
         shell: alpine.sh {0}
 
