@@ -1,7 +1,7 @@
+FROM alpine:3.22
+
 ARG TARGET
 ARG BINARY
-
-FROM alpine:3.22
 
 WORKDIR /app
 
