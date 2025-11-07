@@ -203,9 +203,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE }}
+          targets: x86_64-unknown-linux-musl
       - run: sudo apt-get update && sudo apt-get install -y build-essential llvm clang libclang1
       - run: pip install cargo-zigbuild
-      - run: cargo target add x86_64-unknown-linux-musl
       - run: cargo build --release --target x86_64-unknown-linux-musl -p wcn_db
       - run: ldd target/x86_64-unknown-linux-musl/release/wcn_db
 
