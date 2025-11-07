@@ -194,20 +194,48 @@ jobs:
           rust-version: ${{ env.RUST_STABLE }}
           command: check license
 
-  cargo-build-release:
+  package:
     needs: [changed-files]
     # if: needs.changed-files.outputs.rust == 'true'
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        binary: [wcn_node, wcn_db]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runs_on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm64
+            target: aarch64-unknown-linux-musl
+    runs-on: ${{ matrix.runs_on }}
+    env:
+      TARGET: ${{ matrix.target }}
+      BINARY: wcn_db
+      TAG: ghcr.io/${{ github.repository }}/wcn-db:${{ github.sha[0:8] }}-${{ matrix.arch }} 
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE }}
-          targets: x86_64-unknown-linux-musl
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v5
       - run: sudo apt-get update && sudo apt-get install -y build-essential llvm clang libclang1 libclang-dev
       - run: pip install cargo-zigbuild
-      - run: cargo zigbuild --release --target x86_64-unknown-linux-musl -p wcn_db
-      - run: ldd target/x86_64-unknown-linux-musl/release/wcn_db
+      - run: cargo zigbuild --release --target $TARGET -p $BINARY
+      - run: docker build --build-arg TARGET --build-arg BINARY $TAG
+      - run: docker push $TAG
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary }}-{{ github.sha[0:8] }}-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/release/${{ matrix.binary }}
+          if-no-files-found: error
+          retention-days: 1
 
   docker-build-push:
     needs:
