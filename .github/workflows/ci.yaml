@@ -222,6 +222,7 @@ jobs:
       REPO: ${{ github.repository }}
     steps:
       - run: echo "SHA_SHORT=${SHA::8}" >> $GITHUB_ENV
+      - run: echo "REPO=$(echo $REPO | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - run: echo "TAG=ghcr.io/${REPO}/${PACKAGE}:${SHA_SHORT}-${ARCH}" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
