@@ -197,25 +197,17 @@ jobs:
   cargo-build-release:
     needs: [changed-files]
     # if: needs.changed-files.outputs.rust == 'true'
-    runs-on:
-      group: ubuntu-runners
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: jirutka/setup-alpine@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          branch: v3.22
-          packages: build-base binutils pkgconf lld rustup musl-dev musl-utils gcc libgcc llvm19 llvm19-dev clang19 clang19-dev lz4-dev
-      - run: rustup-init --default-toolchain stable --profile minimal -y
-        shell: alpine.sh {0}
-      - name: Build statically linked binary
-        # env:
-          # PKG_CONFIG_ALL_STATIC: '1'
-          # RUSTFLAGS: -C linker=/usr/bin/ld.lld
-        run: cargo build --release --locked --verbose -p wcn_db
-        shell: alpine.sh {0}
-
-      - run: ldd target/release/wcn_db
-        shell: alpine.sh {0}
+          toolchain: ${{ env.RUST_STABLE }}
+      - run: sudo apt-get update && sudo apt-get install -y build-essential llvm clang libclang1
+      - run: pip install cargo-zigbuild
+      - run: cargo target add x86_64-unknown-linux-musl
+      - run: cargo build --release --target x86_64-unknown-linux-musl -p wcn_db
+      - run: ldd target/x86_64-unknown-linux-musl/release/wcn_db
 
   docker-build-push:
     needs:
