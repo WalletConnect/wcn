@@ -234,7 +234,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_STABLE }}
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v5
+      - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y build-essential llvm clang libclang1 libclang-dev
       - run: pip install cargo-zigbuild
       - run: cargo zigbuild --release --target $TARGET -p $BINARY
