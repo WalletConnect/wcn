@@ -206,7 +206,7 @@ jobs:
             runs_on: ubuntu-24.04
             target: x86_64-unknown-linux-musl
           - arch: arm64
-            runs_on: ubuntu-24.04-arm64
+            runs_on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
           - binary: wcn_node
             package: wcn-node
