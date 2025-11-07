@@ -238,7 +238,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y build-essential llvm clang libclang1 libclang-dev
       - run: pip install cargo-zigbuild
       - run: cargo zigbuild --release --target $TARGET -p $BINARY
-      - run: docker build --build-arg TARGET --build-arg BINARY $TAG
+      - run: docker build --build-arg TARGET --build-arg BINARY -t $TAG .
       - run: docker push $TAG
       - uses: actions/upload-artifact@v4
         with:
@@ -247,103 +247,36 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  docker-build-push:
-    needs:
-      [
-        changed-files,
-        cargo-build,
-        cargo-test,
-        cargo-fmt,
-        cargo-clippy,
-        cargo-deny,
-      ]
-    if: |
-      needs.changed-files.result != 'failure' &&
-      (needs.changed-files.outputs.rust == 'true' || needs.changed-files.outputs.dockerfile == 'true') &&
-      needs.cargo-build.result != 'failure' &&
-      needs.cargo-test.result != 'failure' &&
-      needs.cargo-fmt.result != 'failure' &&
-      needs.cargo-clippy.result != 'failure' &&
-      needs.cargo-deny.result != 'failure' &&
-      !cancelled()
-    runs-on:
-      group: ubuntu-runners
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-            - name: wcn-node
-              dockerfile: infra/Dockerfile.node
-            - name: wcn-db
-              dockerfile: infra/Dockerfile.db
+  # release:
+  #   needs: [changed-files]
+  #   if: github.ref_name == 'main' && needs.changed-files.outputs.version == 'true'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         token: ${{ secrets.RELEASE_PAT }}
+  #     - id: generate-changelog
+  #       run: |
+  #         LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
-    steps:
-      - uses: actions/checkout@v4
+  #         if [[ "$LAST_TAG" ]]; then
+  #           CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s")
+  #         else
+  #           CHANGELOG=$(git log --pretty=format:"* %s")
+  #         fi
+  #         echo "::set-output name=changelog::$CHANGELOG"
 
-      - uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: push-tag
+  #       run: |
+  #         VERSION=$(cat VERSION)
 
-      - uses: docker/setup-buildx-action@v2
+  #         git tag $VERSION
+  #         git push origin "$VERSION"
 
-      - id: read-version
-        run: echo VERSION=$(cat VERSION) >> $GITHUB_ENV
+  #         echo VERSION=$VERSION >> $GITHUB_ENV
 
-      - id: meta
-        name: Docker metadata ${{ matrix.name }}
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            ${{ github.ref_name == 'main' && env.VERSION || '' }}
-
-      - name: Build & publish ${{ matrix.image }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # platforms: linux/amd64,linux/arm64
-
-  release:
-    needs: [changed-files]
-    if: github.ref_name == 'main' && needs.changed-files.outputs.version == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.RELEASE_PAT }}
-      - id: generate-changelog
-        run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-          if [[ "$LAST_TAG" ]]; then
-            CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s")
-          else
-            CHANGELOG=$(git log --pretty=format:"* %s")
-          fi
-          echo "::set-output name=changelog::$CHANGELOG"
-
-      - name: push-tag
-        run: |
-          VERSION=$(cat VERSION)
-
-          git tag $VERSION
-          git push origin "$VERSION"
-
-          echo VERSION=$VERSION >> $GITHUB_ENV
-
-      - uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ env.VERSION }}
-          body: ${{ steps.generate-changelog.outputs.changelog }}
-          token: ${{ secrets.RELEASE_PAT }}
+  #     - uses: ncipollo/release-action@v1
+  #       with:
+  #         tag: ${{ env.VERSION }}
+  #         body: ${{ steps.generate-changelog.outputs.changelog }}
+  #         token: ${{ secrets.RELEASE_PAT }}
