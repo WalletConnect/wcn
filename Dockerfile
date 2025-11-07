@@ -1,0 +1,13 @@
+ARG TARGET
+ARG BINARY
+
+FROM alpine:3.22
+
+WORKDIR /app
+
+COPY target/${TARGET}/release/${BINARY} .
+
+RUN chmod +x ./${BINARY}
+
+USER 1001:1001
+ENTRYPOINT ["./${BINARY}"]
