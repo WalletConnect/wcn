@@ -219,11 +219,10 @@ jobs:
       TARGET: ${{ matrix.target }}
       PACKAGE: ${{ matrix.package }}
       SHA: ${{ github.sha }}
-      REPO: ${{ github.repository }}
     steps:
       - run: echo "SHA_SHORT=${SHA::8}" >> $GITHUB_ENV
       - run: echo "REPO=$(echo $REPO | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-      - run: echo "TAG=ghcr.io/${REPO}/${PACKAGE}:${SHA_SHORT}-${ARCH}" >> $GITHUB_ENV
+      - run: echo "TAG=ghcr.io/walletconnect/${PACKAGE}:${SHA_SHORT}-${ARCH}" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
@@ -243,7 +242,7 @@ jobs:
       - run: docker push $TAG
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.BINARY }}-{{ env.SHA_SHORT }}-${{ env.ARCH }}
+          name: ${{ env.BINARY }}-${{ env.SHA_SHORT }}-${{ env.ARCH }}
           path: target/${{ env.TARGET }}/release/${{ env.BINARY }}
           if-no-files-found: error
           retention-days: 1
