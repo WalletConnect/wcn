@@ -239,7 +239,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y build-essential llvm clang libclang1 libclang-dev
       - run: pip install cargo-zigbuild
       - run: cargo zigbuild --release --target $TARGET -p $BINARY
-      - run: docker build --build-arg TARGET --build-arg BINARY -t $TAG .
+      - run: docker build --build-arg TARGET=$TARGET --build-arg BINARY=$BINARY -t $TAG .
       - run: docker push $TAG
       - uses: actions/upload-artifact@v4
         with:
