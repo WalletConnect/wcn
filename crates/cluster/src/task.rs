@@ -49,6 +49,8 @@ where
     }
 
     async fn run(mut self) {
+        cluster_keyspace_metrics(&self.inner.view.load_full());
+
         // apply initial events until they finish / first error
         if let Some(events) = self.initial_events.take() {
             match self.apply_events(events).await {
