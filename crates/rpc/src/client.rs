@@ -207,6 +207,7 @@ impl<API: Api> Client<API> {
     ) -> Connection<API> {
         let is_reconnect_enabled = quic.is_none();
         let (tx, rx) = watch::channel(quic);
+
         Connection {
             is_reconnect_enabled,
             inner: Arc::new(ConnectionInner {
