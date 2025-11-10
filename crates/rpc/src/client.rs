@@ -153,7 +153,7 @@ impl<API: Api> Client<API> {
             tx.write_all(&API::NAME.0).await?;
             check_connection_status(rx.read_i32().await?)?;
 
-            let conn = self.new_connection_inner(addr, peer_id, params, Some(conn));
+            let conn = self.new_connection_inner(addr, peer_id, params, Some(conn), false);
 
             // we just created the `Connection`, the lock can't be locked
             // NOTE: by holding this guard here we are also making sure that
@@ -193,7 +193,7 @@ impl<API: Api> Client<API> {
     ) -> Connection<API> {
         tracing::debug!(%addr, %peer_id, "Connecting to");
 
-        let conn = self.new_connection_inner(addr, peer_id, params, None);
+        let conn = self.new_connection_inner(addr, peer_id, params, None, true);
         conn.reconnect(self.config.reconnect_interval);
         conn
     }
@@ -204,10 +204,11 @@ impl<API: Api> Client<API> {
         peer_id: &PeerId,
         params: API::ConnectionParameters,
         quic: Option<quinn::Connection>,
+        is_reconnect_enabled: bool,
     ) -> Connection<API> {
         let (tx, rx) = watch::channel(quic);
-
         Connection {
+            is_reconnect_enabled,
             inner: Arc::new(ConnectionInner {
                 client: self.clone(),
                 remote_addr: addr,
@@ -259,6 +260,7 @@ pub struct Outbound<API: Api, RPC: Rpc> {
 /// network connection is already established (or will ever be established).
 #[derive_where(Clone)]
 pub struct Connection<API: Api> {
+    is_reconnect_enabled: bool,
     inner: Arc<ConnectionInner<API>>,
     guard: Arc<ConnectionGuard>,
 }
@@ -447,6 +449,8 @@ impl<API: Api> Connection<API> {
     }
 
     fn reconnect(&self, interval: Duration) {
+        if !self.is_reconnect_enabled { return; }
+
         // If we can't acquire the lock then reconnection is already in progress.
         let Ok(guard) = self.inner.watch_tx.clone().try_lock_owned() else {
             return;
