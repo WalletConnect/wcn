@@ -450,7 +450,9 @@ impl<API: Api> Connection<API> {
     }
 
     fn reconnect(&self, interval: Duration) {
-        if !self.is_reconnect_enabled { return; }
+        if !self.is_reconnect_enabled {
+            return;
+        }
 
         // If we can't acquire the lock then reconnection is already in progress.
         let Ok(guard) = self.inner.watch_tx.clone().try_lock_owned() else {
