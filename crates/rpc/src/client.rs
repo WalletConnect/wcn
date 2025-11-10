@@ -153,7 +153,7 @@ impl<API: Api> Client<API> {
             tx.write_all(&API::NAME.0).await?;
             check_connection_status(rx.read_i32().await?)?;
 
-            let conn = self.new_connection_inner(addr, peer_id, params, Some(conn), false);
+            let conn = self.new_connection_inner(addr, peer_id, params, Some(conn));
 
             // we just created the `Connection`, the lock can't be locked
             // NOTE: by holding this guard here we are also making sure that
@@ -193,7 +193,7 @@ impl<API: Api> Client<API> {
     ) -> Connection<API> {
         tracing::debug!(%addr, %peer_id, "Connecting to");
 
-        let conn = self.new_connection_inner(addr, peer_id, params, None, true);
+        let conn = self.new_connection_inner(addr, peer_id, params, None);
         conn.reconnect(self.config.reconnect_interval);
         conn
     }
@@ -204,8 +204,8 @@ impl<API: Api> Client<API> {
         peer_id: &PeerId,
         params: API::ConnectionParameters,
         quic: Option<quinn::Connection>,
-        is_reconnect_enabled: bool,
     ) -> Connection<API> {
+        let is_reconnect_enabled = quic.is_none();
         let (tx, rx) = watch::channel(quic);
         Connection {
             is_reconnect_enabled,
