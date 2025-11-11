@@ -44,6 +44,7 @@ use {
             future_metrics,
             EnumLabel,
             FutureExt as _,
+            Gauge,
             StringLabel,
         },
     },
@@ -206,9 +207,11 @@ impl<API: Api> Client<API> {
         params: API::ConnectionParameters,
         quic: Option<quinn::Connection>,
     ) -> Connection<API> {
+        let is_reconnect_enabled = quic.is_none();
         let (tx, rx) = watch::channel(quic);
 
         Connection {
+            is_reconnect_enabled,
             inner: Arc::new(ConnectionInner {
                 client: self.clone(),
                 remote_addr: addr,
@@ -218,6 +221,7 @@ impl<API: Api> Client<API> {
             }),
             guard: Arc::new(ConnectionGuard {
                 cancellation_token: CancellationToken::new(),
+                _metrics: ConnectionMetrics::new(API::NAME, addr),
             }),
         }
     }
@@ -260,6 +264,7 @@ pub struct Outbound<API: Api, RPC: Rpc> {
 /// network connection is already established (or will ever be established).
 #[derive_where(Clone)]
 pub struct Connection<API: Api> {
+    is_reconnect_enabled: bool,
     inner: Arc<ConnectionInner<API>>,
     guard: Arc<ConnectionGuard>,
 }
@@ -272,8 +277,35 @@ impl<API: Api> Connection<API> {
 
 type ConnectionMutex<Params> = Mutex<(watch::Sender<Option<quinn::Connection>>, Params)>;
 
+struct ConnectionMetrics {
+    api: ApiName,
+    addr: SocketAddrV4,
+}
+
+impl ConnectionMetrics {
+    fn new(api: ApiName, addr: SocketAddrV4) -> Self {
+        let this = Self { api, addr };
+        this.meter().increment(1);
+        this
+    }
+
+    fn meter(&self) -> &Gauge {
+        metrics::gauge!("wcn_rpc_client_outbound_connections",
+            StringLabel<"remote_addr", SocketAddrV4> => &self.addr,
+            StringLabel<"api", ApiName> => &self.api
+        )
+    }
+}
+
+impl Drop for ConnectionMetrics {
+    fn drop(&mut self) {
+        self.meter().decrement(1);
+    }
+}
+
 struct ConnectionGuard {
     cancellation_token: CancellationToken,
+    _metrics: ConnectionMetrics,
 }
 
 impl Drop for ConnectionGuard {
@@ -454,6 +486,10 @@ impl<API: Api> Connection<API> {
     }
 
     fn reconnect(&self, interval: Duration) {
+        if !self.is_reconnect_enabled {
+            return;
+        }
+
         // If we can't acquire the lock then reconnection is already in progress.
         let Ok(guard) = self.inner.watch_tx.clone().try_lock_owned() else {
             return;
