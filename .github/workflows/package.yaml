@@ -132,7 +132,7 @@ jobs:
           else
             CHANGELOG=$(git log --pretty=format:"* %s")
           fi
-          echo "::set-output name=changelog::$CHANGELOG"
+          echo "changelog=$CHANGELOG" >> $GITHUB_OUTPUT
 
       - name: push-tag
         run: |
