@@ -34,7 +34,6 @@ jobs:
     name: Package ${{ inputs.binary }} (${{ inputs.arch }})
     runs-on: ${{ inputs.runs_on }}
     env:
-      RUST_STABLE: ${{ inputs.rust_toolchain }}
       BINARY: ${{ inputs.binary }}
       PACKAGE: ${{ inputs.package }}
       ARCH: ${{ inputs.arch }}
@@ -55,7 +54,7 @@ jobs:
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.RUST_STABLE }}
+          toolchain: ${{ inputs.rust_toolchain }}
           targets: ${{ env.TARGET }}
 
       - uses: Swatinem/rust-cache@v2

@@ -24,9 +24,6 @@ permissions:
   contents: write
   packages: write
 
-env:
-  RUST_STABLE: 1.89.0
-
 jobs:
   package-node:
     if: ${{ inputs.wcn-node }}
@@ -48,7 +45,7 @@ jobs:
       arch:    ${{ matrix.arch }}
       runs_on: ${{ matrix.runs_on }}
       target:  ${{ matrix.target }}
-      rust_toolchain: ${{ env.RUST_STABLE }}
+      rust_toolchain: 1.89.0
 
   package-db:
     if: ${{ inputs.wcn-db }}
@@ -70,7 +67,7 @@ jobs:
       arch:    ${{ matrix.arch }}
       runs_on: ${{ matrix.runs_on }}
       target:  ${{ matrix.target }}
-      rust_toolchain: ${{ env.RUST_STABLE }}
+      rust_toolchain: 1.89.0
 
   release-node-package:
     needs: package-node
