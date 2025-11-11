@@ -1,3 +1,5 @@
+name: package
+
 on:
   workflow_dispatch:
     inputs:
@@ -5,11 +7,11 @@ on:
         type: string
         default: "main"
         required: true
-      wcn_node:
+      wcn-node:
         type: boolean
         default: true
         required: true
-      wcn_db:
+      wcn-db:
         type: boolean
         default: false
         required: true
@@ -26,11 +28,11 @@ env:
   RUST_STABLE: 1.89.0
 
 jobs:
-  build:
+  package-node:
+    if: ${{ inputs.wcn-node }}
     strategy:
+      fail-fast: false
       matrix:
-        binary: [wcn_node, wcn_db]
-        arch: [amd64, arm64]
         include:
           - arch: amd64
             runs_on: ubuntu-24.04
@@ -38,77 +40,53 @@ jobs:
           - arch: arm64
             runs_on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-          - binary: wcn_node
-            package: wcn-node
-          - binary: wcn_db
-            package: wcn-db
-    if: ${{ (inputs.wcn_node && matrix.binary == 'wcn_node') || (inputs.wcn_db && matrix.binary == 'wcn_db') }}
-    runs-on: ${{ matrix.runs_on }}
-    env:
-      BINARY: ${{ matrix.binary }}
-      ARCH: ${{ matrix.arch }}
-      TARGET: ${{ matrix.target }}
-      PACKAGE: ${{ matrix.package }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
-      - run: echo "SHA_SHORT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-      - run: echo "TAG=ghcr.io/walletconnect/${PACKAGE}:${SHA_SHORT}-${ARCH}" >> $GITHUB_ENV
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_STABLE }}
-          targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update && sudo apt-get install -y build-essential llvm clang libclang1 libclang-dev
-      - run: pip install cargo-zigbuild
-      - run: cargo zigbuild --release --target $TARGET -p $BINARY
-      - run: docker build --build-arg TARGET=$TARGET --build-arg BINARY=$BINARY -t $TAG .
-      - run: docker push $TAG
-      - uses: actions/upload-artifact@v5
-        with:
-          name: ${{ env.BINARY }}.${{ env.ARCH }}
-          path: target/${{ env.TARGET }}/release/${{ env.BINARY }}
-          if-no-files-found: error
-          retention-days: 1
+    uses: ./.github/workflows/package-binary.yml
+    with:
+      branch:  ${{ inputs.branch }}
+      binary:  wcn_node
+      package: wcn-node
+      arch:    ${{ matrix.arch }}
+      runs_on: ${{ matrix.runs_on }}
+      target:  ${{ matrix.target }}
+      rust_toolchain: ${{ env.RUST_STABLE }}
 
-  package_release:
-    needs: build
+  package-db:
+    if: ${{ inputs.wcn-db }}
     strategy:
+      fail-fast: false
       matrix:
-        package: [wcn-node, wcn-db]
-    if: ${{ inputs.release && ((inputs.wcn_node && matrix.package == 'wcn-node') || (inputs.wcn_db && matrix.package == 'wcn-db')) }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-buildx-action@v3
-      - run: |
-          set -euxo pipefail
+        include:
+          - arch: amd64
+            runs_on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    uses: ./.github/workflows/package-binary.yml
+    with:
+      branch:  ${{ inputs.branch }}
+      binary:  wcn_db
+      package: wcn-db
+      arch:    ${{ matrix.arch }}
+      runs_on: ${{ matrix.runs_on }}
+      target:  ${{ matrix.target }}
+      rust_toolchain: ${{ env.RUST_STABLE }}
 
-          SHA_SHORT=$(git rev-parse --short HEAD)
-          VERSION=$(cat VERSION)
+  release-node-package:
+    needs: package-node
+    if: ${{ inputs.wcn-node }}
+    uses: ./.github/workflows/release-package.yml
+    with:
+      package: wcn-node
 
-          package="${{ matrix.package }}"
-          tag_ver="ghcr.io/walletconnect/${package}:${VERSION}"
-          amd="ghcr.io/walletconnect/${package}:${SHA_SHORT}-amd64"
-          arm="ghcr.io/walletconnect/${package}:${SHA_SHORT}-arm64"
+  release-db-package:
+    needs: package-db
+    if: ${{ inputs.wcn-db }}
+    uses: ./.github/workflows/release-package.yml
+    with:
+      package: wcn-db
 
-          docker buildx imagetools create \
-              --tag "${tag_ver}" \
-              "${amd}" \
-              "${arm}"
-
-
-  github_release:
+  github-release:
     needs: build
     if: ${{ inputs.release }}
     runs-on: ubuntu-latest

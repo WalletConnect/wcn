@@ -1,0 +1,93 @@
+name: package-binary
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        type: string
+        required: true
+      binary:
+        type: string
+        required: true
+      package:
+        type: string
+        required: true
+      arch:
+        type: string
+        required: true
+      runs_on:
+        type: string
+        required: true
+      target:
+        type: string
+        required: true
+      rust_toolchain:
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  package-binary:
+    name: Package ${{ inputs.binary }} (${{ inputs.arch }})
+    runs-on: ${{ inputs.runs_on }}
+    env:
+      RUST_STABLE: ${{ inputs.rust_toolchain }}
+      BINARY: ${{ inputs.binary }}
+      PACKAGE: ${{ inputs.package }}
+      ARCH: ${{ inputs.arch }}
+      TARGET: ${{ inputs.target }}
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE }}
+          targets: ${{ env.TARGET }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential llvm clang libclang1 libclang-dev
+          pip install cargo-zigbuild
+
+      - name: Cargo build
+        run: cargo zigbuild --release --target "$TARGET" -p "$BINARY"
+
+      - name: Commit hash
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          echo "SHA=$SHA" >> $GITHUB_ENV
+          echo "SHA_SHORT=${SHA::8}" >> $GITHUB_ENV
+
+      - name: Docker tag
+        run: echo "TAG=ghcr.io/walletconnect/${PACKAGE}:${SHA_SHORT}-${ARCH}" >> $GITHUB_ENV
+
+      - name: Docker build
+        run: docker build --build-arg TARGET="$TARGET" --build-arg BINARY="$BINARY" -t "$TAG" .
+
+      - name: Docker push
+        run: docker push "$TAG"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY }}-${{ env.SHA_SHORT }}-${{ env.ARCH }}
+          path: target/${{ env.TARGET }}/release/${{ env.BINARY }}
+          if-no-files-found: error
+          retention-days: 1
