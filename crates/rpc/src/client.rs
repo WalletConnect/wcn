@@ -206,9 +206,11 @@ impl<API: Api> Client<API> {
         params: API::ConnectionParameters,
         quic: Option<quinn::Connection>,
     ) -> Connection<API> {
+        let is_reconnect_enabled = quic.is_none();
         let (tx, rx) = watch::channel(quic);
 
         Connection {
+            is_reconnect_enabled,
             inner: Arc::new(ConnectionInner {
                 client: self.clone(),
                 remote_addr: addr,
@@ -261,6 +263,7 @@ pub struct Outbound<API: Api, RPC: Rpc> {
 /// network connection is already established (or will ever be established).
 #[derive_where(Clone)]
 pub struct Connection<API: Api> {
+    is_reconnect_enabled: bool,
     inner: Arc<ConnectionInner<API>>,
     guard: Arc<ConnectionGuard>,
 }
@@ -476,6 +479,10 @@ impl<API: Api> Connection<API> {
     }
 
     fn reconnect(&self, interval: Duration) {
+        if !self.is_reconnect_enabled {
+            return;
+        }
+
         // If we can't acquire the lock then reconnection is already in progress.
         let Ok(guard) = self.inner.watch_tx.clone().try_lock_owned() else {
             return;
