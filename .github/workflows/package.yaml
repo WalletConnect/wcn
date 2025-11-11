@@ -1,0 +1,142 @@
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        type: string
+        default: "main"
+        required: true
+      wcn_node:
+        type: boolean
+        default: true
+        required: true
+      wcn_db:
+        type: boolean
+        default: false
+        required: true
+      release:
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        binary: [wcn_node, wcn_db]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runs_on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+          - binary: wcn_node
+            package: wcn-node
+          - binary: wcn_db
+            package: wcn-db
+    if: ${{ (inputs.wcn_node && matrix.binary == 'wcn_node') || (inputs.wcn_db && matrix.binary == 'wcn_db') }}
+    runs-on: ${{ matrix.runs_on }}
+    env:
+      BINARY: ${{ matrix.binary }}
+      ARCH: ${{ matrix.arch }}
+      TARGET: ${{ matrix.target }}
+      PACKAGE: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+      - run: echo "SHA_SHORT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - run: echo "TAG=ghcr.io/walletconnect/${PACKAGE}:${SHA_SHORT}-${ARCH}" >> $GITHUB_ENV
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE }}
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y build-essential llvm clang libclang1 libclang-dev
+      - run: pip install cargo-zigbuild
+      - run: cargo zigbuild --release --target $TARGET -p $BINARY
+      - run: docker build --build-arg TARGET=$TARGET --build-arg BINARY=$BINARY -t $TAG .
+      - run: docker push $TAG
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ env.BINARY }}.${{ env.ARCH }}
+          path: target/${{ env.TARGET }}/release/${{ env.BINARY }}
+          if-no-files-found: error
+          retention-days: 1
+
+  package_release:
+    needs: build
+    if: ${{ inputs.release }}
+    strategy:
+      matrix:
+        package: [wcn-node, wcn-db]
+    if: ${{ (inputs.wcn_node && matrix.package == 'wcn-node') || (inputs.wcn_db && matrix.package == 'wcn-db') }}
+    steps:
+      - run: |
+          set -euxo pipefail
+
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          VERSION=$(cat VERSION)
+
+          local package="${{ matrix.package }}"
+          local tag_ver="ghcr.io/walletconnect/${package}:${VERSION}"
+          local amd="ghcr.io/walletconnect/${package}:${SHA_SHORT}-amd64"
+          local arm="ghcr.io/walletconnect/${package}:${SHA_SHORT}-arm64"
+
+          docker buildx imagetools create \
+              --tag "${tag_ver}" \
+              "${amd}" \
+              "${arm}"
+
+
+  github_release:
+    needs: build
+    if: ${{ inputs.release }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: bin
+          merge-multiple: true
+
+      - id: generate-changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [[ "$LAST_TAG" ]]; then
+            CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s")
+          else
+            CHANGELOG=$(git log --pretty=format:"* %s")
+          fi
+          echo "::set-output name=changelog::$CHANGELOG"
+
+      - name: push-tag
+        run: |
+          VERSION=$(cat VERSION)
+
+          git tag $VERSION
+          git push origin "$VERSION"
+
+          echo VERSION=$VERSION >> $GITHUB_ENV
+
+      - uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ env.VERSION }}
+          body: ${{ steps.generate-changelog.outputs.changelog }}
+          artifacts: "bin/*"
+          token: ${{ secrets.RELEASE_PAT }}
