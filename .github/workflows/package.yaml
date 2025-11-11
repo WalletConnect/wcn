@@ -84,7 +84,7 @@ jobs:
       package: wcn-db
 
   github-release:
-    needs: build
+    needs: [package-node, package-db]
     if: ${{ inputs.release }}
     runs-on: ubuntu-latest
     steps:
