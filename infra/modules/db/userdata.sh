@@ -14,8 +14,11 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-# Make XFS file system
-mkfs.xfs $EBS_DEVICE_PATH
+FSTYPE="$(blkid -s TYPE -o value $EBS_DEVICE_PATH || true)"
+if [[ -z $FSTYPE ]]; then
+  # Make XFS file system
+  mkfs.xfs $EBS_DEVICE_PATH
+fi
 
 # Make the drive to automount on restarts
 EBS_DEVICE_UUID="$(blkid -s UUID -o value $EBS_DEVICE_PATH)"
