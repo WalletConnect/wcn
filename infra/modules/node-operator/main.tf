@@ -85,7 +85,7 @@ module "db" {
 }
 
 resource "aws_security_group" "ec2_instance_connect_endpoint" {
-  name   = "${local.name}-ec2-instance-connect-endpoint"
+  name   = "${var.config.name}-ec2-instance-connect-endpoint"
   vpc_id = module.vpc.vpc_id
 
   egress {
