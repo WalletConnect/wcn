@@ -82,9 +82,9 @@ resource "aws_ecs_task_definition" "this" {
         },
       ]
       environment = [
-        { name = "PRIMARY_RPC_SERVER_PORT", value = "${var.config.primary_rpc_server_port}" },
-        { name = "SECONDARY_RPC_SERVER_PORT", value = "${var.config.secondary_rpc_server_port}" },
-        { name = "METRICS_SERVER_PORT", value = "${var.config.metrics_server_port}" },
+        { name = "PRIMARY_RPC_SERVER_PORT", value = tostring(var.config.primary_rpc_server_port) },
+        { name = "SECONDARY_RPC_SERVER_PORT", value = tostring(var.config.secondary_rpc_server_port) },
+        { name = "METRICS_SERVER_PORT", value = tostring(var.config.metrics_server_port) },
         { name = "ROCKSDB_DIR", value = "/data" },
         { name = "SECRETS_VERSION", value = var.config.secrets_version },
       ]
@@ -128,8 +128,8 @@ resource "aws_ecs_service" "this" {
   deployment_maximum_percent         = 100
 }
 
-data "aws_ssm_parameter" "ami" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/amzn2-ami-ecs-hvm-2.0.20251015-x86_64-ebs"
+data "aws_ssm_parameter" "ami_id" {
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/amzn2-ami-ecs-hvm-2.0.20251015-x86_64-ebs/image_id"
 }
 
 resource "aws_security_group" "this" {
@@ -188,7 +188,7 @@ module "iam_instance_profile" {
 }
 
 resource "aws_instance" "this" {
-  ami           = data.aws_ssm_parameter.ami.value
+  ami           = data.aws_ssm_parameter.ami_id.value
   instance_type = var.config.ec2_instance_type
   subnet_id     = var.config.subnet.id
 
