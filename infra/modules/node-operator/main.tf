@@ -99,4 +99,5 @@ resource "aws_security_group" "ec2_instance_connect_endpoint" {
 resource "aws_ec2_instance_connect_endpoint" "this" {
   subnet_id = module.vpc.private_subnet_objects[0].id
   security_group_ids = [aws_security_group.ec2_instance_connect_endpoint.id]
+  preserve_client_ip = false
 }
