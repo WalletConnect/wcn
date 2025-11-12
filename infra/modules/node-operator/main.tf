@@ -58,6 +58,7 @@ module "vpc" {
 
   name = var.config.name
   cidr = "10.0.0.0/16"
+  region = local.region
 
   azs             = ["${local.region}a", "${local.region}b"]
   private_subnets = ["10.0.1.0/24"]

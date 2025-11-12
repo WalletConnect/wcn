@@ -5,7 +5,7 @@ variable "config" {
     vpc = object({
       vpc_id     = string
       region     = string
-      cidr_block = string
+      vpc_cidr_block = string
     })
 
     subnet = object({
@@ -138,7 +138,7 @@ resource "aws_security_group" "this" {
     from_port   = var.config.primary_rpc_server_port
     to_port     = var.config.primary_rpc_server_port
     protocol    = "udp"
-    cidr_blocks = [var.config.vpc.cidr_block]
+    cidr_blocks = [var.config.vpc.vpc_cidr_block]
   }
 
   ingress {
@@ -146,7 +146,7 @@ resource "aws_security_group" "this" {
     from_port   = var.config.secondary_rpc_server_port
     to_port     = var.config.secondary_rpc_server_port
     protocol    = "udp"
-    cidr_blocks = [var.config.vpc.cidr_block]
+    cidr_blocks = [var.config.vpc.vpc_cidr_block]
   }
 
   ingress {
@@ -154,7 +154,7 @@ resource "aws_security_group" "this" {
     from_port   = var.config.metrics_server_port
     to_port     = var.config.metrics_server_port
     protocol    = "tcp"
-    cidr_blocks = [var.config.vpc.cidr_block]
+    cidr_blocks = [var.config.vpc.vpc_cidr_block]
   }
 
   egress {
