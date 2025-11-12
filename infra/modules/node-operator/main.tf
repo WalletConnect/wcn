@@ -84,6 +84,19 @@ module "db" {
   })
 }
 
+resource "aws_security_group" "ec2_instance_connect_endpoint" {
+  name   = "${local.name}-ec2-instance-connect-endpoint"
+  vpc_id = module.vpc.vpc_id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [module.vpc.vpc_cidr_block]
+  }
+}
+
 resource "aws_ec2_instance_connect_endpoint" "this" {
   subnet_id = module.vpc.private_subnet_objects[0].id
+  security_group_ids = [aws_security_group.ec2_instance_connect_endpoint.id]
 }
