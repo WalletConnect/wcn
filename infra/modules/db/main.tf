@@ -213,7 +213,7 @@ resource "aws_ebs_volume" "this" {
 }
 
 resource "aws_volume_attachment" "data" {
-  device_name = local.data_volume.ebs_device_name
+  device_name = local.data_volume.ebs_device_path
   volume_id   = aws_ebs_volume.this.id
   instance_id = aws_instance.this.id
 }
