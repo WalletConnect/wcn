@@ -62,6 +62,8 @@ module "vpc" {
   name = var.config.name
   cidr = "10.0.0.0/16"
 
+  enable_nat_gateway = true
+
   azs             = ["${local.region}a", "${local.region}b"]
   private_subnets = ["10.0.1.0/24"]
   public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"]
