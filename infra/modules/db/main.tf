@@ -160,6 +160,13 @@ resource "aws_security_group" "this" {
     cidr_blocks = [var.config.vpc.vpc_cidr_block]
   }
 
+  ingress {
+    description = "EC2 Instance connect"
+    from_port = 22
+    to_port = 22
+    cidr_blocks = [var.config.vpc.vpc_cidr_block]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -195,6 +202,8 @@ resource "aws_instance" "this" {
   ami           = data.aws_ssm_parameter.ami_id.value
   instance_type = var.config.ec2_instance_type
   subnet_id     = var.config.subnet.id
+
+  associate_public_ip_address = false
 
   vpc_security_group_ids = [aws_security_group.this.id]
   iam_instance_profile   = module.iam_instance_profile.name
