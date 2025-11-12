@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    sops = {
+      source  = "carlpett/sops"
+    }
+  }
+}
+
 variable "config" {
   type = object({
     name    = string
