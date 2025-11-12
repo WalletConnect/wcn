@@ -4,7 +4,6 @@ variable "config" {
 
     vpc = object({
       vpc_id     = string
-      region     = string
       vpc_cidr_block = string
     })
 
@@ -33,6 +32,9 @@ variable "config" {
 
 locals {
   name = "${var.config.operator_name}-db"
+
+  az = var.config.subnet.availability_zone
+  region = substr(local.az, 0, length(local.az) - 1)
 
   data_volume = {
     name            = "data"

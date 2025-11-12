@@ -30,7 +30,7 @@ ephemeral "sops_file" "secrets" {
 }
 
 locals {
-  region = data.aws_region.current.name
+  region = data.aws_region.current.region
 
   # We store encrypted secrets as a `local` to be able to derive secret versions.
   encrypted_secrets = yamldecode(file(var.config.secrets_file_path))
@@ -58,7 +58,6 @@ module "vpc" {
 
   name = var.config.name
   cidr = "10.0.0.0/16"
-  region = local.region
 
   azs             = ["${local.region}a", "${local.region}b"]
   private_subnets = ["10.0.1.0/24"]
