@@ -195,6 +195,12 @@ resource "aws_instance" "this" {
   vpc_security_group_ids = [aws_security_group.this.id]
   iam_instance_profile   = module.iam_instance_profile.name
   user_data_base64       = data.cloudinit_config.this.rendered
+
+  lifecycle {
+    replace_triggered_by = [
+      data.cloudinit_config.this.rendered
+    ]
+  }
 }
 
 resource "aws_eip" "this" {

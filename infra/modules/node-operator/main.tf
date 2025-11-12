@@ -81,3 +81,7 @@ module "db" {
     ]))
   })
 }
+
+resource "aws_ec2_instance_connect_endpoint" "this" {
+  subnet_id = module.vpc.private_subnet_objects[0].id
+}
