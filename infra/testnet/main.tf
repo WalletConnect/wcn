@@ -18,6 +18,7 @@ terraform {
 
 provider "aws" {
   region = "eu-central-1"
+  alias = "eu"
 }
 
 provider "sops" {}
@@ -55,6 +56,10 @@ module "eu-central-1" {
     secrets_file_path = "${path.module}/secrets/${each.key}.sops.yaml"
 
     db      = each.value.db
+  }
+
+  providers = {
+    aws = aws.eu
   }
 }
 
