@@ -182,6 +182,10 @@ data "cloudinit_config" "this" {
   }
 }
 
+resource "terraform_data" "userdata_fingerprint" {
+  input = sha256(data.cloudinit_config.this.rendered)
+}
+
 module "iam_instance_profile" {
   source      = "../ec2-ecs-iam-instance-profile"
   name_prefix = local.name
@@ -197,9 +201,7 @@ resource "aws_instance" "this" {
   user_data_base64       = data.cloudinit_config.this.rendered
 
   lifecycle {
-    replace_triggered_by = [
-      data.cloudinit_config.this.rendered
-    ]
+    replace_triggered_by  = [terraform_data.userdata_fingerprint]
   }
 }
 
