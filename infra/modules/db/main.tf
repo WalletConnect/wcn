@@ -164,6 +164,7 @@ resource "aws_security_group" "this" {
     description = "EC2 Instance connect"
     from_port = 22
     to_port = 22
+    protocol    = "tcp"
     cidr_blocks = [var.config.vpc.vpc_cidr_block]
   }
 
