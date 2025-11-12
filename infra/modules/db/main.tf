@@ -202,11 +202,12 @@ module "iam_instance_profile" {
 resource "aws_instance" "this" {
   ami           = data.aws_ssm_parameter.ami_id.value
   instance_type = var.config.ec2_instance_type
-  subnet_id     = var.config.subnet.id
 
-  associate_public_ip_address = false
+  network_interface {
+    device_index         = 0
+    network_interface_id = aws_network_interface.private_eni.id
+  }
 
-  vpc_security_group_ids = [aws_security_group.this.id]
   iam_instance_profile   = module.iam_instance_profile.name
   user_data_base64       = data.cloudinit_config.this.rendered
 
@@ -215,14 +216,19 @@ resource "aws_instance" "this" {
   }
 }
 
-resource "aws_eip" "this" {
-  domain = "vpc"
+resource "aws_network_interface" "this" {
+  subnet_id       = var.config.subnet.id
+  security_groups = [aws_security_group.this.id]
 }
 
-resource "aws_eip_association" "this" {
-  instance_id   = aws_instance.this.id
-  allocation_id = aws_eip.this.id
-}
+# resource "aws_eip" "this" {
+#   domain = "vpc"
+# }
+
+# resource "aws_eip_association" "this" {
+#   instance_id   = aws_instance.this.id
+#   allocation_id = aws_eip.this.id
+# }
 
 resource "aws_ebs_volume" "this" {
   availability_zone = var.config.subnet.availability_zone

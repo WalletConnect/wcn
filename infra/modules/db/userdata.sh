@@ -28,3 +28,7 @@ mkdir -p $MOUNT_POINT
 mount -a
 
 chown 1001:1001 $MOUNT_POINT
+
+# Make sure that EC2 instance connect is installed and running
+dnf install -y ec2-instance-connect
+systemctl restart sshd
