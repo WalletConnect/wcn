@@ -5,9 +5,9 @@ ARG BINARY
 
 WORKDIR /app
 
-COPY target/${TARGET}/release/${BINARY} .
+COPY target/${TARGET}/release/${BINARY} /app/bin
 
-RUN chmod +x ./${BINARY}
+RUN chmod +x /app/bin
 
 USER 1001:1001
-ENTRYPOINT ./${BINARY}
+ENTRYPOINT ./app/bin
