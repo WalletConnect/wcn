@@ -37,7 +37,7 @@ locals {
     ec2_instance_type = "c6g.large"
 
     ebs_volume_size = 50 # GiB
-    ecs_task_container_image = "ghcr.io/walletconnect/wcn-db:efadb307-arm64"
+    ecs_task_container_image = "ghcr.io/walletconnect/wcn-db:fe66cee0-arm64"
     ecs_task_cpu             = 2048
     # 512 MiB are system reserved
     ecs_task_memory = 4096 - 512
