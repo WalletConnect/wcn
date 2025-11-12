@@ -129,7 +129,7 @@ resource "aws_ecs_service" "this" {
 }
 
 data "aws_ssm_parameter" "ami_id" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/amzn2-ami-ecs-hvm-2.0.20251015-x86_64-ebs/image_id"
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/al2023-ami-ecs-hvm-2023.0.20251108-kernel-6.1-arm64"
 }
 
 resource "aws_security_group" "this" {
