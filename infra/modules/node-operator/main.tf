@@ -46,7 +46,7 @@ locals {
 resource "aws_ssm_parameter" "ed25519_secret_key" {
   name             = "${var.config.name}-ed25519-secret-key"
   type             = "SecureString"
-  value_wo         = var.secrets.ed25519_secret_key
+  value_wo         = sops_file.secrets.ed25519_secret_key
   value_wo_version = parseint(substr(sha1(local.encrypted_secrets.ed25519_secret_key), 0, 8), 16)
 }
 
