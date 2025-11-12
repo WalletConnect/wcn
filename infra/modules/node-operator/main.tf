@@ -1,7 +1,7 @@
 variable "config" {
   type = object({
     name    = string
-    peer_id = string
+    secrets_file_path = string
 
     db = object({
       ec2_instance_type = string
@@ -15,34 +15,32 @@ variable "config" {
   })
 }
 
-variable "secrets" {
-  type = object({
-    ed25519_secret_key = string
-  })
-  sensitive = true
-  ephemeral = true
+data "aws_region" "current" {}
+
+ephemeral "sops_file" "secrets" {
+  source_file = var.config.secrets_file_path
 }
 
 locals {
   region = data.aws_region.current.name
+
+  # We store encrypted secrets as a `local` to be able to derive secret versions.
+  # The decrypted secrets are not being stored in the TF state.
+  encrypted_secrets = yamldecode(file(var.config.secrets_file_path))
 
   db = {
     primary_rpc_server_port   = 3000
     secondary_rpc_server_port = 3001
     metrics_server_port       = 3002
   }
-
-  ed25519_secret_key_hash = sha1(var.secrets.ed25519_secret_key)
 }
 
 resource "aws_ssm_parameter" "ed25519_secret_key" {
   name             = "${var.config.name}-ed25519-secret-key"
   type             = "SecureString"
   value_wo         = var.secrets.ed25519_secret_key
-  value_wo_version = parseint(substr(local.ed25519_secret_key_hash, 0, 8), 16)
+  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.ed25519_secret_key), 0, 8), 16)
 }
-
-data "aws_region" "current" {}
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
@@ -66,7 +64,7 @@ module "db" {
 
     secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
     secrets_version = sha1({
-      secret_key = var.secrets.ed25519_secret_key
+      secret_key = var.encrypted_secrets.ed25519_secret_key
     })
   })
 }
