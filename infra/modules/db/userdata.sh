@@ -21,6 +21,7 @@ mkfs.xfs $EBS_DEVICE_PATH
 EBS_DEVICE_UUID="$(blkid -s UUID -o value $EBS_DEVICE_PATH)"
 echo "UUID=$EBS_DEVICE_UUID $MOUNT_POINT xfs defaults,nofail 0 2" >> /etc/fstab
 
+mkdir -p $MOUNT_POINT
 mount -a
 
 chown 1001:1001 $MOUNT_POINT
