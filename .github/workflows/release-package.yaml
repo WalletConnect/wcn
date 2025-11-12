@@ -3,6 +3,9 @@ name: release-package
 on:
   workflow_call:
     inputs:
+      branch:
+        type: string
+        required: true
       package:
         type: string
         required: true
@@ -16,6 +19,10 @@ jobs:
     name: Release ${{ inputs.package }} package
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io

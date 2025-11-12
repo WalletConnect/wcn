@@ -71,16 +71,18 @@ jobs:
 
   release-node-package:
     needs: package-node
-    if: ${{ inputs.wcn-node }}
+    if: ${{ inputs.release && inputs.wcn-node }}
     uses: ./.github/workflows/release-package.yml
     with:
+      branch: ${{ inputs.branch }}
       package: wcn-node
 
   release-db-package:
     needs: package-db
-    if: ${{ inputs.wcn-db }}
+    if: ${{ inputs.release && inputs.wcn-db }}
     uses: ./.github/workflows/release-package.yml
     with:
+      branch: ${{ inputs.branch }}
       package: wcn-db
 
   github-release:
