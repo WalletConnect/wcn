@@ -73,8 +73,8 @@ module "db" {
     subnet = module.vpc.private_subnet_objects[0]
 
     secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
-    secrets_version = sha1({
-      secret_key = local.encrypted_secrets.ed25519_secret_key
-    })
+    secrets_version = sha1(jsonencode([
+      local.encrypted_secrets.ed25519_secret_key
+    ]))
   })
 }
