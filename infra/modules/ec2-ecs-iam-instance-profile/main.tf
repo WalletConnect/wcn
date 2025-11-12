@@ -14,7 +14,7 @@ data "aws_iam_policy_document" "this" {
 
 resource "aws_iam_role" "this" {
   name_prefix        = var.name_prefix
-  assume_role_policy = data.aws_iam_policy_document.ec2_assume.json
+  assume_role_policy = data.aws_iam_policy_document.this.json
 }
 
 resource "aws_iam_role_policy_attachment" "this" {
@@ -29,7 +29,7 @@ resource "aws_iam_role_policy_attachment" "this" {
 
 resource "aws_iam_instance_profile" "this" {
   name_prefix = var.name_prefix
-  role        = aws_iam_role.ecs_instance.name
+  role        = aws_iam_role.this.name
 }
 
 output "name" {
