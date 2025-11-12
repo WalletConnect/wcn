@@ -206,7 +206,7 @@ jobs:
           - arch: arm64
             runs_on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-    uses: ./.github/workflows/package-binary.yml
+    uses: ./.github/workflows/package-binary.yaml
     with:
       branch:  feat/package-workflow
       binary:  wcn_db

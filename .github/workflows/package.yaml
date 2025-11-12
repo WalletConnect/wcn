@@ -37,7 +37,7 @@ jobs:
           - arch: arm64
             runs_on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-    uses: ./.github/workflows/package-binary.yml
+    uses: ./.github/workflows/package-binary.yaml
     with:
       branch:  ${{ inputs.branch }}
       binary:  wcn_node
@@ -59,7 +59,7 @@ jobs:
           - arch: arm64
             runs_on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-    uses: ./.github/workflows/package-binary.yml
+    uses: ./.github/workflows/package-binary.yaml
     with:
       branch:  ${{ inputs.branch }}
       binary:  wcn_db
@@ -72,7 +72,7 @@ jobs:
   release-node-package:
     needs: package-node
     if: ${{ inputs.release && inputs.wcn-node }}
-    uses: ./.github/workflows/release-package.yml
+    uses: ./.github/workflows/release-package.yaml
     with:
       branch: ${{ inputs.branch }}
       package: wcn-node
@@ -80,7 +80,7 @@ jobs:
   release-db-package:
     needs: package-db
     if: ${{ inputs.release && inputs.wcn-db }}
-    uses: ./.github/workflows/release-package.yml
+    uses: ./.github/workflows/release-package.yaml
     with:
       branch: ${{ inputs.branch }}
       package: wcn-db
