@@ -33,8 +33,10 @@ locals {
   region = data.aws_region.current.name
 
   # We store encrypted secrets as a `local` to be able to derive secret versions.
-  # The decrypted secrets are not being stored in the TF state.
   encrypted_secrets = yamldecode(file(var.config.secrets_file_path))
+
+  # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
+  secrets = yamldecode(ephemeral.sops_file.secrets.raw)
 
   db = {
     primary_rpc_server_port   = 3000
@@ -46,7 +48,7 @@ locals {
 resource "aws_ssm_parameter" "ed25519_secret_key" {
   name             = "${var.config.name}-ed25519-secret-key"
   type             = "SecureString"
-  value_wo         = ephemeral.sops_file.secrets.ed25519_secret_key
+  value_wo         = local.secrets.ed25519_secret_key
   value_wo_version = parseint(substr(sha1(local.encrypted_secrets.ed25519_secret_key), 0, 8), 16)
 }
 
@@ -72,7 +74,7 @@ module "db" {
 
     secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
     secrets_version = sha1({
-      secret_key = var.encrypted_secrets.ed25519_secret_key
+      secret_key = local.encrypted_secrets.ed25519_secret_key
     })
   })
 }
