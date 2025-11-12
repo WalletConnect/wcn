@@ -193,3 +193,26 @@ jobs:
         with:
           rust-version: ${{ env.RUST_STABLE }}
           command: check license
+
+  # TODO: Delete
+  package-db:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs_on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    uses: ./.github/workflows/package-binary.yml
+    with:
+      branch:  feat/package-workflow
+      binary:  wcn_db
+      package: wcn-db
+      arch:    ${{ matrix.arch }}
+      runs_on: ${{ matrix.runs_on }}
+      target:  ${{ matrix.target }}
+      rust_toolchain: 1.89.0
+
