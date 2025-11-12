@@ -34,7 +34,7 @@ module "sops-encryption-key" {
 locals {  
   db_config = {
     # 2 vCPU / 4 GiB RAM, arm64
-    ec2_instance_type = "a1.large"
+    ec2_instance_type = "c6g.large"
 
     ebs_volume_size = 50 # GiB
     ecs_task_container_image = "ghcr.io/walletconnect/wcn-db:f5867045-arm64"
