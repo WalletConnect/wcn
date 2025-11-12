@@ -16,6 +16,8 @@ provider "aws" {
   region = "eu-central-1"
 }
 
+provider "sops" {}
+
 module "sops-encryption-key" {
   source = "../modules/sops-encryption-key"
 }
