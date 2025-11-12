@@ -205,7 +205,7 @@ resource "aws_instance" "this" {
 
   network_interface {
     device_index         = 0
-    network_interface_id = aws_network_interface.private_eni.id
+    network_interface_id = aws_network_interface.this.id
   }
 
   iam_instance_profile   = module.iam_instance_profile.name
