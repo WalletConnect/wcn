@@ -8,6 +8,7 @@ variable "config" {
     })
 
     subnet = object({
+      id = string
       availability_zone = string
     })
 
@@ -189,7 +190,7 @@ module "iam_instance_profile" {
 resource "aws_instance" "this" {
   ami           = data.aws_ssm_parameter.ami.value
   instance_type = var.config.ec2_instance_type
-  subnet_id     = var.config.vpc_subnet_id
+  subnet_id     = var.config.subnet.id
 
   vpc_security_group_ids = [aws_security_group.this.id]
   iam_instance_profile   = module.iam_instance_profile.name
