@@ -114,6 +114,10 @@ resource "aws_ecs_task_definition" "this" {
   }
 }
 
+resource "aws_cloudwatch_log_group" "this" {
+  name = "/ecs/${local.name}"
+}
+
 resource "aws_ecs_cluster" "this" {
   name = local.name
 }
