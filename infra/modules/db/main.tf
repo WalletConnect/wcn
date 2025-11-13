@@ -85,7 +85,7 @@ resource "aws_ecs_task_definition" "this" {
         { name = "PRIMARY_RPC_SERVER_PORT", value = tostring(var.config.primary_rpc_server_port) },
         { name = "SECONDARY_RPC_SERVER_PORT", value = tostring(var.config.secondary_rpc_server_port) },
         { name = "METRICS_SERVER_PORT", value = tostring(var.config.metrics_server_port) },
-        { name = "ROCKSDB_DIR", value = "/data" },
+        { name = "ROCKSDB_DIR", value = local.data_volume.container_path },
         { name = "SECRETS_VERSION", value = var.config.secrets_version },
       ]
       secrets = [
