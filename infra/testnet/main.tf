@@ -44,7 +44,8 @@ locals {
   }
 
   eu_operators = {
-    wallet-connect-1 = {
+    wallet-connect = {
+      vpc_cidr_octet = 105 # 10.105.0.0/16
       db = local.db_config
     }
   }
@@ -54,12 +55,10 @@ module "eu-central-1" {
   source = "../modules/node-operator"
   for_each = local.eu_operators
 
-  config = {
+  config = merge(each.value, {
     name    = each.key
     secrets_file_path = "${path.module}/secrets/${each.key}.sops.yaml"
-
-    db      = each.value.db
-  }
+  })
 
   providers = {
     aws = aws.eu

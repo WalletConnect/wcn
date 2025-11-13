@@ -14,6 +14,8 @@ variable "config" {
     name    = string
     secrets_file_path = string
 
+    vpc_cidr_octet = number
+
     db = object({
       ec2_instance_type = string
 
@@ -33,6 +35,7 @@ ephemeral "sops_file" "secrets" {
 }
 
 locals {
+  octet = var.vpc_cidr_octet
   region = data.aws_region.current.region
 
   # We store encrypted secrets as a `local` to be able to derive secret versions.
@@ -52,8 +55,7 @@ resource "aws_ssm_parameter" "ed25519_secret_key" {
   name             = "${var.config.name}-ed25519-secret-key"
   type             = "SecureString"
   value_wo         = local.secrets.ed25519_secret_key
-  # value_wo_version = parseint(substr(sha1(local.encrypted_secrets.ed25519_secret_key), 0, 8), 16)
-  value_wo_version = 0
+  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.ed25519_secret_key), 0, 8), 16)
 }
 
 module "vpc" {
@@ -61,13 +63,13 @@ module "vpc" {
   version = "~> 6.5"
 
   name = var.config.name
-  cidr = "10.0.0.0/16"
+  cidr = "10.${local.octet}.0.0/16"
 
   enable_nat_gateway = true
 
   azs             = ["${local.region}a", "${local.region}b"]
-  private_subnets = ["10.0.1.0/24"]
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"]
+  private_subnets = ["10.${local.octet}.1.0/24"]
+  public_subnets  = ["10.${local.octet}.101.0/24", "10.${local.octet}.102.0/24"]
 }
 
 module "db" {
