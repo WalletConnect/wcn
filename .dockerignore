@@ -1,9 +1,4 @@
 *
-!contracts
-!crates/**
-!src
-!Cargo.toml
-!Cargo.lock
-!build.rs
-!.git
-!VERSION
+
+!target/*/release/wcn_node
+!target/*/release/wcn_db

@@ -1,0 +1,128 @@
+name: package
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        type: string
+        default: "main"
+        required: true
+      wcn-node:
+        type: boolean
+        default: true
+        required: true
+      wcn-db:
+        type: boolean
+        default: false
+        required: true
+      release:
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  package-node:
+    if: ${{ inputs.wcn-node }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs_on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    uses: ./.github/workflows/package-binary.yaml
+    with:
+      branch:  ${{ inputs.branch }}
+      binary:  wcn_node
+      package: wcn-node
+      arch:    ${{ matrix.arch }}
+      runs_on: ${{ matrix.runs_on }}
+      target:  ${{ matrix.target }}
+      rust_toolchain: 1.89.0
+
+  package-db:
+    if: ${{ inputs.wcn-db }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs_on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    uses: ./.github/workflows/package-binary.yaml
+    with:
+      branch:  ${{ inputs.branch }}
+      binary:  wcn_db
+      package: wcn-db
+      arch:    ${{ matrix.arch }}
+      runs_on: ${{ matrix.runs_on }}
+      target:  ${{ matrix.target }}
+      rust_toolchain: 1.89.0
+
+  release-node-package:
+    needs: package-node
+    if: ${{ inputs.release && inputs.wcn-node }}
+    uses: ./.github/workflows/release-package.yaml
+    with:
+      branch: ${{ inputs.branch }}
+      package: wcn-node
+
+  release-db-package:
+    needs: package-db
+    if: ${{ inputs.release && inputs.wcn-db }}
+    uses: ./.github/workflows/release-package.yaml
+    with:
+      branch: ${{ inputs.branch }}
+      package: wcn-db
+
+  github-release:
+    needs: [package-node, package-db]
+    if: ${{ inputs.release }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: bin
+          merge-multiple: true
+
+      - id: generate-changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [[ "$LAST_TAG" ]]; then
+            CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s")
+          else
+            CHANGELOG=$(git log --pretty=format:"* %s")
+          fi
+          echo "changelog=$CHANGELOG" >> $GITHUB_OUTPUT
+
+      - name: push-tag
+        run: |
+          VERSION=$(cat VERSION)
+
+          git tag $VERSION
+          git push origin "$VERSION"
+
+          echo VERSION=$VERSION >> $GITHUB_ENV
+
+      - uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ env.VERSION }}
+          body: ${{ steps.generate-changelog.outputs.changelog }}
+          artifacts: "bin/*"
+          token: ${{ secrets.RELEASE_PAT }}
