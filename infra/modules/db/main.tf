@@ -102,6 +102,7 @@ resource "aws_ecs_task_definition" "this" {
           awslogs-region        = local.region
           awslogs-group         = "/ecs/${local.name}"
           awslogs-stream-prefix = "ecs"
+          awslogs-create-group   = "true"
         }
       }
     }
