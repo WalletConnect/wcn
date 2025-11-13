@@ -39,10 +39,10 @@ locals {
   region = data.aws_region.current.region
 
   # We store encrypted secrets as a `local` to be able to derive secret versions.
-  encrypted_secrets = yamldecode(file(var.config.secrets_file_path))
+  encrypted_secrets = jsondecode(file(var.config.secrets_file_path))
 
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
-  secrets = yamldecode(ephemeral.sops_file.secrets.raw)
+  secrets = jsondecode(ephemeral.sops_file.secrets.raw)
 
   db = {
     primary_rpc_server_port   = 3000
