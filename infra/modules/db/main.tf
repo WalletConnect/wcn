@@ -31,6 +31,10 @@ variable "config" {
   })
 }
 
+data "aws_ssm_parameter" "ami_id" {
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/al2023-ami-ecs-hvm-2023.0.20251108-kernel-6.1-arm64/image_id"
+}
+
 locals {
   name = "${var.config.operator_name}-db"
 
@@ -43,98 +47,6 @@ locals {
     host_path       = "/mnt/data"
     container_path  = "/data"
   }
-}
-
-module "ecs_task_execution_role" {
-  source             = "../ecs-task-execution-role"
-  name_prefix        = local.name
-  ssm_parameter_arns = [var.config.secret_key_arn]
-}
-
-resource "aws_ecs_task_definition" "this" {
-  family                   = local.name
-  requires_compatibilities = ["EC2"]
-  network_mode             = "host"
-  cpu                      = var.config.ecs_task_cpu
-  memory                   = var.config.ecs_task_memory
-  execution_role_arn       = module.ecs_task_execution_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name      = local.name
-      image     = var.config.ecs_task_container_image
-      essential = true
-      portMappings = [
-        {
-          containerPort = var.config.primary_rpc_server_port
-          hostPort      = var.config.primary_rpc_server_port
-          protocol      = "udp"
-        },
-        {
-          containerPort = var.config.secondary_rpc_server_port
-          hostPort      = var.config.secondary_rpc_server_port
-          protocol      = "udp"
-        },
-        {
-          containerPort = var.config.metrics_server_port
-          hostPort      = var.config.metrics_server_port
-          protocol      = "tcp"
-        },
-      ]
-      environment = [
-        { name = "PRIMARY_RPC_SERVER_PORT", value = tostring(var.config.primary_rpc_server_port) },
-        { name = "SECONDARY_RPC_SERVER_PORT", value = tostring(var.config.secondary_rpc_server_port) },
-        { name = "METRICS_SERVER_PORT", value = tostring(var.config.metrics_server_port) },
-        { name = "ROCKSDB_DIR", value = local.data_volume.container_path },
-        { name = "SECRETS_VERSION", value = var.config.secrets_version },
-      ]
-      secrets = [
-        { name = "SECRET_KEY", valueFrom = var.config.secret_key_arn }
-      ]
-      mountPoints = [{
-        sourceVolume  = local.data_volume.name
-        containerPath = local.data_volume.container_path
-        readOnly      = false
-      }]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-region        = local.region
-          awslogs-group         = "/ecs/${local.name}"
-          awslogs-stream-prefix = "ecs"
-          awslogs-create-group   = "true"
-        }
-      }
-    }
-  ])
-
-  volume {
-    name      = local.data_volume.name
-    host_path = local.data_volume.host_path
-  }
-}
-
-resource "aws_cloudwatch_log_group" "this" {
-  name = "/ecs/${local.name}"
-}
-
-resource "aws_ecs_cluster" "this" {
-  name = local.name
-}
-
-resource "aws_ecs_service" "this" {
-  name            = local.name
-  cluster         = aws_ecs_cluster.this.id
-  task_definition = aws_ecs_task_definition.this.arn
-  desired_count   = 1
-  launch_type     = "EC2"
-
-  deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
-}
-
-data "aws_ssm_parameter" "ami_id" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/al2023-ami-ecs-hvm-2023.0.20251108-kernel-6.1-arm64/image_id"
 }
 
 resource "aws_security_group" "this" {
@@ -246,3 +158,92 @@ resource "aws_volume_attachment" "data" {
   volume_id   = aws_ebs_volume.this.id
   instance_id = aws_instance.this.id
 }
+
+module "ecs_task_execution_role" {
+  source             = "../ecs-task-execution-role"
+  name_prefix        = local.name
+  ssm_parameter_arns = [var.config.secret_key_arn]
+}
+
+resource "aws_cloudwatch_log_group" "this" {
+  name = "/ecs/${local.name}"
+}
+
+resource "aws_ecs_task_definition" "this" {
+  family                   = local.name
+  requires_compatibilities = ["EC2"]
+  network_mode             = "host"
+  cpu                      = var.config.ecs_task_cpu
+  memory                   = var.config.ecs_task_memory
+  execution_role_arn       = module.ecs_task_execution_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = local.name
+      image     = var.config.ecs_task_container_image
+      essential = true
+      portMappings = [
+        {
+          containerPort = var.config.primary_rpc_server_port
+          hostPort      = var.config.primary_rpc_server_port
+          protocol      = "udp"
+        },
+        {
+          containerPort = var.config.secondary_rpc_server_port
+          hostPort      = var.config.secondary_rpc_server_port
+          protocol      = "udp"
+        },
+        {
+          containerPort = var.config.metrics_server_port
+          hostPort      = var.config.metrics_server_port
+          protocol      = "tcp"
+        },
+      ]
+      environment = [
+        { name = "PRIMARY_RPC_SERVER_PORT", value = tostring(var.config.primary_rpc_server_port) },
+        { name = "SECONDARY_RPC_SERVER_PORT", value = tostring(var.config.secondary_rpc_server_port) },
+        { name = "METRICS_SERVER_PORT", value = tostring(var.config.metrics_server_port) },
+        { name = "ROCKSDB_DIR", value = local.data_volume.container_path },
+        { name = "SECRETS_VERSION", value = var.config.secrets_version },
+      ]
+      secrets = [
+        { name = "SECRET_KEY", valueFrom = var.config.secret_key_arn }
+      ]
+      mountPoints = [{
+        sourceVolume  = local.data_volume.name
+        containerPath = local.data_volume.container_path
+        readOnly      = false
+      }]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-region        = aws_cloudwatch_log_group.this.region
+          awslogs-group         = aws_cloudwatch_log_group.this.name
+          # awslogs-stream-prefix = "ecs"
+          # awslogs-create-group   = "true"
+        }
+      }
+    }
+  ])
+
+  volume {
+    name      = local.data_volume.name
+    host_path = local.data_volume.host_path
+  }
+}
+
+resource "aws_ecs_cluster" "this" {
+  name = local.name
+}
+
+resource "aws_ecs_service" "this" {
+  name            = local.name
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.this.arn
+  desired_count   = 1
+  launch_type     = "EC2"
+
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
+}
+
