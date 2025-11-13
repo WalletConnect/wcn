@@ -218,6 +218,7 @@ resource "aws_ecs_task_definition" "this" {
         options = {
           awslogs-region        = aws_cloudwatch_log_group.this.region
           awslogs-group         = aws_cloudwatch_log_group.this.name
+          awslogs-stream-prefix = "${local.name}/"
         }
       }
     }
