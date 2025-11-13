@@ -243,6 +243,6 @@ resource "aws_ecs_service" "this" {
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
 
-  depends_on = [aws_instance.this, aws_volume_attachment.this]
+  depends_on = [aws_instance.this, aws_volume_attachment.data]
 }
 
