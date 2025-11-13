@@ -57,7 +57,7 @@ module "eu-central-1" {
 
   config = merge(each.value, {
     name    = each.key
-    secrets_file_path = "${path.module}/secrets/${each.key}.sops.yaml"
+    secrets_file_path = "${path.module}/secrets/${each.key}.sops.json"
   })
 
   providers = {
