@@ -35,7 +35,7 @@ ephemeral "sops_file" "secrets" {
 }
 
 locals {
-  octet = var.vpc_cidr_octet
+  octet = var.config.vpc_cidr_octet
   region = data.aws_region.current.region
 
   # We store encrypted secrets as a `local` to be able to derive secret versions.
