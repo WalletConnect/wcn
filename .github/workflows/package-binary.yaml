@@ -70,9 +70,8 @@ jobs:
 
       - name: Commit hash
         run: |
-          SHA="$(git rev-parse HEAD)"
-          echo "SHA=$SHA" >> $GITHUB_ENV
-          echo "SHA_SHORT=${SHA::8}" >> $GITHUB_ENV
+          SHA_SHORT="$(git rev-parse --short HEAD)"
+          echo "SHA_SHORT=$SHA_SHORT" >> $GITHUB_ENV
 
       - name: Docker tag
         run: echo "TAG=ghcr.io/walletconnect/${PACKAGE}:${SHA_SHORT}-${ARCH}" >> $GITHUB_ENV
