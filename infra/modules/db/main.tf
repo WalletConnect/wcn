@@ -78,7 +78,7 @@ resource "aws_security_group" "this" {
   }
 
   ingress {
-    description = "EC2 Instance connect"
+    description = "EC2 Instance Connect"
     from_port = 22
     to_port = 22
     protocol    = "tcp"
@@ -120,8 +120,7 @@ resource "aws_instance" "this" {
   ami           = data.aws_ssm_parameter.ami_id.value
   instance_type = var.config.ec2_instance_type
 
-  network_interface {
-    device_index         = 0
+  primary_network_interface {
     network_interface_id = aws_network_interface.this.id
   }
 
@@ -219,8 +218,6 @@ resource "aws_ecs_task_definition" "this" {
         options = {
           awslogs-region        = aws_cloudwatch_log_group.this.region
           awslogs-group         = aws_cloudwatch_log_group.this.name
-          # awslogs-stream-prefix = "ecs"
-          # awslogs-create-group   = "true"
         }
       }
     }
@@ -245,5 +242,7 @@ resource "aws_ecs_service" "this" {
 
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
+
+  depends_on = [aws_instance.this, aws_volume_attachment.this]
 }
 
