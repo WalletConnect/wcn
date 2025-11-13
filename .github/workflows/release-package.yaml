@@ -36,7 +36,7 @@ jobs:
           SHA_SHORT=$(git rev-parse --short HEAD)
           VERSION=$(cat VERSION)
 
-          package="${{ matrix.package }}"
+          package="${{ inputs.package }}"
           tag_ver="ghcr.io/walletconnect/${package}:${VERSION}"
           amd="ghcr.io/walletconnect/${package}:${SHA_SHORT}-amd64"
           arm="ghcr.io/walletconnect/${package}:${SHA_SHORT}-arm64"
