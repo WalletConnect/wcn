@@ -84,6 +84,7 @@ where
             config.cluster_key,
             cluster_api_client,
             coordinator_api_client,
+            config.ignored_operators,
         );
 
         let bootstrap_sc = cluster::SmartContract::Static(initial_cluster_view);
@@ -202,6 +203,10 @@ where
             // Iterate over all of the operators to find one with a connected node.
             let result = operators.find_next_operator(|operator| {
                 operator.find_next_node(|node| {
+                    if !node.is_active {
+                        return None;
+                    }
+
                     let connector = node.coordinator_api();
 
                     connector
