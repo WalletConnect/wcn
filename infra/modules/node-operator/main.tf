@@ -113,7 +113,7 @@ module "db" {
 
     secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
     secrets_version = sha1(jsonencode([
-      local.encrypted_secrets.ed25519_secret_key
+      local.encrypted_secrets.ed25519_secret_key,
     ]))
   })
 }
@@ -142,10 +142,10 @@ module "node" {
     smart_contract_encryption_key_arn = aws_ssm_parameter.smart_contract_encryption_key.arn
     rpc_provider_url_arn = aws_ssm_parameter.rpc_provider_url_arn.arn
     secrets_version = sha1(jsonencode([
-      local.encrypted_secrets.ed25519_secret_key
-      local.encrypted_secrets.ecdsa_private_key
-      local.encrypted_secrets.smart_contract_encryption_key
-      local.encrypted_secrets.rpc_provider_url_arn
+      local.encrypted_secrets.ed25519_secret_key,
+      local.encrypted_secrets.ecdsa_private_key,
+      local.encrypted_secrets.smart_contract_encryption_key,
+      local.encrypted_secrets.rpc_provider_url_arn,
     ]))
   })
 }
