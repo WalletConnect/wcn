@@ -146,7 +146,7 @@ module "node" {
       local.encrypted_secrets.ed25519_secret_key,
       local.encrypted_secrets.ecdsa_private_key,
       local.encrypted_secrets.smart_contract_encryption_key,
-      local.encrypted_secrets.rpc_provider_url_arn,
+      local.encrypted_secrets.rpc_provider_url,
     ]))
   })
 }
