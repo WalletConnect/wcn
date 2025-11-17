@@ -13,9 +13,10 @@ variable "config" {
   type = object({
     name    = string
     secrets_file_path = string
+    smart_contract_address = string
 
     vpc_cidr_octet = number
-
+    
     db = object({
       ec2_instance_type = string
 
@@ -25,6 +26,14 @@ variable "config" {
       ecs_task_cpu             = number
       ecs_task_memory          = number
     })
+
+    nodes = list(object({
+      ec2_instance_type = string
+
+      ecs_task_container_image = string
+      ecs_task_cpu             = number
+      ecs_task_memory          = number
+    }))
   })
 }
 
@@ -44,11 +53,8 @@ locals {
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
 
-  db = {
-    primary_rpc_server_port   = 3000
-    secondary_rpc_server_port = 3001
-    metrics_server_port       = 3002
-  }
+  # peer_id is '_unencrypted'
+  peer_id = encrypted_secrets.peer_id 
 }
 
 resource "aws_ssm_parameter" "ed25519_secret_key" {
@@ -56,6 +62,27 @@ resource "aws_ssm_parameter" "ed25519_secret_key" {
   type             = "SecureString"
   value_wo         = local.secrets.ed25519_secret_key
   value_wo_version = parseint(substr(sha1(local.encrypted_secrets.ed25519_secret_key), 0, 8), 16)
+}
+
+resource "aws_ssm_parameter" "ecdsa_private_key" {
+  name             = "${var.config.name}-ecdsa-private-key"
+  type             = "SecureString"
+  value_wo         = local.secrets.ecdsa_private_key
+  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.ecdsa_private_key), 0, 8), 16)
+}
+
+resource "aws_ssm_parameter" "smart_contract_encryption_key" {
+  name             = "${var.config.name}-smart-contract-encryption-key"
+  type             = "SecureString"
+  value_wo         = local.secrets.smart_contract_encryption_key
+  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.smart_contract_encryption_key), 0, 8), 16)
+}
+
+resource "aws_ssm_parameter" "rpc_provider_url" {
+  name             = "${var.config.name}-rpc-provider-url"
+  type             = "SecureString"
+  value_wo         = local.secrets.rpc_provider_url
+  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.rpc_provider_url), 0, 8), 16)
 }
 
 module "vpc" {
@@ -74,15 +101,51 @@ module "vpc" {
 
 module "db" {
   source = "../db"
-  config = merge(var.config.db, local.db, {
+  config = merge(var.config.db, {
     operator_name = var.config.name
 
     vpc    = module.vpc
     subnet = module.vpc.private_subnet_objects[0]
 
+    primary_rpc_server_port   = 3000
+    secondary_rpc_server_port = 3001
+    metrics_server_port       = 3002
+
     secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
     secrets_version = sha1(jsonencode([
       local.encrypted_secrets.ed25519_secret_key
+    ]))
+  })
+}
+
+module "node" {
+  source = "../node"
+  count = length(var.config.nodes)
+  config = merge(var.config.nodes[count.index], local.node, {
+    index = count.index
+    operator_name = var.config.name
+
+    vpc    = module.vpc
+    subnet = module.vpc.public_subnet_objects[length(module.vpc.public_subnet_objects) % length(var.config.nodes)]
+
+    primary_rpc_server_port   = 3010
+    secondary_rpc_server_port = 3011
+    metrics_server_port       = 3012
+
+    database_rpc_server_address = module.db._rpc_server_address
+    database_peer_id = local.peer_id
+    database_primary_rpc_server_port = module.db.primary_rpc_server_port
+    database_secondary_rpc_server_port = module.db.secondary_rpc_server_port
+
+    secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
+    smart_contract_signer_private_key_arn = aws_ssm_parameter.ecdsa_private_key.arn
+    smart_contract_encryption_key_arn = aws_ssm_parameter.smart_contract_encryption_key.arn
+    rpc_provider_url_arn = aws_ssm_parameter.rpc_provider_url_arn.arn
+    secrets_version = sha1(jsonencode([
+      local.encrypted_secrets.ed25519_secret_key
+      local.encrypted_secrets.ecdsa_private_key
+      local.encrypted_secrets.smart_contract_encryption_key
+      local.encrypted_secrets.rpc_provider_url_arn
     ]))
   })
 }

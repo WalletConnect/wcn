@@ -43,10 +43,26 @@ locals {
     ecs_task_memory = 4096 - 512
   }
 
+  node_config = {
+    # 1 vCPU / 2 GiB RAM, arm64
+    ec2_instance_type = "c6g.medium"
+
+    ecs_task_container_image = "ghcr.io/walletconnect/wcn-node:251113.0"
+    ecs_task_cpu             = 1024
+    # 512 MiB are system reserved
+    ecs_task_memory = 2048 - 512
+  }
+
+  eu_smart_contract_address = "0x31551311408e4428b82e1acf042217a5446ff490"
+
   eu_operators = {
     wallet-connect = {
       vpc_cidr_octet = 105 # 10.105.0.0/16
       db = local.db_config
+      nodes = [
+        local.node_config
+        local.node_config
+      ]
     }
   }
 }
@@ -57,6 +73,7 @@ module "eu-central-1" {
 
   config = merge(each.value, {
     name    = each.key
+    smart_contract_address = local.eu_smart_contract_address
     secrets_file_path = "${path.module}/secrets/${each.key}.sops.json"
   })
 

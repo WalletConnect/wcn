@@ -137,15 +137,6 @@ resource "aws_network_interface" "this" {
   security_groups = [aws_security_group.this.id]
 }
 
-# resource "aws_eip" "this" {
-#   domain = "vpc"
-# }
-
-# resource "aws_eip_association" "this" {
-#   instance_id   = aws_instance.this.id
-#   allocation_id = aws_eip.this.id
-# }
-
 resource "aws_ebs_volume" "this" {
   availability_zone = var.config.subnet.availability_zone
   size              = var.config.ebs_volume_size
@@ -247,3 +238,14 @@ resource "aws_ecs_service" "this" {
   depends_on = [aws_instance.this, aws_volume_attachment.data]
 }
 
+output "rpc_server_address" {
+  value = aws_network_interface.primary_ip
+}
+
+output "primary_rpc_server_port" {
+  value = var.config.primary_rpc_server_port
+}
+
+output "secondary_rpc_server_port" {
+  value = var.config.secondary_rpc_server_port
+}
