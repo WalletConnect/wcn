@@ -65,41 +65,41 @@ locals {
       ]
     }
 
-    operator-a = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
+    # operator-a = {
+    #   vpc_cidr_octet = 0 # 10.0.0.0/16
+    #   db = local.db_config
+    #   nodes = [
+    #     local.node_config,
+    #     local.node_config,
+    #   ]
+    # }
 
-    operator-b = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
+    # operator-b = {
+    #   vpc_cidr_octet = 0 # 10.0.0.0/16
+    #   db = local.db_config
+    #   nodes = [
+    #     local.node_config,
+    #     local.node_config,
+    #   ]
+    # }
 
-    operator-c = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
+    # operator-c = {
+    #   vpc_cidr_octet = 0 # 10.0.0.0/16
+    #   db = local.db_config
+    #   nodes = [
+    #     local.node_config,
+    #     local.node_config,
+    #   ]
+    # }
 
-    operator-d = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
+    # operator-d = {
+    #   vpc_cidr_octet = 0 # 10.0.0.0/16
+    #   db = local.db_config
+    #   nodes = [
+    #     local.node_config,
+    #     local.node_config,
+    #   ]
+    # }
   }
 }
 

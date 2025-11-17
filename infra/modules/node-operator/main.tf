@@ -92,7 +92,8 @@ module "vpc" {
   cidr = "10.${local.octet}.0.0/16"
 
   enable_nat_gateway = true
-
+  single_nat_gateway = true
+  
   azs             = ["${local.region}a", "${local.region}b"]
   private_subnets = ["10.${local.octet}.1.0/24"]
   public_subnets  = ["10.${local.octet}.101.0/24", "10.${local.octet}.102.0/24"]
