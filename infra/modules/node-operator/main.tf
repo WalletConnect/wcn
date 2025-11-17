@@ -54,7 +54,7 @@ locals {
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
 
   # peer_id is '_unencrypted'
-  peer_id = encrypted_secrets.peer_id 
+  peer_id = local.encrypted_secrets.peer_id 
 }
 
 resource "aws_ssm_parameter" "ed25519_secret_key" {
