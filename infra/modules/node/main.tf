@@ -149,7 +149,12 @@ resource "aws_eip_association" "this" {
 module "ecs_task_execution_role" {
   source             = "../ecs-task-execution-role"
   name_prefix        = local.name
-  ssm_parameter_arns = [var.config.secret_key_arn]
+  ssm_parameter_arns = [
+    var.config.secret_key_arn,
+    var.config.smart_contract_signer_private_key_arn,
+    var.config.smart_contract_encryption_key_arn,
+    var.config.rpc_provider_url_arn,
+  ]
 }
 
 resource "aws_cloudwatch_log_group" "this" {
