@@ -121,7 +121,7 @@ module "db" {
 module "node" {
   source = "../node"
   count = length(var.config.nodes)
-  config = merge(var.config.nodes[count.index], local.node, {
+  config = merge(var.config.nodes[count.index], {
     index = count.index
     operator_name = var.config.name
 
