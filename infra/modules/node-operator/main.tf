@@ -132,7 +132,7 @@ module "node" {
     secondary_rpc_server_port = 3011
     metrics_server_port       = 3012
 
-    database_rpc_server_address = module.db._rpc_server_address
+    database_rpc_server_address = module.db.rpc_server_address
     database_peer_id = local.peer_id
     database_primary_rpc_server_port = module.db.primary_rpc_server_port
     database_secondary_rpc_server_port = module.db.secondary_rpc_server_port
