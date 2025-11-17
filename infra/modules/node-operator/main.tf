@@ -137,6 +137,8 @@ module "node" {
     database_primary_rpc_server_port = module.db.primary_rpc_server_port
     database_secondary_rpc_server_port = module.db.secondary_rpc_server_port
 
+    smart_contract_address = var.config.smart_contract_address
+
     secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
     smart_contract_signer_private_key_arn = aws_ssm_parameter.ecdsa_private_key.arn
     smart_contract_encryption_key_arn = aws_ssm_parameter.smart_contract_encryption_key.arn
