@@ -130,6 +130,10 @@ resource "aws_instance" "this" {
   lifecycle {
     replace_triggered_by  = [terraform_data.userdata_fingerprint]
   }
+
+  tags = {
+    Name = local.name
+  }
 }
 
 resource "aws_network_interface" "this" {
