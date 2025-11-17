@@ -239,7 +239,7 @@ resource "aws_ecs_service" "this" {
 }
 
 output "rpc_server_address" {
-  value = aws_network_interface.this.primary_ip
+  value = aws_network_interface.this.private_ip
 }
 
 output "primary_rpc_server_port" {
