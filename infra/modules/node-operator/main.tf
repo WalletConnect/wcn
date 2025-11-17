@@ -53,8 +53,7 @@ locals {
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
 
-  # peer_id is '_unencrypted'
-  peer_id = local.encrypted_secrets.peer_id 
+  peer_id = local.encrypted_secrets.peer_id_unencrypted
 }
 
 resource "aws_ssm_parameter" "ed25519_secret_key" {
