@@ -140,7 +140,7 @@ module "node" {
     secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
     smart_contract_signer_private_key_arn = aws_ssm_parameter.ecdsa_private_key.arn
     smart_contract_encryption_key_arn = aws_ssm_parameter.smart_contract_encryption_key.arn
-    rpc_provider_url_arn = aws_ssm_parameter.rpc_provider_url_arn.arn
+    rpc_provider_url_arn = aws_ssm_parameter.rpc_provider_url.arn
     secrets_version = sha1(jsonencode([
       local.encrypted_secrets.ed25519_secret_key,
       local.encrypted_secrets.ecdsa_private_key,
