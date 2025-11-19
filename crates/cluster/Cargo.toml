@@ -51,6 +51,7 @@ aes = { version = "0.8", default-features = false }
 
 # Async
 futures = { workspace = true }
+futures-concurrency = { workspace = true }
 tokio = { workspace = true, features = ["time", "rt", "macros"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 
