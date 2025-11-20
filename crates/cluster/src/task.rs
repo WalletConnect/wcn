@@ -121,7 +121,7 @@ where
         let inner = self.inner.clone();
 
         async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(30));
+            let mut interval = tokio::time::interval(Duration::from_secs(60 * 10));
             interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
             // Delay the first tick.
