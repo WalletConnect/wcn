@@ -15,6 +15,14 @@ on:
         type: boolean
         default: false
         required: true
+      quinn-test-client:
+        type: boolean
+        default: false
+        required: true
+      quinn-test-server:
+        type: boolean
+        default: false
+        required: true
       release:
         type: boolean
         default: false
@@ -69,6 +77,50 @@ jobs:
       target:  ${{ matrix.target }}
       rust_toolchain: 1.89.0
 
+  package-quinn-test-client:
+    if: ${{ inputs.quinn-test-client }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs_on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    uses: ./.github/workflows/package-binary.yaml
+    with:
+      branch:  ${{ inputs.branch }}
+      binary:  quinn_test_client
+      package: quinn_test_client
+      arch:    ${{ matrix.arch }}
+      runs_on: ${{ matrix.runs_on }}
+      target:  ${{ matrix.target }}
+      rust_toolchain: 1.89.0
+
+  package-quinn-test-server:
+    if: ${{ inputs.quinn-test-server }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs_on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    uses: ./.github/workflows/package-binary.yaml
+    with:
+      branch:  ${{ inputs.branch }}
+      binary:  quinn_test_server
+      package: quinn_test_server
+      arch:    ${{ matrix.arch }}
+      runs_on: ${{ matrix.runs_on }}
+      target:  ${{ matrix.target }}
+      rust_toolchain: 1.89.0
+
   release-node-package:
     needs: package-node
     if: ${{ inputs.release && inputs.wcn-node }}
@@ -85,8 +137,24 @@ jobs:
       branch: ${{ inputs.branch }}
       package: wcn-db
 
+  release-quinn-test-client:
+    needs: package-quinn-test-client
+    if: ${{ inputs.release && inputs.quinn-test-client }}
+    uses: ./.github/workflows/release-package.yaml
+    with:
+      branch: ${{ inputs.branch }}
+      package: quinn-test-client
+
+  release-quinn-test-server:
+    needs: package-quinn-test-server
+    if: ${{ inputs.release && inputs.quinn-test-server }}
+    uses: ./.github/workflows/release-package.yaml
+    with:
+      branch: ${{ inputs.branch }}
+      package: quinn-test-server
+
   github-release:
-    needs: [package-node, package-db]
+    needs: [package-node, package-db, package-quinn-test-client, package-quinn-test-server ]
     if: ${{ inputs.release }}
     runs-on: ubuntu-latest
     steps:
