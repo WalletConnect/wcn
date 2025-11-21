@@ -37,8 +37,8 @@ struct Config {
 struct TestServer;
 
 impl StorageApi for TestServer {
-    fn execute(&self, _operation: Operation<'_>) -> impl Future<Output = Result<Output>> + Send {
-        async { Ok(Output::none()) }
+    async fn execute(&self, _operation: Operation<'_>) -> Result<Output> {
+        Ok(Output::none())
     }
 }
 
