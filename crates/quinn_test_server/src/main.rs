@@ -45,7 +45,7 @@ impl StorageApi for TestServer {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
-    let _logger = wcn_logging::Logger::init(wcn_logging::LogFormat::Json, Some("INFO"), None);
+    let _logger = wcn_logging::Logger::init(wcn_logging::LogFormat::Text, Some("INFO"), None);
     let socket = Socket::new(config.port, Priority::High)?;
     let keypair = Keypair::try_from_bytes(&mut include_bytes!("../keypair").to_vec())?.into();
     let shutdown_signal = ShutdownSignal::new();

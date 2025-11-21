@@ -37,7 +37,7 @@ struct Config {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
-    let _logger = wcn_logging::Logger::init(wcn_logging::LogFormat::Json, Some("INFO"), None);
+    let _logger = wcn_logging::Logger::init(wcn_logging::LogFormat::Text, Some("INFO"), None);
     let keypair = Keypair::generate_ed25519();
     let client_config = client::Config {
         keypair,
