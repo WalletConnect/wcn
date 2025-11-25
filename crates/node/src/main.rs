@@ -8,7 +8,6 @@ use {
         net::{Ipv4Addr, SocketAddrV4, TcpListener},
         time::Duration,
     },
-    tap::Tap,
     wc::metrics::exporter_prometheus::{PrometheusBuilder, PrometheusHandle},
     wcn_cluster::smart_contract,
     wcn_node::Config,
