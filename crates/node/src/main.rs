@@ -1,20 +1,17 @@
 use {
     anyhow::Context,
     base64::Engine as _,
-    futures::FutureExt,
-    futures_concurrency::future::Race as _,
     libp2p_identity::Keypair,
     serde::Deserialize,
     std::{
         net::{Ipv4Addr, SocketAddrV4, TcpListener},
-        pin::pin,
         time::Duration,
     },
-    tokio::signal::unix::SignalKind,
+    tap::Tap,
     wc::metrics::exporter_prometheus::{PrometheusBuilder, PrometheusHandle},
     wcn_cluster::smart_contract,
     wcn_node::Config,
-    wcn_rpc::server::ShutdownSignal,
+    wcn_rpc::server::{run_with_signal_handling, ShutdownSignal},
 };
 
 #[global_allocator]
@@ -74,32 +71,12 @@ fn main() -> anyhow::Result<()> {
         .build()
         .unwrap()
         .block_on(async move {
-            enum FutureOutput {
-                CtrlC,
-                SigTerm,
-                Node,
-            }
-
             let shutdown_signal = cfg.shutdown_signal.clone();
-
-            let mut shutdown_fut =
-                pin!(tokio::signal::ctrl_c().map(|_| FutureOutput::CtrlC).fuse());
-
-            let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
-            let mut sigterm_fut = pin!(sigterm.recv().map(|_| FutureOutput::SigTerm).fuse());
-
-            let mut node_fut = pin!(wcn_node::run(cfg).await?.map(|_| FutureOutput::Node));
-
-            loop {
-                match (&mut shutdown_fut, &mut sigterm_fut, &mut node_fut)
-                    .race()
-                    .await
-                {
-                    FutureOutput::CtrlC => shutdown_signal.emit(),
-                    FutureOutput::SigTerm => shutdown_signal.emit(),
-                    FutureOutput::Node => return Ok(()),
-                }
-            }
+            let run_fut = wcn_node::run(cfg)
+                .await?
+                .tap(|_| tracing::info!("node stopped"));
+            let r = run_with_signal_handling::<_, anyhow::Error>(shutdown_signal, run_fut).await?;
+            Ok(r)
         })
 }
 
