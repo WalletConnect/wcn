@@ -75,8 +75,8 @@ fn main() -> anyhow::Result<()> {
             let run_fut = wcn_node::run(cfg)
                 .await?
                 .tap(|_| tracing::info!("node stopped"));
-            let r = run_with_signal_handling::<_, anyhow::Error>(shutdown_signal, run_fut).await?;
-            Ok(r)
+            run_with_signal_handling::<_, anyhow::Error>(shutdown_signal, run_fut).await?;
+            Ok(())
         })
 }
 
