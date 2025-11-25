@@ -191,7 +191,7 @@ module "monitoring" {
     vpc    = module.vpc
     subnet = module.vpc.public_subnet_objects[0]
 
-    admin_password_arn = aws_ssm_parameter.grafana_admin_password.arn
+    admin_password_arn = aws_ssm_parameter.grafana_admin_password[0].arn
     secrets_version = sha1(jsonencode([
       local.encrypted_secrets.grafana_admin_password,
     ]))
