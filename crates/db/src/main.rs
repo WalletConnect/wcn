@@ -1,5 +1,6 @@
 use {
     anyhow::Context as _,
+    futures::FutureExt,
     tap::Tap,
     wc::metrics::exporter_prometheus::PrometheusBuilder,
     wcn_db::{config, Error},
@@ -37,7 +38,7 @@ fn main() -> anyhow::Result<()> {
         .unwrap()
         .block_on(async move {
             let shutdown_signal = cfg.shutdown_signal.clone();
-            let db_src_fut = wcn_db::run(cfg)?.tap(|_| tracing::info!("database server stopped"));
+            let db_src_fut = wcn_db::run(cfg)?.map(|_| tracing::info!("database server stopped"));
             run_with_signal_handling(shutdown_signal, db_src_fut).await
         })
 }

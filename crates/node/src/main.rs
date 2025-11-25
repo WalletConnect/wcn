@@ -1,6 +1,7 @@
 use {
     anyhow::Context,
     base64::Engine as _,
+    futures::FutureExt,
     libp2p_identity::Keypair,
     serde::Deserialize,
     std::{
@@ -74,7 +75,7 @@ fn main() -> anyhow::Result<()> {
             let shutdown_signal = cfg.shutdown_signal.clone();
             let run_fut = wcn_node::run(cfg)
                 .await?
-                .tap(|_| tracing::info!("node stopped"));
+                .map(|_| tracing::info!("node stopped"));
             run_with_signal_handling::<_, anyhow::Error>(shutdown_signal, run_fut).await?;
             Ok(())
         })
