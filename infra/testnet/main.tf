@@ -53,6 +53,27 @@ locals {
     ecs_task_memory = 2048 - 512
   }
 
+
+  # 512 MiB are system reserved
+  monitoring_config = {
+    # 1 vCPU / 2 GiB RAM, arm64
+    ec2_instance_type = "c6g.medium"
+
+    ebs_volume_size = 20 # GiB
+
+    prometheus = {
+      ecs_task_container_image = "docker.io/prom/prometheus:v3.7.3"
+      ecs_task_cpu             = 1024
+      ecs_task_memory = 1024
+    }
+
+    grafana = {
+      ecs_task_container_image = "docker.io/grafana/grafana:12.3"
+      ecs_task_cpu             = 1024
+      ecs_task_memory = 512
+    }
+  }
+
   eu_smart_contract_address = "0x31551311408e4428b82e1acf042217a5446ff490"
 
   eu_operators = {

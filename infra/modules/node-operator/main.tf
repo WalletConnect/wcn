@@ -34,6 +34,24 @@ variable "config" {
       ecs_task_cpu             = number
       ecs_task_memory          = number
     }))
+
+    monitoring = optional(object({
+      ec2_instance_type = string
+
+      ebs_volume_size = number
+
+      prometheus = object({
+        ecs_task_container_image = string
+        ecs_task_cpu             = number
+        ecs_task_memory          = number
+      })
+
+      grafana = object({
+        ecs_task_container_image = string
+        ecs_task_cpu             = number
+        ecs_task_memory          = number
+      })
+    }))
   })
 }
 
@@ -54,6 +72,8 @@ locals {
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
 
   peer_id = local.encrypted_secrets.peer_id_unencrypted
+
+  create_monitoring = try(var.config.monitoring, null) != null ? 1 : 0 
 }
 
 resource "aws_ssm_parameter" "ed25519_secret_key" {
@@ -82,6 +102,15 @@ resource "aws_ssm_parameter" "rpc_provider_url" {
   type             = "SecureString"
   value_wo         = local.secrets.rpc_provider_url
   value_wo_version = parseint(substr(sha1(local.encrypted_secrets.rpc_provider_url), 0, 8), 16)
+}
+
+resource "aws_ssm_parameter" "grafana_admin_password" {
+  count = local.create_monitoring ? 1 : 0
+  
+  name             = "${var.config.name}-grafana-admin-password"
+  type             = "SecureString"
+  value_wo         = local.secrets.grafana_admin_password
+  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.grafana_admin_password), 0, 8), 16)
 }
 
 module "vpc" {
@@ -148,6 +177,23 @@ module "node" {
       local.encrypted_secrets.ecdsa_private_key,
       local.encrypted_secrets.smart_contract_encryption_key,
       local.encrypted_secrets.rpc_provider_url,
+    ]))
+  })
+}
+
+module "monitoring" {
+  source = "../monitoring"
+  count = local.create_monitoring ? 1 : 0
+
+  config = merge(var.config.nodes[count.index], {
+    operator_name = var.config.name
+
+    vpc    = module.vpc
+    subnet = module.vpc.public_subnet_objects[0]
+
+    admin_password_arn = aws_ssm_parameter.grafana_admin_password.arn
+    secrets_version = sha1(jsonencode([
+      local.encrypted_secrets.grafana_admin_password,
     ]))
   })
 }
