@@ -15,19 +15,19 @@ variable "config" {
     ec2_instance_type = string
     ebs_volume_size   = number
 
-    prometheus = {
+    prometheus = object({
       ecs_task_container_image = string
       ecs_task_cpu             = number
       ecs_task_memory          = number
-    }
+    })
 
-    grafana = {
+    grafana = object({
       ecs_task_container_image = string
       ecs_task_cpu             = number
       ecs_task_memory          = number
 
       admin_password_arn = string
-    }
+    })
 
     # Force ECS task update when secrets / config change
     secrets_version = string
