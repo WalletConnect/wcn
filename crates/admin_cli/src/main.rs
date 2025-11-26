@@ -6,6 +6,7 @@ use {
     wcn_cluster::NodeOperator,
 };
 
+mod deploy;
 mod migration;
 mod operator;
 mod view;
@@ -22,6 +23,9 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Deploy a new Cluster
+    Deploy(deploy::Args),
+
     /// Get overview of the Cluster
     View(ClusterArgs),
 
@@ -84,6 +88,7 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Command::Deploy(args) => deploy::execute(args).await,
         Command::View(args) => view::execute(args).await,
         Command::Operator(cmd) => operator::execute(cmd).await,
         Command::Migration(cmd) => migration::execute(cmd).await,
