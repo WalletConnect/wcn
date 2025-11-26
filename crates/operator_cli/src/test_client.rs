@@ -1,6 +1,6 @@
 use {
     anyhow::bail,
-    clap::Parser,
+    clap::Args,
     libp2p_identity::{Keypair, ed25519},
     quinn_proto::{ConnectionStats, FrameStats, PathStats, UdpStats},
     std::{net::SocketAddrV4, str::FromStr, time::Duration},
@@ -10,58 +10,53 @@ use {
     wcn_storage_api::{Namespace, RecordVersion, StorageApi, operation::Del, rpc::DatabaseApi},
 };
 
-#[derive(Clone, Parser)]
-struct Config {
-    #[arg(short = 'c', long, default_value_t = 10)]
-    connection_timeout_secs: u64,
+#[derive(Clone, Copy, Debug, Args)]
+pub struct Command {
+    /// The address of the testing server
+    #[arg(short = 'a', long)]
+    server_address: SocketAddrV4,
 
-    #[arg(short = 'M', long, default_value_t = 1000)]
+    #[arg(short, long, default_value_t = 10_000)]
+    connection_timeout_ms: u64,
+
+    /// Number of connections to run concurrently
+    #[arg(short, long, default_value_t = 100)]
+    num_concurrent_connections: u32,
+
+    /// Number of messages to send sequentially per connection
+    #[arg(short = 'N', long, default_value_t = 1_000)]
+    num_messages_per_connection: u32,
+
+    #[arg(short = 'i', long, default_value_t = 1_000)]
+    reconnect_interval_ms: u64,
+
+    #[arg(short = 'r', long, default_value_t = 10_000)]
     max_concurrent_rpcs: u32,
 
-    #[arg(short = 'i', long, default_value_t = 10)]
-    max_idle_connection_timeout_secs: u64,
-
-    #[arg(short = 'n', long, default_value_t = 100)]
-    num_concurrent_clients: u32,
-
-    #[arg(short = 'm', long, default_value_t = 1_000)]
-    num_messages_per_client: u32,
-
-    #[arg(short = 'r', long, default_value_t = 1)]
-    reconnect_interval_secs: u64,
-
-    #[arg(short = 's', long)]
-    server_address: SocketAddrV4,
+    #[arg(long, default_value_t = 500)]
+    max_idle_connection_timeout_ms: u64,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = Config::parse();
+pub(super) async fn execute(args: Command) -> anyhow::Result<()> {
     let _logger = wcn_logging::Logger::init(wcn_logging::LogFormat::Text, Some("INFO"), None);
     let keypair = Keypair::generate_ed25519();
     let client_config = client::Config {
         keypair,
-        connection_timeout: Duration::from_secs(config.connection_timeout_secs),
-        reconnect_interval: Duration::from_secs(config.reconnect_interval_secs),
-        max_idle_connection_timeout: Duration::from_secs(config.max_idle_connection_timeout_secs),
-        max_concurrent_rpcs: config.max_concurrent_rpcs,
+        connection_timeout: Duration::from_millis(args.connection_timeout_ms),
+        reconnect_interval: Duration::from_millis(args.reconnect_interval_ms),
+        max_idle_connection_timeout: Duration::from_millis(args.max_idle_connection_timeout_ms),
+        max_concurrent_rpcs: args.max_concurrent_rpcs,
         priority: Priority::High,
     };
-    let server_keypair = ed25519::Keypair::try_from_bytes(
-        &mut include_bytes!("../../operator_cli/keypair").to_vec(),
-    )?;
+    let server_keypair =
+        ed25519::Keypair::try_from_bytes(&mut include_bytes!("../keypair").to_vec())?;
     let peer_id = PeerId::from_public_key(&server_keypair.public().into());
     let client = client::Client::new(client_config, wcn_storage_api::rpc::DatabaseApi::new())?;
     let namespace = Namespace::from_str("6b6977696b6977696b6977696b6977696b697769/00")?;
 
     let mut join_set = JoinSet::new();
-    for _id in 0..config.num_concurrent_clients {
-        join_set.spawn(tokio::spawn(run(
-            client.clone(),
-            config.clone(),
-            peer_id,
-            namespace,
-        )));
+    for _id in 0..args.num_concurrent_connections {
+        join_set.spawn(tokio::spawn(run(client.clone(), args, peer_id, namespace)));
     }
     let results = join_set.join_all().await;
     let mut total_successes = 0;
@@ -75,11 +70,12 @@ async fn main() -> anyhow::Result<()> {
     }
     println!("{:#?}", total_connection_stats);
     info!(
-        "total successes:{} failures:{} num_concurrent_clients:{} num_messages_per_client:{}",
+        "total successes:{} failures:{} num_concurrent_connections:{} \
+         num_messages_per_connection:{}",
         total_successes,
         total_failures,
-        config.num_concurrent_clients,
-        config.num_messages_per_client
+        args.num_concurrent_connections,
+        args.num_messages_per_connection
     );
 
     Ok(())
@@ -87,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run(
     client: Client<DatabaseApi>,
-    config: Config,
+    config: Command,
     peer_id: PeerId,
     namespace: Namespace,
 ) -> anyhow::Result<(u32, u32, ConnectionStats)> {
@@ -96,7 +92,7 @@ async fn run(
     let mut failures = 0;
     let mut retries = 10;
     let mut connection_stats = ConnectionStats::default();
-    while successes + failures < config.num_messages_per_client {
+    while successes + failures < config.num_messages_per_connection {
         let Ok(connection) = client.connect(config.server_address, &peer_id, ()).await else {
             retries -= 1;
             if retries == 0 {
@@ -111,7 +107,7 @@ async fn run(
             version: RecordVersion::from_unix_timestamp_micros(0),
             keyspace_version: None,
         };
-        while successes + failures < config.num_messages_per_client {
+        while successes + failures < config.num_messages_per_connection {
             match connection.execute(del.clone().into()).await {
                 Ok(_) => successes += 1,
                 Err(_) => failures += 1,

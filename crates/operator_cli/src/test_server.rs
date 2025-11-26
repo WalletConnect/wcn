@@ -14,7 +14,7 @@ pub struct Command {
     #[arg(short, long)]
     port: u16,
 
-    #[arg(short, long, default_value_t = 10000)]
+    #[arg(short, long, default_value_t = 10_000)]
     connection_timeout_ms: u64,
 
     /// Maximum number of connections accepted in total
@@ -30,7 +30,7 @@ pub struct Command {
     max_connection_rate_per_ip: u32,
 
     /// Maximum number of concurrent rpcs
-    #[arg(short = 'r', long, default_value_t = 10000)]
+    #[arg(short = 'r', long, default_value_t = 10_000)]
     max_concurrent_rpcs: u32,
 
     #[arg(long, default_value_t = 500)]
