@@ -1,10 +1,9 @@
 use {
     anyhow::Context as _,
-    futures::{future::FusedFuture as _, FutureExt as _},
-    std::pin,
-    tokio::signal::unix::SignalKind,
+    futures::FutureExt,
     wc::metrics::exporter_prometheus::PrometheusBuilder,
     wcn_db::{config, Error},
+    wcn_rpc::server::run_with_signal_handling,
 };
 
 #[global_allocator]
@@ -38,32 +37,7 @@ fn main() -> anyhow::Result<()> {
         .unwrap()
         .block_on(async move {
             let shutdown_signal = cfg.shutdown_signal.clone();
-            let mut shutdown_fut = pin::pin!(tokio::signal::ctrl_c().fuse());
-
-            let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
-
-            let db_srv_fut = wcn_db::run(cfg)?;
-            let mut db_srv_fut = pin::pin!(db_srv_fut.fuse());
-
-            loop {
-                tokio::select! {
-                    biased;
-
-                    _ = &mut shutdown_fut, if !shutdown_fut.is_terminated() => {
-                        shutdown_signal.emit();
-                    }
-
-                    _ = sigterm.recv() => {
-                        shutdown_signal.emit();
-                    }
-
-                    _ = &mut db_srv_fut => {
-                        tracing::info!("database server stopped");
-                        break;
-                    }
-                }
-            }
-
-            Ok(())
+            let db_src_fut = wcn_db::run(cfg)?.map(|_| tracing::info!("database server stopped"));
+            run_with_signal_handling(shutdown_signal, db_src_fut).await
         })
 }
