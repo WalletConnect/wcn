@@ -1,7 +1,6 @@
 use {
     anyhow::Context as _,
     futures::FutureExt,
-    tap::Tap,
     wc::metrics::exporter_prometheus::PrometheusBuilder,
     wcn_db::{config, Error},
     wcn_rpc::server::run_with_signal_handling,
