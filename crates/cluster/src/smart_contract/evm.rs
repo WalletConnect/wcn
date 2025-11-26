@@ -120,6 +120,23 @@ impl Deployer<SmartContract> for RpcProvider {
         )
         .await?;
 
+        // Try to make sure that the code is actually there before we return from this
+        // function. We are doing contract calls right after and they fail with
+        // `ZeroData` errors otherwise.
+        for _ in 0..10 {
+            let code = proxy
+                .provider()
+                .get_code_at(*proxy.address())
+                .await
+                .map_err(|err| DeploymentError(format!("Provider::get_code_at: {err:?}")))?;
+
+            if !code.is_empty() {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(500)).await
+        }
+
         Ok(SmartContract {
             signer: self.signer.clone(),
             alloy: bindings::Cluster::new(*proxy.address(), self.alloy.clone()),
