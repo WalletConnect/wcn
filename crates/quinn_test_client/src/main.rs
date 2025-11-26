@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
         priority: Priority::High,
     };
     let server_keypair = ed25519::Keypair::try_from_bytes(
-        &mut include_bytes!("../../quinn_test_server/keypair").to_vec(),
+        &mut include_bytes!("../../operator_cli/keypair").to_vec(),
     )?;
     let peer_id = PeerId::from_public_key(&server_keypair.public().into());
     let client = client::Client::new(client_config, wcn_storage_api::rpc::DatabaseApi::new())?;

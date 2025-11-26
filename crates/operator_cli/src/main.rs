@@ -10,6 +10,7 @@ mod client;
 mod key;
 mod maintenance;
 mod node;
+mod test_server;
 mod view;
 
 type Cluster = wcn_cluster::Cluster<ClusterConfig>;
@@ -42,6 +43,9 @@ enum Command {
     /// Maintenance scheduling
     #[command(subcommand)]
     Maintenance(maintenance::Command),
+
+    /// Starts a test server
+    TestServer(test_server::Command),
 }
 
 #[derive(Debug, Args)]
@@ -99,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Node(cmd) => node::execute(cmd).await?,
         Command::Client(cmd) => client::execute(cmd).await?,
         Command::Maintenance(cmd) => maintenance::execute(cmd).await?,
+        Command::TestServer(cmd) => test_server::execute(cmd).await?,
     }
 
     Ok(())
