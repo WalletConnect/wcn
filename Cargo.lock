@@ -6000,6 +6000,7 @@ dependencies = [
  "derive_more",
  "fpe",
  "futures",
+ "futures-concurrency",
  "indexmap 2.11.4",
  "itertools 0.14.0",
  "libp2p-identity",

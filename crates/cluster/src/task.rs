@@ -7,9 +7,10 @@ use {
         Inner,
         Keyspace,
     },
-    futures::{Stream, StreamExt},
-    std::{pin::pin, sync::Arc, time::Duration},
-    tokio::sync::watch,
+    futures::{FutureExt as _, Stream, StreamExt},
+    futures_concurrency::future::Race as _,
+    std::{future::Future, pin::pin, sync::Arc, time::Duration},
+    tokio::{sync::watch, time::MissedTickBehavior},
     tracing::Instrument,
 };
 
@@ -86,14 +87,20 @@ where
         self.apply_events(events).await
     }
 
-    #[allow(clippy::needless_pass_by_ref_mut)] // otherwise `Steam` is required to be `Sync`
+    #[allow(clippy::needless_pass_by_ref_mut)] // otherwise `Stream` is required to be `Sync`
     async fn apply_events(
         &mut self,
         events: impl Stream<Item = smart_contract::ReadResult<smart_contract::Event>>,
     ) -> Result<()> {
         let mut events = pin!(events);
 
-        while let Some(res) = events.next().await {
+        // Map the result to `None` to match the expected return type from the `events`
+        // stream.
+        let mut invalidation_fut = pin!(self.invalidation_event().map(|_| None));
+
+        // If the invalidation event is triggered, the future will resolve to `None`,
+        // causing exit from the loop.
+        while let Some(res) = (events.next(), &mut invalidation_fut).race().await {
             let event = res?;
             tracing::info!(?event, "received");
 
@@ -106,6 +113,39 @@ where
         }
 
         Ok(())
+    }
+
+    // Polls the smart contract on a specified interval, and resolves if a mismatch
+    // is detected between the local and remote cluster versions.
+    fn invalidation_event(&self) -> impl Future<Output = ()> + Send {
+        let inner = self.inner.clone();
+
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60 * 10));
+            interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+            // Delay the first tick.
+            interval.reset();
+
+            loop {
+                interval.tick().await;
+
+                match inner.smart_contract.cluster_view().await {
+                    Ok(new_view) => {
+                        if inner.view.load().cluster_version != new_view.cluster_version {
+                            wc::metrics::counter!("wcn_node_cluster_view_invalidation")
+                                .increment(1);
+
+                            return;
+                        }
+                    }
+
+                    Err(err) => {
+                        tracing::error!(%err, "Failed to update cluster::View");
+                    }
+                }
+            }
+        }
     }
 }
 
