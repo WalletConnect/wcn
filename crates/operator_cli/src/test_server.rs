@@ -14,19 +14,19 @@ pub struct Command {
     #[arg(short, long)]
     port: u16,
 
-    #[arg(short, long, default_value_t = 10_000)]
+    #[arg(short, long, default_value_t = 2_000)]
     connection_timeout_ms: u64,
 
     /// Maximum number of connections accepted in total
-    #[arg(short, long, default_value_t = 100)]
+    #[arg(short, long, default_value_t = 2000)]
     max_connections: u32,
 
     /// Maximum number of connection accepted per ip
-    #[arg(short = 'M', long, default_value_t = 100)]
+    #[arg(short = 'M', long, default_value_t = 1000)]
     max_connections_per_ip: u32,
 
     /// Maximum connection rate accepted per ip
-    #[arg(short = 'I', long, default_value_t = 100)]
+    #[arg(short = 'I', long, default_value_t = 1000)]
     max_connection_rate_per_ip: u32,
 
     /// Maximum number of concurrent rpcs
