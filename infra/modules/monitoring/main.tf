@@ -72,8 +72,8 @@ resource "aws_security_group" "this" {
 
   ingress {
     description = "Grafana HTTP UI"
-    from_port   = var.config.grafana.http_port
-    to_port     = var.config.grafana.http_port
+    from_port   = local.grafana_port
+    to_port     = local.grafana_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -164,7 +164,7 @@ module "ecs_task_execution_role_grafana" {
   source      = "../ecs-task-execution-role"
   name_prefix = "${local.name}-grafana"
   ssm_parameter_arns = [
-    var.config.grafana_admin_password_arn,
+    var.config.grafana.admin_password_arn,
   ]
 }
 
@@ -186,7 +186,7 @@ resource "aws_ecs_task_definition" "prometheus" {
   network_mode             = "host"
   cpu                      = var.config.prometheus.ecs_task_cpu
   memory                   = var.config.prometheus.ecs_task_memory
-  execution_role_arn       = module.ecs_task_execution_role.arn
+  execution_role_arn       = module.ecs_task_execution_role_prometheus.arn
 
   container_definitions = jsonencode([
     {
@@ -232,7 +232,7 @@ resource "aws_ecs_task_definition" "grafana" {
   network_mode             = "host"
   cpu                      = var.config.grafana.ecs_task_cpu
   memory                   = var.config.grafana.ecs_task_memory
-  execution_role_arn       = module.ecs_task_execution_role.arn
+  execution_role_arn       = module.ecs_task_execution_role_grafana.arn
 
   container_definitions = jsonencode([
     {
