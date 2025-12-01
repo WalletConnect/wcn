@@ -31,6 +31,11 @@ variable "config" {
       # Force ECS task update when secrets / config change
       secrets_version = string
     })
+
+    hosted_zone = object({
+      name = string
+      cloudflare_zone_id = string
+    })
   })
 }
 
@@ -310,3 +315,24 @@ resource "aws_ecs_service" "grafana" {
 
   depends_on = [aws_instance.this, aws_volume_attachment.data]
 }
+
+resource "aws_acm_certificate" "this" {
+  domain_name               = var.hosted_zone.name
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# resource "aws_route53_record" "grafana" {
+#   zone_id = var.hosted_zone.zone_id
+#   name    = var.load_balancers[count.index].name
+#   type    = "A"
+
+#   alias {
+#     name                   = var.load_balancers[count.index].dns_name
+#     zone_id                = var.load_balancers[count.index].zone_id
+#     evaluate_target_health = true
+#   }
+# }
