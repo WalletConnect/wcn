@@ -196,7 +196,8 @@ resource "aws_ecs_task_definition" "prometheus" {
       command = [
         "--config.file=/etc/prometheus/prometheus.yml",
         "--storage.tsdb.path=${local.prometheus_docker_volume.container_path}",
-        "--web.enable-lifecycle"
+        "--web.enable-lifecycle",
+        "--web.listen-address=:${local.prometheus_port}"
       ]
       essential = true
       portMappings = [
