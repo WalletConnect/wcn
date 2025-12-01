@@ -189,7 +189,7 @@ module "monitoring" {
     operator_name = var.config.name
 
     vpc    = module.vpc
-    subnet = module.vpc.public_subnet_objects[0]
+    subnet = module.vpc.private_subnet_objects[0]
 
     grafana = merge(var.config.monitoring.grafana, {
       admin_password_arn = aws_ssm_parameter.grafana_admin_password[0].arn
