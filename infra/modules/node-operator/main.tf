@@ -85,14 +85,14 @@ locals {
   create_monitoring = try(var.config.monitoring, null) != null 
 }
 
-module "secret" {
-  source = "../secret"
-  for_each = local.encrypted_secrets
+# module "secret" {
+#   source = "../secret"
+#   for_each = local.encrypted_secrets
 
-  name = "test-${var.config.name}-ed25519-secret-key"
-  value = local.secrets[each.key]
-  value_encrypted = each.value
-}
+#   name = "test-${var.config.name}-ed25519-secret-key"
+#   value = local.secrets[each.key]
+#   value_encrypted = each.value
+# }
 
 resource "aws_ssm_parameter" "ed25519_secret_key" {
   name             = "${var.config.name}-ed25519-secret-key"
