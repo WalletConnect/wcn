@@ -6188,8 +6188,13 @@ dependencies = [
  "clap",
  "derive_more",
  "libp2p-identity",
+ "quinn-proto",
  "tokio",
+ "tracing",
  "wcn_cluster",
+ "wcn_logging",
+ "wcn_rpc",
+ "wcn_storage_api",
 ]
 
 [[package]]
