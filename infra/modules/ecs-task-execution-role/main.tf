@@ -20,6 +20,7 @@ resource "aws_iam_role_policy_attachment" "AmazonECSTaskExecutionRolePolicy" {
 }
 
 resource "aws_iam_role_policy" "ssm" {
+  count = length(var.ssm_parameter_arns) > 0 ? 1 : 0
   name = "ecs-exec-ssm-kms"
   role = aws_iam_role.this.id
   policy = jsonencode({
