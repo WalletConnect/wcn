@@ -192,6 +192,7 @@ resource "aws_ecs_task_definition" "prometheus" {
     {
       name      = "${local.name}-prometheus"
       image     = var.config.prometheus.ecs_task_container_image
+      user = "1001:1001"
       essential = true
       portMappings = [
         {
@@ -238,6 +239,7 @@ resource "aws_ecs_task_definition" "grafana" {
     {
       name      = "${local.name}-grafana"
       image     = var.config.grafana.ecs_task_container_image
+      user = "1001:1001"
       essential = true
       portMappings = [
         {
