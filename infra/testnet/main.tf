@@ -73,10 +73,8 @@ locals {
       ecs_task_memory = 512
     }
 
-    hosted_zone = {
-      name = "walletconnect.network"
-      cloudflare_zone_id = "tbd"
-    }
+    domain_name = "testnet.walletconnect.network"
+    cloudflare_zone_id = "tbd"
   }
 
   eu_smart_contract_address = "0x31551311408e4428b82e1acf042217a5446ff490"

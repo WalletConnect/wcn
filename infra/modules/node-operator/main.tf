@@ -51,11 +51,11 @@ variable "config" {
         ecs_task_cpu             = number
         ecs_task_memory          = number
       })
+    }))
 
-      hosted_zone = object({
-        name = string
-        cloudflare_zone_id = string
-      })
+    dns = optional(object({
+      domain_name = string
+      cloudflare_zone_id = string
     }))
   })
 }
@@ -71,7 +71,7 @@ locals {
   region = data.aws_region.current.region
 
   # We store encrypted secrets as a `local` to be able to derive secret versions.
-  encrypted_secrets = jsondecode(file(var.config.secrets_file_path))
+  encrypted_secrets = merge(jsondecode(file(var.config.secrets_file_path)), { sops = null })
 
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
@@ -79,6 +79,15 @@ locals {
   peer_id = local.encrypted_secrets.peer_id_unencrypted
 
   create_monitoring = try(var.config.monitoring, null) != null 
+}
+
+module "secret" {
+  source = "../secret"
+  for_each = local.encrypted_secrets
+
+  name = "test-${var.config.name}-ed25519-secret-key"
+  value = local.secrets[each.key]
+  value_encrypted = each.value
 }
 
 resource "aws_ssm_parameter" "ed25519_secret_key" {
@@ -204,6 +213,27 @@ module "monitoring" {
     })
   })
 }
+
+# resource "aws_acm_certificate" "this" {
+#   domain_name               = var.config.hosted_zone.name
+#   validation_method         = "DNS"
+
+#   lifecycle {
+#     create_before_destroy = true
+#   }
+# }
+
+# resource "aws_route53_record" "grafana" {
+#   zone_id = var.hosted_zone.zone_id
+#   name    = var.load_balancers[count.index].name
+#   type    = "A"
+
+#   alias {
+#     name                   = var.load_balancers[count.index].dns_name
+#     zone_id                = var.load_balancers[count.index].zone_id
+#     evaluate_target_health = true
+#   }
+# }
 
 resource "aws_security_group" "ec2_instance_connect_endpoint" {
   name   = "${var.config.name}-ec2-instance-connect-endpoint"
