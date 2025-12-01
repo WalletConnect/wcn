@@ -317,7 +317,7 @@ resource "aws_ecs_service" "grafana" {
 }
 
 resource "aws_acm_certificate" "this" {
-  domain_name               = var.hosted_zone.name
+  domain_name               = var.config.hosted_zone.name
   validation_method         = "DNS"
 
   lifecycle {
