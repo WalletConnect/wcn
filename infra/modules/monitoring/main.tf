@@ -27,10 +27,10 @@ variable "config" {
       ecs_task_memory          = number
 
       admin_password_arn = string
-    })
 
-    # Force ECS task update when secrets / config change
-    secrets_version = string
+      # Force ECS task update when secrets / config change
+      secrets_version = string
+    })
   })
 }
 
@@ -250,7 +250,7 @@ resource "aws_ecs_task_definition" "grafana" {
         { name = "GF_SERVER_HTTP_PORT", value = tostring(local.grafana_port) },
         { name = "GF_PATHS_DATA", value = local.grafana_docker_volume.container_path },
         { name = "GF_SECURITY_ADMIN_USER", value = "admin" },
-        { name = "SECRETS_VERSION", value = var.config.secrets_version },
+        { name = "SECRETS_VERSION", value = var.config.grafana.secrets_version },
       ]
       secrets = [
         { name = "GF_SECURITY_ADMIN_PASSWORD", valueFrom = var.config.grafana.admin_password_arn }
