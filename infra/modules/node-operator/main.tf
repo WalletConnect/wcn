@@ -73,7 +73,7 @@ locals {
 
   peer_id = local.encrypted_secrets.peer_id_unencrypted
 
-  create_monitoring = try(var.config.monitoring, null) != null ? 1 : 0 
+  create_monitoring = try(var.config.monitoring, null) != null 
 }
 
 resource "aws_ssm_parameter" "ed25519_secret_key" {
