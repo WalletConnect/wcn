@@ -51,6 +51,11 @@ variable "config" {
         ecs_task_cpu             = number
         ecs_task_memory          = number
       })
+
+      hosted_zone = object({
+        name = string
+        cloudflare_zone_id = string
+      })
     }))
   })
 }
