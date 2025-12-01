@@ -183,7 +183,8 @@ module "node" {
 
 module "monitoring" {
   source = "../monitoring"
-  count = local.create_monitoring ? 1 : 0
+  # count = local.create_monitoring ? 1 : 0
+  count = 0
 
   config = merge(var.config.monitoring, {
     operator_name = var.config.name
