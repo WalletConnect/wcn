@@ -71,7 +71,11 @@ locals {
   region = data.aws_region.current.region
 
   # We store encrypted secrets as a `local` to be able to derive secret versions.
-  encrypted_secrets = merge(jsondecode(file(var.config.secrets_file_path)), { sops = null })
+  encrypted_secrets = {
+    for k, v in jsondecode(file(var.config.secrets_file_path)):
+    # Remove SOPS metadata
+    k => v if k != "sops"
+  }
 
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
