@@ -63,13 +63,13 @@ locals {
 
     prometheus = {
       ecs_task_container_image = "docker.io/prom/prometheus:v3.7.3"
-      ecs_task_cpu             = 1024
+      ecs_task_cpu             = 512
       ecs_task_memory = 1024
     }
 
     grafana = {
       ecs_task_container_image = "docker.io/grafana/grafana:12.3"
-      ecs_task_cpu             = 1024
+      ecs_task_cpu             = 512
       ecs_task_memory = 512
     }
   }
