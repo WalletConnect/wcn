@@ -193,6 +193,11 @@ resource "aws_ecs_task_definition" "prometheus" {
       name      = "${local.name}-prometheus"
       image     = var.config.prometheus.ecs_task_container_image
       user = "1001:1001"
+      command = [
+        "--config.file=/etc/prometheus/prometheus.yml",
+        "--storage.tsdb.path=${local.prometheus_docker_volume.container_path}",
+        "--web.enable-lifecycle"
+      ]
       essential = true
       portMappings = [
         {
