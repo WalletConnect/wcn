@@ -89,7 +89,7 @@ module "secret" {
   source = "../secret"
   for_each = local.encrypted_secrets
 
-  name = "test-${var.config.name}-ed25519-secret-key"
+  name = "test-${var.config.name}-${each.key}"
   value = local.secrets[each.key]
   value_encrypted = each.value
 }
