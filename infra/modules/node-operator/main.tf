@@ -185,7 +185,7 @@ module "monitoring" {
   source = "../monitoring"
   count = local.create_monitoring ? 1 : 0
 
-  config = merge(var.config.nodes[count.index], {
+  config = merge(var.config.monitoring, {
     operator_name = var.config.name
 
     vpc    = module.vpc
