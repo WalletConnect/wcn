@@ -52,7 +52,7 @@ locals {
   prometheus_docker_volume = {
     name = "prometheus-data"
     host_path = "${local.ebs_data_volume.mount_point}/prometheus"
-    container_path = "data"
+    container_path = "/data"
   }
 
   prometheus_port = 3000
@@ -60,7 +60,7 @@ locals {
   grafana_docker_volume = {
     name = "grafana-data"
     host_path = "${local.ebs_data_volume.mount_point}/grafana"
-    container_path = "data"
+    container_path = "/data"
   }
 
   grafana_port = 9090
