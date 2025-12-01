@@ -10,7 +10,7 @@ variable "value_encrypted" {
   type = string
 }
 
-local {
+locals {
   version = parseint(substr(sha1(var.value_encrypted), 0, 8), 16)
 }
 
