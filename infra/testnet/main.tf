@@ -84,6 +84,7 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      monitoring = local.monitoring_config
     }
 
     operator-a = {
