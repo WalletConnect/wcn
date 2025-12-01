@@ -237,7 +237,7 @@ resource "aws_ecs_task_definition" "grafana" {
   container_definitions = jsonencode([
     {
       name      = "${local.name}-grafana"
-      image     = var.config.grafana.esc_task_container_image
+      image     = var.config.grafana.ecs_task_container_image
       essential = true
       portMappings = [
         {
