@@ -4,6 +4,7 @@ variable "name" {
 
 variable "value" {
   type = string
+  ephemeral = true
 }
 
 variable "value_encrypted" {
