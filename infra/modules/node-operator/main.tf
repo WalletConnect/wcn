@@ -70,7 +70,7 @@ locals {
 module "secret" {
   source = "../secret"
   for_each = {
-    for k, v in encrypted_secrets:
+    for k, v in local.encrypted_secrets:
     # Remove non-encrypted values and SOPS metadata
     k => v if !endswith(k, "_unencrypted") && k != "sops" 
   }
