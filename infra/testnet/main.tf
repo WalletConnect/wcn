@@ -52,6 +52,7 @@ locals {
     cpu_burst = true
     cpu = 2
     memory = 1
+    disk = 20
   }
 
   grafana_config = {
@@ -59,6 +60,7 @@ locals {
     cpu_burst = true
     cpu = 2
     memory = 1
+    disk = 5
   }
 
   eu_smart_contract_address = "0x31551311408e4428b82e1acf042217a5446ff490"
