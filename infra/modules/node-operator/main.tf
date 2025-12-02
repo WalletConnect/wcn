@@ -3,6 +3,9 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
     }
+    cloudflare = {
+      source = "cloudflare/cloudflare"
+    }
     sops = {
       source  = "carlpett/sops"
     }
@@ -12,6 +15,7 @@ terraform {
 variable "config" {
   type = object({
     name    = string
+    domain_name = optional(string)
     secrets_file_path = string
     smart_contract_address = string
 

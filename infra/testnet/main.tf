@@ -9,11 +9,21 @@ terraform {
       source  = "hashicorp/cloudinit"
       version = "~> 2.0"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.0"
+    }
     sops = {
       source  = "carlpett/sops"
       version = "~> 1.3"
     }
   }
+}
+
+variable "cloudflare_wcf_api_token" {
+  type = string
+  sensitive = true
+  ephemeral = true
 }
 
 provider "aws" {
@@ -23,6 +33,10 @@ provider "aws" {
 provider "aws" {
   region = "eu-central-1"
   alias = "eu"
+}
+
+provider "cloudflare" {
+  api_token = var.cloudflare_wcf_api_token
 }
 
 provider "sops" {}
@@ -67,6 +81,7 @@ locals {
 
   eu_operators = {
     wallet-connect = {
+      domain_name = "testnet.walletconnect.network"
       vpc_cidr_octet = 105 # 10.105.0.0/16
       db = local.db_config
       nodes = [
