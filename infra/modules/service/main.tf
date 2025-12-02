@@ -162,7 +162,7 @@ locals {
 resource "aws_volume_attachment" "data" {
   count = var.config.disk != null ? 1 : 0
   device_name = local.ebs_device_path
-  volume_id   = aws_ebs_volume.this.id
+  volume_id   = aws_ebs_volume.this[0].id
   instance_id = aws_instance.this.id
 }
 
@@ -248,8 +248,8 @@ resource "aws_ecs_task_definition" "this" {
         value = v.ssm_parameter_arn
       }]
       mountPoints = [{
-        sourceVolume  = local.data_volume.name
-        containerPath = local.data_volume.container_path
+        sourceVolume  = "data"
+        containerPath = "/data"
         readOnly      = false
       }]
       logConfiguration = {
