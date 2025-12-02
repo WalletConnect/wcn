@@ -260,7 +260,7 @@ resource "cloudflare_dns_record" "ns_delegation" {
 
 module "ssl_certificate" {
   source = "../ssl-certificate"
-  for_each = var.config.dns == null ? {} : toset(["grafana.${var.config.dns.domain_name}"])
+  for_each = toset(var.config.dns == null ? [] : ["grafana.${var.config.dns.domain_name}"])
   domain_name = each.key
   route53_zone = aws_route53_zone.this[0]
 }
