@@ -1,14 +1,15 @@
-variable "config" {
+variable "domain_name" {
+  type = string
+}
+
+variable "route53_zone" {
   type = object({
-    domain_name = string
-    route53_zone = object({
-      zone_id = string
-    })
+    zone_id = string
   })
 }
 
 resource "aws_acm_certificate" "this" {
-  domain_name               = var.config.domain_name
+  domain_name               = var.domain_name
   validation_method         = "DNS"
 
   lifecycle {
@@ -21,7 +22,7 @@ locals {
 }
 
 resource "aws_route53_record" "cert_verification" {
-  zone_id = var.config.route53_zone.zone_id
+  zone_id = var.route53_zone.zone_id
   name    = local.domain_validation.resource_record_name
   type    = local.domain_validation.resource_record_type
   records = [local.domain_validation.resource_record_value]
