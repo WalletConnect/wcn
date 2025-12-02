@@ -151,7 +151,3 @@ module "eu-central-1" {
 output "sops-encryption-key-arn" {
   value = module.sops-encryption-key.arn
 }
-
-output "test" {
-  value = module.eu-central-1["wallet-connect"].test[0].domain_validation_options
-}
