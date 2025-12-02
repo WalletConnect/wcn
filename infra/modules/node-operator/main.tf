@@ -73,16 +73,14 @@ locals {
   # We store encrypted secrets as a `local` to be able to derive secret versions.
   encrypted_secrets = {
     for k, v in jsondecode(file(var.config.secrets_file_path)):
-    # Remove SOPS metadata
-    k => v if k != "sops"
+    # Remove non-encrypted values and SOPS metadata
+    k => v if !endswith(k, "_unencrypted") && k != "sops" 
   }
 
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
 
   peer_id = local.encrypted_secrets.peer_id_unencrypted
-
-  create_monitoring = try(var.config.monitoring, null) != null 
 }
 
 module "secret" {
@@ -121,7 +119,7 @@ module "db" {
     secondary_rpc_server_port = 3001
     metrics_server_port       = 3002
 
-    secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
+    secret_key_arn = module.secret["ed25519_secret_key"].ssm_parameter_arn
     secrets_version = sha1(jsonencode([
       local.encrypted_secrets.ed25519_secret_key,
     ]))
@@ -149,10 +147,10 @@ module "node" {
 
     smart_contract_address = var.config.smart_contract_address
 
-    secret_key_arn = aws_ssm_parameter.ed25519_secret_key.arn
-    smart_contract_signer_private_key_arn = aws_ssm_parameter.ecdsa_private_key.arn
-    smart_contract_encryption_key_arn = aws_ssm_parameter.smart_contract_encryption_key.arn
-    rpc_provider_url_arn = aws_ssm_parameter.rpc_provider_url.arn
+    secret_key_arn = module.secret["ed25519_secret_key"].ssm_parameter_arn
+    smart_contract_signer_private_key_arn = module.secret["ecdsa_private_key"].ssm_parameter_arn
+    smart_contract_encryption_key_arn = module.secret["smart_contract_encryption_key"].ssm_parameter_arn
+    rpc_provider_url_arn = module.secret["rpc_provider_url"].ssm_parameter_arn
     secrets_version = sha1(jsonencode([
       local.encrypted_secrets.ed25519_secret_key,
       local.encrypted_secrets.ecdsa_private_key,
@@ -164,7 +162,7 @@ module "node" {
 
 module "monitoring" {
   source = "../monitoring"
-  count = local.create_monitoring ? 1 : 0
+  count = var.config.monitoring != 0 ? 1 : 0
 
   config = merge(var.config.monitoring, {
     operator_name = var.config.name
@@ -173,7 +171,7 @@ module "monitoring" {
     subnet = module.vpc.private_subnet_objects[0]
 
     grafana = merge(var.config.monitoring.grafana, {
-      admin_password_arn = aws_ssm_parameter.grafana_admin_password[0].arn
+      admin_password_arn = module.secret["grafana_admin_password"].ssm_parameter_arn
       secrets_version = sha1(jsonencode([
         local.encrypted_secrets.grafana_admin_password,
       ]))
