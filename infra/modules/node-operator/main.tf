@@ -277,6 +277,7 @@ resource "cloudflare_dns_record" "ns_delegation" {
 }
 
 resource "aws_acm_certificate" "this" {
+  count = var.config.dns != null ? 1 : 0
   domain_name               = var.config.dns.domain_name
   validation_method         = "DNS"
 
