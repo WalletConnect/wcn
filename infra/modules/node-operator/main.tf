@@ -286,12 +286,16 @@ resource "aws_acm_certificate" "this" {
   }
 }
 
+locals {
+  domain_validation = aws_acm_certificate.this[0].domain_validation_options[var.config.dns.domain_name]
+}
+
 resource "aws_route53_record" "cert_verification" {
   count = var.config.dns != null ? 1 : 0
   zone_id = aws_route53_zone.this[0]
-  name    = aws_acm_certificate.this[0].domain_validation_options[0].resource_record_name
-  type    = aws_acm_certificate.this[0].domain_validation_options[0].resource_record_type
-  records = [aws_acm_certificate.this[0].domain_validation_options[0].resource_record_value]
+  name    = domain_validation.resource_record_name
+  type    = domain_validation.resource_record_type
+  records = [domain_validation.resource_record_value]
   ttl     = 300
 
   allow_overwrite = true
