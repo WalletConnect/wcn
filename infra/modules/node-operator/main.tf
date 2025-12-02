@@ -244,27 +244,6 @@ module "grafana" {
   })
 }
 
-# resource "aws_acm_certificate" "this" {
-#   domain_name               = var.config.hosted_zone.name
-#   validation_method         = "DNS"
-
-#   lifecycle {
-#     create_before_destroy = true
-#   }
-# }
-
-# resource "aws_route53_record" "grafana" {
-#   zone_id = var.hosted_zone.zone_id
-#   name    = var.load_balancers[count.index].name
-#   type    = "A"
-
-#   alias {
-#     name                   = var.load_balancers[count.index].dns_name
-#     zone_id                = var.load_balancers[count.index].zone_id
-#     evaluate_target_health = true
-#   }
-# }
-
 resource "aws_security_group" "ec2_instance_connect_endpoint" {
   name   = "${var.config.name}-ec2-instance-connect-endpoint"
   vpc_id = module.vpc.vpc_id
@@ -295,4 +274,47 @@ resource "cloudflare_dns_record" "ns_delegation" {
   content = aws_route53_zone.this[0].name_servers[count.index]
   type    = "NS"
   ttl     = 1
+}
+
+resource "aws_acm_certificate" "this" {
+  domain_name               = var.config.dns.domain_name
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# resource "aws_route53_record" "cert_verification" {
+#   for_each = { for zone in var.opts.hosted_zones : zone.name => zone }
+
+#   zone_id = each.value.zone_id
+#   name    = local.verification_records[each.key].resource_record_name
+#   type    = local.verification_records[each.key].resource_record_type
+#   records = [local.verification_records[each.key].resource_record_value]
+#   ttl     = 300
+
+#   allow_overwrite = true
+# }
+
+# resource "aws_acm_certificate_validation" "this" {
+#   certificate_arn         = aws_acm_certificate.this.arn
+#   validation_record_fqdns = [for record in aws_route53_record.cert_verification : record.fqdn]
+# }
+
+
+# resource "aws_route53_record" "grafana" {
+#   zone_id = aws_route53_zone.this[0].zone_id
+#   name    = var.load_balancers[count.index].name
+#   type    = "A"
+
+#   alias {
+#     name                   = var.load_balancers[count.index].dns_name
+#     zone_id                = var.load_balancers[count.index].zone_id
+#     evaluate_target_health = true
+#   }
+# }
+
+output "test" {
+  value = aws_acm_certificate.this[0].domain_validation_options
 }
