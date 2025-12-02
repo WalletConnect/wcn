@@ -214,7 +214,8 @@ module "prometheus" {
 }
 
 locals {
-  grafana_port = 9090 
+  grafana_port = 9090
+  grafana_domain_name = "grafana.${var.config.dns.domain_name}"
 }
 
 module "grafana" {
@@ -260,9 +261,21 @@ resource "cloudflare_dns_record" "ns_delegation" {
 
 module "ssl_certificate" {
   source = "../ssl-certificate"
-  for_each = toset(var.config.dns == null ? [] : ["grafana.${var.config.dns.domain_name}"])
+  for_each = toset(var.config.dns == null ? [] : [local.grafana_domain_name])
   domain_name = each.key
   route53_zone = aws_route53_zone.this[0]
+}
+
+module "grafana-https-gateway" {
+  source = "../https-gateway"
+  count = var.config.grafana != null ? 1 : 0
+  service = {
+    name = "${var.name}-grafana"
+    ip = module.grafana[0].private_ip
+    port = local.grafana_port
+  }
+  vpc = module.vpc
+  certificate_arn = module.ssl_certificate[local.grafana_domain_name].arn
 }
 
 resource "aws_security_group" "ec2_instance_connect_endpoint" {
