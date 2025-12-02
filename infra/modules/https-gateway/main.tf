@@ -9,7 +9,7 @@ variable "service" {
 variable "vpc" {
   type = object({
     vpc_id = string
-    public_subnet_ids = list(string)
+    public_subnets = list(string)
   })
 }
 
@@ -18,7 +18,7 @@ variable "certificate_arn" {
 }
 
 locals {
-  name = "${var.service_name}-https-gateway"
+  name = "${var.service.name}-https-gateway"
 }
 
 resource "aws_security_group" "this" {
@@ -52,7 +52,7 @@ resource "aws_lb" "this" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.this.id]
-  subnets            = var.vpc.public_subnet_ids
+  subnets            = var.vpc.public_subnets
 
   enable_deletion_protection = false
 }

@@ -270,7 +270,7 @@ module "grafana-https-gateway" {
   source = "../https-gateway"
   count = var.config.grafana != null ? 1 : 0
   service = {
-    name = "${var.name}-grafana"
+    name = "${var.config.name}-grafana"
     ip = module.grafana[0].private_ip
     port = local.grafana_port
   }
