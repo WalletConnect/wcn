@@ -229,7 +229,7 @@ resource "aws_ecs_task_definition" "this" {
       }])
       secrets = [ for k, v in var.config.secrets : {
         name = k
-        value = v.ssm_parameter_arn
+        valueFrom = v.ssm_parameter_arn
       }]
       mountPoints = [{
         sourceVolume  = "data"
