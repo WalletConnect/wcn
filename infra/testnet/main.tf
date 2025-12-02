@@ -35,6 +35,7 @@ locals {
   db_config = {
     image = "ghcr.io/walletconnect/wcn-db:251113.0"
     cpu = 2
+    cpu_burst = false
     memory = 4
     disk = 50
   }
@@ -42,6 +43,7 @@ locals {
   node_config = {
     image = "ghcr.io/walletconnect/wcn-node:251113.0"
     cpu = 1
+    cpu_burst = false
     memory = 2
   }
 
