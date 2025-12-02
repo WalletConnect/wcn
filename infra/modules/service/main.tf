@@ -31,7 +31,7 @@ variable "config" {
       version = number
     }))
 
-    command = option(list(string))
+    command = optional(list(string))
   })
 }
 
