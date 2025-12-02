@@ -33,98 +33,80 @@ module "sops-encryption-key" {
 
 locals {  
   db_config = {
-    # 2 vCPU / 4 GiB RAM, arm64
-    ec2_instance_type = "c6g.large"
-
-    ebs_volume_size = 50 # GiB
-    ecs_task_container_image = "ghcr.io/walletconnect/wcn-db:251113.0"
-    ecs_task_cpu             = 2048
-    # 512 MiB are system reserved
-    ecs_task_memory = 4096 - 512
+    image = "ghcr.io/walletconnect/wcn-db:251113.0"
+    cpu = 2
+    memory = 4
+    disk = 50
   }
 
   node_config = {
-    # 1 vCPU / 2 GiB RAM, arm64
-    ec2_instance_type = "c6g.medium"
-
-    ecs_task_container_image = "ghcr.io/walletconnect/wcn-node:251113.0"
-    ecs_task_cpu             = 1024
-    # 512 MiB are system reserved
-    ecs_task_memory = 2048 - 512
+    image = "ghcr.io/walletconnect/wcn-node:251113.0"
+    cpu = 1
+    memory = 2
   }
 
+  prometheus_config = {
+    image = "docker.io/prom/prometheus:v3.7.3"
+    cpu = 2
+    cpu_burst = true
+    memory = 1
+  }
 
-  # 512 MiB are system reserved
-  monitoring_config = {
-    # 1 vCPU / 2 GiB RAM, arm64
-    ec2_instance_type = "c6g.medium"
-
-    ebs_volume_size = 20 # GiB
-
-    prometheus = {
-      ecs_task_container_image = "docker.io/prom/prometheus:v3.7.3"
-      ecs_task_cpu             = 512
-      ecs_task_memory = 1024
-    }
-
-    grafana = {
-      ecs_task_container_image = "docker.io/grafana/grafana:12.3"
-      ecs_task_cpu             = 512
-      ecs_task_memory = 512
-    }
-
-    domain_name = "testnet.walletconnect.network"
-    cloudflare_zone_id = "tbd"
+  grafana_config = {
+    image = "docker.io/grafana/grafana:12.3"
+    cpu = 2
+    cpu_burst = true
+    memory = 1
   }
 
   eu_smart_contract_address = "0x31551311408e4428b82e1acf042217a5446ff490"
 
   eu_operators = {
-    # wallet-connect = {
-    #   vpc_cidr_octet = 105 # 10.105.0.0/16
-    #   db = local.db_config
-    #   nodes = [
-    #     local.node_config,
-    #     local.node_config,
-    #   ]
-    #   monitoring = local.monitoring_config
-    # }
+    wallet-connect = {
+      vpc_cidr_octet = 105 # 10.105.0.0/16
+      db = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+      # monitoring = local.monitoring_config
+    }
 
-    # operator-a = {
-    #   vpc_cidr_octet = 0 # 10.0.0.0/16
-    #   db = local.db_config
-    #   nodes = [
-    #     local.node_config,
-    #     local.node_config,
-    #   ]
-    # }
+    operator-a = {
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
 
-    # operator-b = {
-    #   vpc_cidr_octet = 0 # 10.0.0.0/16
-    #   db = local.db_config
-    #   nodes = [
-    #     local.node_config,
-    #     local.node_config,
-    #   ]
-    # }
+    operator-b = {
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
 
-    # operator-c = {
-    #   vpc_cidr_octet = 0 # 10.0.0.0/16
-    #   db = local.db_config
-    #   nodes = [
-    #     local.node_config,
-    #     local.node_config,
-    #   ]
-    # }
+    operator-c = {
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
 
-    # operator-d = {
-    #   vpc_cidr_octet = 0 # 10.0.0.0/16
-    #   db = local.db_config
-    #   nodes = [
-    #     local.node_config,
-    #     local.node_config,
-    #   ]
-    # }
+    operator-d = {
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
   }
 }
 

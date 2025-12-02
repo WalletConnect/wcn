@@ -287,3 +287,7 @@ resource "aws_ecs_service" "this" {
 
   depends_on = [aws_instance.this]
 }
+
+output "private_ip" {
+  value = aws_network_interface.this.private_ip
+}

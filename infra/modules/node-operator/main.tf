@@ -18,44 +18,34 @@ variable "config" {
     vpc_cidr_octet = number
     
     db = object({
-      ec2_instance_type = string
-
-      ebs_volume_size = number
-
-      ecs_task_container_image = string
-      ecs_task_cpu             = number
-      ecs_task_memory          = number
+      image = string
+      cpu = number
+      cpu_burst = bool
+      memory = number
+      disk = number
     })
 
     nodes = list(object({
-      ec2_instance_type = string
-
-      ecs_task_container_image = string
-      ecs_task_cpu             = number
-      ecs_task_memory          = number
+      image = string
+      cpu = number
+      cpu_burst = bool
+      memory = number
     }))
 
-    monitoring = optional(object({
-      ec2_instance_type = string
-
-      ebs_volume_size = number
-
-      prometheus = object({
-        ecs_task_container_image = string
-        ecs_task_cpu             = number
-        ecs_task_memory          = number
-      })
-
-      grafana = object({
-        ecs_task_container_image = string
-        ecs_task_cpu             = number
-        ecs_task_memory          = number
-      })
+    prometheus = optional(object({
+      image = string
+      cpu = number
+      cpu_burst = bool
+      memory = number
+      disk = number
     }))
 
-    dns = optional(object({
-      domain_name = string
-      cloudflare_zone_id = string
+    grafana = optional(object({
+      image = string
+      cpu = number
+      cpu_burst = bool
+      memory = number
+      disk = number
     }))
   })
 }
@@ -107,75 +97,81 @@ module "vpc" {
   public_subnets  = ["10.${local.octet}.101.0/24", "10.${local.octet}.102.0/24"]
 }
 
+locals {
+  db_primary_rpc_server_port = 3000
+  db_secondary_rpc_server_port = 3001
+  db_metrics_server_port = 3002
+}
+
 module "db" {
-  source = "../db"
+  source = "../service"
   config = merge(var.config.db, {
-    operator_name = var.config.name
+    name = "${var.config.name}-db"
 
     vpc    = module.vpc
     subnet = module.vpc.private_subnet_objects[0]
 
-    primary_rpc_server_port   = 3000
-    secondary_rpc_server_port = 3001
-    metrics_server_port       = 3002
+    public_ip = false
 
-    secret_key_arn = module.secret["ed25519_secret_key"].ssm_parameter_arn
-    secrets_version = sha1(jsonencode([
-      local.encrypted_secrets.ed25519_secret_key,
-    ]))
+    ports = [
+      { port = local.db_primary_rpc_server_port, protocol = "udp", internal = true },
+      { port = local.db_secondary_rpc_server_port, protocol = "udp", internal = true },
+      { port = local.db_metrics_server_port, protocol = "tcp", internal = true },
+    ]
+
+    environment = {
+      PRIMARY_RPC_SERVER_PORT = tostring(local.db_primary_rpc_server_port)
+      SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
+      METRICS_SERVER_PORT = tostring(local.db_metrics_server_port)
+      ROCKSDB_DIR = "/data"
+    }
+
+    secrets = {
+      SECRET_KEY = module.secret["ed25519_secret_key"]
+    }
   })
+}
+
+locals {
+  node_primary_rpc_server_port = 3010
+  node_secondary_rpc_server_port = 3011
+  node_metrics_server_port = 3012
 }
 
 module "node" {
-  source = "../node"
+  source = "../service"
   count = length(var.config.nodes)
   config = merge(var.config.nodes[count.index], {
-    index = count.index
-    operator_name = var.config.name
+    name = "${var.config.name}-node-${count.index + 1}"
 
     vpc    = module.vpc
-    subnet = module.vpc.public_subnet_objects[length(module.vpc.public_subnet_objects) % length(var.config.nodes)]
+    subnet = module.vpc.public_subnet_objects[count.index % length(module.vpc.public_subnet_objects)]
 
-    primary_rpc_server_port   = 3010
-    secondary_rpc_server_port = 3011
-    metrics_server_port       = 3012
+    public_ip = true
 
-    database_rpc_server_address = module.db.rpc_server_address
-    database_peer_id = local.peer_id
-    database_primary_rpc_server_port = module.db.primary_rpc_server_port
-    database_secondary_rpc_server_port = module.db.secondary_rpc_server_port
+    ports = [
+      { port = local.node_primary_rpc_server_port, protocol = "udp", internal = false },
+      { port = local.node_secondary_rpc_server_port, protocol = "udp", internal = false },
+      { port = local.node_metrics_server_port, protocol = "tcp", internal = true },
+    ]
 
-    smart_contract_address = var.config.smart_contract_address
+    environment = {
+      PRIMARY_RPC_SERVER_PORT = tostring(local.node_primary_rpc_server_port)
+      SECONDARY_RPC_SERVER_PORT = tostring(local.node_secondary_rpc_server_port)
+      METRICS_SERVER_PORT = tostring(local.node_metrics_server_port)
+      DATABASE_RPC_SERVER_ADDRESS = module.db.private_ip
+      DATABASE_PEER_ID = local.peer_id
+      DATABASE_PRIMARY_RPC_SERVER_PORT = tostring(local.db_primary_rpc_server_port)
+      DATABASE_SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
+      SMART_CONTRACT_ADDRESS = var.config.smart_contract_address
+    }
 
-    secret_key_arn = module.secret["ed25519_secret_key"].ssm_parameter_arn
-    smart_contract_signer_private_key_arn = module.secret["ecdsa_private_key"].ssm_parameter_arn
-    smart_contract_encryption_key_arn = module.secret["smart_contract_encryption_key"].ssm_parameter_arn
-    rpc_provider_url_arn = module.secret["rpc_provider_url"].ssm_parameter_arn
-    secrets_version = sha1(jsonencode([
-      local.encrypted_secrets.ed25519_secret_key,
-      local.encrypted_secrets.ecdsa_private_key,
-      local.encrypted_secrets.smart_contract_encryption_key,
-      local.encrypted_secrets.rpc_provider_url,
-    ]))
-  })
-}
-
-module "monitoring" {
-  source = "../monitoring"
-  count = var.config.monitoring != 0 ? 1 : 0
-
-  config = merge(var.config.monitoring, {
-    operator_name = var.config.name
-
-    vpc    = module.vpc
-    subnet = module.vpc.private_subnet_objects[0]
-
-    grafana = merge(var.config.monitoring.grafana, {
-      admin_password_arn = module.secret["grafana_admin_password"].ssm_parameter_arn
-      secrets_version = sha1(jsonencode([
-        local.encrypted_secrets.grafana_admin_password,
-      ]))
-    })
+    secrets = {
+      SECRET_KEY = module.secret["ed25519_secret_key"]
+      SMART_CONTRACT_SIGNER_PRIVATE_KEY = module.secret["ecdsa_private_key"]
+      SMART_CONTRACT_ENCRYPTION_KEY = module.secret["smart_contract_encryption_key"]
+      RPC_PROVIDER_URL = module.secret["rpc_provider_url"]
+    }
   })
 }
 
