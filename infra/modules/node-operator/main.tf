@@ -286,5 +286,5 @@ data "cloudflare_zone" "selected" {
 }
 
 output "zones" {
-  value = data.cloudflare_zones.selected
+  value = data.cloudflare_zone.selected
 }
