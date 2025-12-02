@@ -43,7 +43,7 @@ locals {
 }
 
 resource "aws_route53_record" "cert_verification" {
-  zone_id = aws_route53_zone.this
+  zone_id = aws_route53_zone.this.zone_id
   name    = local.domain_validation.resource_record_name
   type    = local.domain_validation.resource_record_type
   records = [local.domain_validation.resource_record_value]
