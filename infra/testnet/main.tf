@@ -150,5 +150,5 @@ output "sops-encryption-key-arn" {
 }
 
 output "cf_zones" {
-  valuet = module.eu-central-1["wallet-connect"].zones
+  value = module.eu-central-1["wallet-connect"].zones
 }
