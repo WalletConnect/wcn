@@ -293,9 +293,9 @@ locals {
 resource "aws_route53_record" "cert_verification" {
   count = var.config.dns != null ? 1 : 0
   zone_id = aws_route53_zone.this[0]
-  name    = domain_validation.resource_record_name
-  type    = domain_validation.resource_record_type
-  records = [domain_validation.resource_record_value]
+  name    = local.domain_validation.resource_record_name
+  type    = local.domain_validation.resource_record_type
+  records = [local.domain_validation.resource_record_value]
   ttl     = 300
 
   allow_overwrite = true
