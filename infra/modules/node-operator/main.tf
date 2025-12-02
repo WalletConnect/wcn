@@ -278,7 +278,7 @@ resource "aws_ec2_instance_connect_endpoint" "this" {
   preserve_client_ip = false
 }
 
-data "cloudflare_zones" "selected" {
+data "cloudflare_zone" "selected" {
   count = var.config.domain_name != null ? 1 : 0
   filter = {
     name = var.config.domain_name
