@@ -291,7 +291,7 @@ resource "aws_route53_zone" "this" {
 resource "cloudflare_dns_record" "ns_delegation" {
   count = var.config.dns != null ? 4 : 0
   zone_id = var.config.dns.cloudflare_zone_id
-  name    = var.config.dns.name
+  name    = var.config.dns.domain_name
   content = aws_route53_zone.this[0].name_servers[count.index]
   type    = "NS"
   ttl     = 1
