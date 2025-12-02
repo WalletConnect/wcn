@@ -81,7 +81,6 @@ locals {
 
   eu_operators = {
     wallet-connect = {
-      domain_name = "walletconnect.network"
       vpc_cidr_octet = 105 # 10.105.0.0/16
       db = local.db_config
       nodes = [
@@ -90,6 +89,10 @@ locals {
       ]
       prometheus = local.prometheus_config
       grafana = local.grafana_config
+      dns = {
+        domain_name = "testnet.walletconnect.network"
+        cloudflare_zone_id = "a97af2cd2fd2da7a93413e455ed47f2c"
+      }
     }
 
     operator-a = {
@@ -147,8 +150,4 @@ module "eu-central-1" {
 
 output "sops-encryption-key-arn" {
   value = module.sops-encryption-key.arn
-}
-
-output "cf_zones" {
-  value = module.eu-central-1["wallet-connect"].zones
 }

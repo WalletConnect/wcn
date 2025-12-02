@@ -51,6 +51,11 @@ variable "config" {
       memory = number
       disk = number
     }))
+
+    dns = optional(object({
+      domain_name = string
+      cloudflare_zone_id = string
+    }))
   })
 }
 
@@ -278,11 +283,16 @@ resource "aws_ec2_instance_connect_endpoint" "this" {
   preserve_client_ip = false
 }
 
-data "cloudflare_zones" "selected" {
-  count = var.config.domain_name != null ? 1 : 0
-  name = var.config.domain_name
+resource "aws_route53_zone" "this" {
+  count = var.config.dns != null ? 1 : 0
+  name     = var.config.dns.domain_name
 }
 
-output "zones" {
-  value = data.cloudflare_zones.selected
+resource "cloudflare_dns_record" "ns_delegation" {
+  count = var.config.dns != null ? 4 : 0
+  zone_id = var.config.dns.cloudflare_zone_id
+  name    = var.config.dns.name
+  content = aws_route53_zone.this[0].name_servers[count.index]
+  type    = "NS"
+  ttl     = 1
 }
