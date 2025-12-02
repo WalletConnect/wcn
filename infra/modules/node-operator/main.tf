@@ -244,12 +244,23 @@ module "grafana" {
   })
 }
 
-module "dns" {
-  source = "../dns"
+resource "aws_route53_zone" "this" {
   count = var.config.dns != null ? 1 : 0
-  config = merge(var.config.dns, {
-    
-  })
+  name     = var.config.dns.domain_name
+}
+
+resource "cloudflare_dns_record" "ns_delegation" {
+  count = var.config.dns != null ? 4 : 0
+  zone_id = var.config.dns.cloudflare_zone_id
+  name    = var.config.dns.domain_name
+  content = aws_route53_zone.this[0].name_servers[count.index]
+  type    = "NS"
+  ttl     = 1
+}
+
+module "ssl_certificate" {
+  source = "../ssl-certificate"
+  for_each = var.config.dns == null ? {} : toset(["grafana.${var.config.dns.domain_name}"])
 }
 
 resource "aws_security_group" "ec2_instance_connect_endpoint" {
