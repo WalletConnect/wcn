@@ -153,5 +153,5 @@ output "sops-encryption-key-arn" {
 }
 
 output "test" {
-  value = module.eu-central-1["wallet-connect"].test
+  value = module.eu-central-1["wallet-connect"].test[0].domain_validation_options
 }
