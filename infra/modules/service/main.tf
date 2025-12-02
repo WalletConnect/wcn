@@ -5,7 +5,7 @@ variable "config" {
     cpu = number
     cpu_burst = bool
     memory = number
-    disk = option(number)
+    disk = optional(number)
     public_ip = bool
 
     vpc = object({
@@ -18,11 +18,11 @@ variable "config" {
       availability_zone = string
     })
 
-    ports = list(object{
+    ports = list(object({
       port = number
       protocol = string
       internal = bool 
-    })
+    }))
 
     environment = map(string)
 
