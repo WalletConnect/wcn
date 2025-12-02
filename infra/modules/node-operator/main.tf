@@ -317,5 +317,5 @@ resource "aws_acm_certificate" "this" {
 # }
 
 output "test" {
-  value = aws_acm_certificate.this[0]
+  value = aws_acm_certificate.this
 }
