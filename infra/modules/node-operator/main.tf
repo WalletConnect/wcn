@@ -89,46 +89,9 @@ module "secret" {
   source = "../secret"
   for_each = local.encrypted_secrets
 
-  name = "test-${var.config.name}-${each.key}"
+  name = "${var.config.name}-${each.key}"
   value = local.secrets[each.key]
   value_encrypted = each.value
-}
-
-resource "aws_ssm_parameter" "ed25519_secret_key" {
-  name             = "${var.config.name}-ed25519-secret-key"
-  type             = "SecureString"
-  value_wo         = local.secrets.ed25519_secret_key
-  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.ed25519_secret_key), 0, 8), 16)
-}
-
-resource "aws_ssm_parameter" "ecdsa_private_key" {
-  name             = "${var.config.name}-ecdsa-private-key"
-  type             = "SecureString"
-  value_wo         = local.secrets.ecdsa_private_key
-  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.ecdsa_private_key), 0, 8), 16)
-}
-
-resource "aws_ssm_parameter" "smart_contract_encryption_key" {
-  name             = "${var.config.name}-smart-contract-encryption-key"
-  type             = "SecureString"
-  value_wo         = local.secrets.smart_contract_encryption_key
-  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.smart_contract_encryption_key), 0, 8), 16)
-}
-
-resource "aws_ssm_parameter" "rpc_provider_url" {
-  name             = "${var.config.name}-rpc-provider-url"
-  type             = "SecureString"
-  value_wo         = local.secrets.rpc_provider_url
-  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.rpc_provider_url), 0, 8), 16)
-}
-
-resource "aws_ssm_parameter" "grafana_admin_password" {
-  count = local.create_monitoring ? 1 : 0
-  
-  name             = "${var.config.name}-grafana-admin-password"
-  type             = "SecureString"
-  value_wo         = local.secrets.grafana_admin_password
-  value_wo_version = parseint(substr(sha1(local.encrypted_secrets.grafana_admin_password), 0, 8), 16)
 }
 
 module "vpc" {

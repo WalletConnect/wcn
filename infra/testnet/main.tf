@@ -80,51 +80,51 @@ locals {
   eu_smart_contract_address = "0x31551311408e4428b82e1acf042217a5446ff490"
 
   eu_operators = {
-    wallet-connect = {
-      vpc_cidr_octet = 105 # 10.105.0.0/16
-      db = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-      monitoring = local.monitoring_config
-    }
+    # wallet-connect = {
+    #   vpc_cidr_octet = 105 # 10.105.0.0/16
+    #   db = local.db_config
+    #   nodes = [
+    #     local.node_config,
+    #     local.node_config,
+    #   ]
+    #   monitoring = local.monitoring_config
+    # }
 
-    operator-a = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
+    # operator-a = {
+    #   vpc_cidr_octet = 0 # 10.0.0.0/16
+    #   db = local.db_config
+    #   nodes = [
+    #     local.node_config,
+    #     local.node_config,
+    #   ]
+    # }
 
-    operator-b = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
+    # operator-b = {
+    #   vpc_cidr_octet = 0 # 10.0.0.0/16
+    #   db = local.db_config
+    #   nodes = [
+    #     local.node_config,
+    #     local.node_config,
+    #   ]
+    # }
 
-    operator-c = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
+    # operator-c = {
+    #   vpc_cidr_octet = 0 # 10.0.0.0/16
+    #   db = local.db_config
+    #   nodes = [
+    #     local.node_config,
+    #     local.node_config,
+    #   ]
+    # }
 
-    operator-d = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
+    # operator-d = {
+    #   vpc_cidr_octet = 0 # 10.0.0.0/16
+    #   db = local.db_config
+    #   nodes = [
+    #     local.node_config,
+    #     local.node_config,
+    #   ]
+    # }
   }
 }
 
