@@ -98,34 +98,48 @@ resource "terraform_data" "userdata_fingerprint" {
   input = sha256(data.cloudinit_config.this.rendered)
 }
 
-data "aws_iam_policy_document" "assume_ec2" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-  }
+resource "aws_iam_role" "this" {
+  name = var.config.name
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17",
+    Statement = [
+      { Effect = "Allow", Principal = { Service = "ec2.amazonaws.com" }, Action = "sts:AssumeRole" },
+      { Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" },
+    ]
+  })
 }
 
-resource "aws_iam_role" "instance_profile" {
-  name        = var.config.name
-  assume_role_policy = data.aws_iam_policy_document.assume_ec2.json
-}
-
-resource "aws_iam_role_policy_attachment" "instance_profile" {
+resource "aws_iam_role_policy_attachment" "this" {
   for_each = toset([
     "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role",
     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-    "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+    "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess",
+    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"    
   ])
-  role       = aws_iam_role.instance_profile.name
+  role       = aws_iam_role.this.name
   policy_arn = each.value
+}
+
+resource "aws_iam_role_policy" "ssm" {
+  count = length(var.config.secrets) > 0 ? 1: 0  
+  name = "ecs-exec-ssm-kms"
+  role = aws_iam_role.this.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
+        Resource = [for s in var.config.secrets : s.ssm_parameter_arn]
+      },
+      { Effect = "Allow", Action = ["kms:Decrypt"], Resource = "*" }
+    ]
+  })
 }
 
 resource "aws_iam_instance_profile" "this" {
   name = var.config.name
-  role        = aws_iam_role.instance_profile.name
+  role        = aws_iam_role.this.name
 }
 
 resource "aws_instance" "this" {
@@ -182,36 +196,6 @@ resource "aws_eip_association" "this" {
   allocation_id = aws_eip.this[0].id
 }
 
-resource "aws_iam_role" "ecs_task_execution" {
-  name = var.config.name
-  assume_role_policy = jsonencode({
-    Version   = "2012-10-17",
-    Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "AmazonECSTaskExecutionRolePolicy" {
-  role       = aws_iam_role.ecs_task_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-resource "aws_iam_role_policy" "ecs_task_execution_ssm" {
-  count = length(var.config.secrets) > 0 ? 1: 0  
-  name = "ecs-exec-ssm-kms"
-  role = aws_iam_role.ecs_task_execution.id
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
-        Resource = [for s in var.config.secrets : s.ssm_parameter_arn]
-      },
-      { Effect = "Allow", Action = ["kms:Decrypt"], Resource = "*" }
-    ]
-  })
-}
-
 resource "aws_cloudwatch_log_group" "this" {
   name = "/ecs/${var.config.name}"
 }
@@ -220,7 +204,7 @@ resource "aws_ecs_task_definition" "this" {
   family                   = var.config.name
   requires_compatibilities = ["EC2"]
   network_mode             = "host"
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  execution_role_arn       = aws_iam_role.this.arn
 
   container_definitions = jsonencode([
     {
