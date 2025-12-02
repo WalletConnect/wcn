@@ -81,7 +81,7 @@ locals {
 
   eu_operators = {
     wallet-connect = {
-      domain_name = "testnet.walletconnect.network"
+      domain_name = "walletconnect.network"
       vpc_cidr_octet = 105 # 10.105.0.0/16
       db = local.db_config
       nodes = [
