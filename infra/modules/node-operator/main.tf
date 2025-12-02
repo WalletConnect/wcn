@@ -60,22 +60,20 @@ locals {
   octet = var.config.vpc_cidr_octet
   region = data.aws_region.current.region
 
-  # We store encrypted secrets as a `local` to be able to derive secret versions.
-  encrypted_secrets = {
-    for k, v in jsondecode(file(var.config.secrets_file_path)):
-    # Remove non-encrypted values and SOPS metadata
-    k => v if !endswith(k, "_unencrypted") && k != "sops" 
-  }
+  encrypted_secrets = jsondecode(file(var.config.secrets_file_path))
+  peer_id = local.encrypted_secrets.peer_id_unencrypted
 
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
-
-  peer_id = local.encrypted_secrets.peer_id_unencrypted
 }
 
 module "secret" {
   source = "../secret"
-  for_each = local.encrypted_secrets
+  for_each = {
+    for k, v in encrypted_secrets:
+    # Remove non-encrypted values and SOPS metadata
+    k => v if !endswith(k, "_unencrypted") && k != "sops" 
+  }
 
   name = "${var.config.name}-${each.key}"
   value = local.secrets[each.key]
