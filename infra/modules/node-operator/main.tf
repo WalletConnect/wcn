@@ -277,3 +277,14 @@ resource "aws_ec2_instance_connect_endpoint" "this" {
   security_group_ids = [aws_security_group.ec2_instance_connect_endpoint.id]
   preserve_client_ip = false
 }
+
+data "cloudflare_zones" "selected" {
+  count = var.config.domain_name != null ? 1 : 0
+  filter {
+    name = var.config.domain_name
+  }
+}
+
+output "zones" {
+  value = cloudflare_zones.selected
+}
