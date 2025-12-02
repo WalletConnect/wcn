@@ -244,6 +244,14 @@ module "grafana" {
   })
 }
 
+module "dns" {
+  source = "../dns"
+  count = var.config.dns != null ? 1 : 0
+  config = merge(var.config.dns, {
+    
+  })
+}
+
 resource "aws_security_group" "ec2_instance_connect_endpoint" {
   name   = "${var.config.name}-ec2-instance-connect-endpoint"
   vpc_id = module.vpc.vpc_id
@@ -261,59 +269,3 @@ resource "aws_ec2_instance_connect_endpoint" "this" {
   security_group_ids = [aws_security_group.ec2_instance_connect_endpoint.id]
   preserve_client_ip = false
 }
-
-resource "aws_route53_zone" "this" {
-  count = var.config.dns != null ? 1 : 0
-  name     = var.config.dns.domain_name
-}
-
-resource "cloudflare_dns_record" "ns_delegation" {
-  count = var.config.dns != null ? 4 : 0
-  zone_id = var.config.dns.cloudflare_zone_id
-  name    = var.config.dns.domain_name
-  content = aws_route53_zone.this[0].name_servers[count.index]
-  type    = "NS"
-  ttl     = 1
-}
-
-resource "aws_acm_certificate" "this" {
-  count = var.config.dns != null ? 1 : 0
-  domain_name               = var.config.dns.domain_name
-  validation_method         = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-locals {
-  domain_validation = aws_acm_certificate.this[0].domain_validation_options[var.config.dns.domain_name]
-}
-
-resource "aws_route53_record" "cert_verification" {
-  count = var.config.dns != null ? 1 : 0
-  zone_id = aws_route53_zone.this[0]
-  name    = local.domain_validation.resource_record_name
-  type    = local.domain_validation.resource_record_type
-  records = [local.domain_validation.resource_record_value]
-  ttl     = 300
-
-  allow_overwrite = true
-}
-
-resource "aws_acm_certificate_validation" "this" {
-  certificate_arn         = aws_acm_certificate.this[0].arn
-  validation_record_fqdns = [aws_route53_record.cert_verification[0].fqdn]
-}
-
-# resource "aws_route53_record" "grafana" {
-#   zone_id = aws_route53_zone.this[0].zone_id
-#   name    = var.load_balancers[count.index].name
-#   type    = "A"
-
-#   alias {
-#     name                   = var.load_balancers[count.index].dns_name
-#     zone_id                = var.load_balancers[count.index].zone_id
-#     evaluate_target_health = true
-#   }
-# }
