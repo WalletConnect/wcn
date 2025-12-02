@@ -265,8 +265,10 @@ resource "aws_ecs_task_definition" "this" {
 
   dynamic volume {
     for_each = var.config.disk != 0 ? { "data" = "/mnt/data" } : {}
-    name      = each.key
-    host_path = each.value
+    content = {
+      name      = each.key
+      host_path = each.value   
+    }
   }
 }
 
