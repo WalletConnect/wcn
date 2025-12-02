@@ -34,30 +34,30 @@ module "sops-encryption-key" {
 locals {  
   db_config = {
     image = "ghcr.io/walletconnect/wcn-db:251113.0"
-    cpu = 2
     cpu_burst = false
+    cpu = 2
     memory = 4
     disk = 50
   }
 
   node_config = {
     image = "ghcr.io/walletconnect/wcn-node:251113.0"
-    cpu = 1
     cpu_burst = false
+    cpu = 1
     memory = 2
   }
 
   prometheus_config = {
     image = "docker.io/prom/prometheus:v3.7.3"
-    cpu = 2
     cpu_burst = true
+    cpu = 2
     memory = 1
   }
 
   grafana_config = {
     image = "docker.io/grafana/grafana:12.3"
-    cpu = 2
     cpu_burst = true
+    cpu = 2
     memory = 1
   }
 
@@ -71,7 +71,8 @@ locals {
         local.node_config,
         local.node_config,
       ]
-      # monitoring = local.monitoring_config
+      prometheus = local.prometheus_config
+      grafana = local.grafana_config
     }
 
     operator-a = {

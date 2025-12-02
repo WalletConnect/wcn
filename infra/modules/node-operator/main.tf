@@ -19,31 +19,31 @@ variable "config" {
     
     db = object({
       image = string
-      cpu = number
       cpu_burst = bool
+      cpu = number
       memory = number
       disk = number
     })
 
     nodes = list(object({
       image = string
-      cpu = number
       cpu_burst = bool
+      cpu = number
       memory = number
     }))
 
     prometheus = optional(object({
       image = string
-      cpu = number
       cpu_burst = bool
+      cpu = number
       memory = number
       disk = number
     }))
 
     grafana = optional(object({
       image = string
-      cpu = number
       cpu_burst = bool
+      cpu = number
       memory = number
       disk = number
     }))
@@ -169,6 +169,68 @@ module "node" {
       SMART_CONTRACT_SIGNER_PRIVATE_KEY = module.secret["ecdsa_private_key"]
       SMART_CONTRACT_ENCRYPTION_KEY = module.secret["smart_contract_encryption_key"]
       RPC_PROVIDER_URL = module.secret["rpc_provider_url"]
+    }
+  })
+}
+
+locals {
+  prometheus_port = 3000 
+}
+
+module "prometheus" {
+  source = "../service"
+  count = var.config.prometheus != null ? 1 : 0
+  config = merge(var.config.prometheus, {
+    name = "${var.config.name}-prometheus"
+
+    vpc    = module.vpc
+    subnet = module.vpc.private_subnet_objects[0]
+
+    public_ip = false
+
+    ports = [
+      { port = local.prometheus_port, protocol = "tcp", internal = true },
+    ]
+
+    environment = {}
+    secrets = {}
+
+    command = [
+      "--config.file=/etc/prometheus/prometheus.yml",
+      "--storage.tsdb.path=/data",
+      "--web.enable-lifecycle",
+      "--web.listen-address=:${local.prometheus_port}"
+    ]
+  })
+}
+
+locals {
+  grafana_port = 9090 
+}
+
+module "grafana" {
+  source = "../service"
+  count = var.config.grafana != null ? 1 : 0
+  config = merge(var.config.grafana, {
+    name = "${var.config.name}-grafana"
+
+    vpc    = module.vpc
+    subnet = module.vpc.private_subnet_objects[0]
+
+    public_ip = false
+
+    ports = [
+      { port = local.grafana_port, protocol = "tcp", internal = true },
+    ]
+
+    environment = {
+      GF_SERVER_HTTP_PORT = tostring(local.grafana_port)
+      GF_PATHS_DATA = "/data"
+      GF_SECURITY_ADMIN_USER = "admin"
+    }
+
+    secrets = {
+      GF_SECURITY_ADMIN_PASSWORD = module.secret["grafana_admin_password"]
     }
   })
 }

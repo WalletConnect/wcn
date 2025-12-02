@@ -2,8 +2,8 @@ variable "config" {
   type = object({
     name = string
     image = string
-    cpu = number
     cpu_burst = bool
+    cpu = number
     memory = number
     disk = optional(number)
     public_ip = bool
@@ -30,6 +30,8 @@ variable "config" {
       ssm_parameter_arn = string
       version = number
     }))
+
+    command = option(list(string))
   })
 }
 
@@ -210,6 +212,8 @@ resource "aws_ecs_task_definition" "this" {
     {
       name      = var.config.name
       image     = var.config.image
+      user = "1001:1001"
+      command = var.config.command
       # Make sure that task doesn't require all the available memory of the instance.
       # Usually around 200-300 MBs are being used by the OS.
       # The task will be able to use more than the specified amount.
