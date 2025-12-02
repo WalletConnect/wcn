@@ -286,23 +286,21 @@ resource "aws_acm_certificate" "this" {
   }
 }
 
-# resource "aws_route53_record" "cert_verification" {
-#   for_each = { for zone in var.opts.hosted_zones : zone.name => zone }
+resource "aws_route53_record" "cert_verification" {
+  count = var.config.dns != null ? 1 : 0
+  zone_id = aws_route53_zone.this[0]
+  name    = aws_acm_certificate.this[0].resource_record_name
+  type    = aws_acm_certificate.this[0].resource_record_type
+  records = [aws_acm_certificate.this[0].resource_record_value]
+  ttl     = 300
 
-#   zone_id = each.value.zone_id
-#   name    = local.verification_records[each.key].resource_record_name
-#   type    = local.verification_records[each.key].resource_record_type
-#   records = [local.verification_records[each.key].resource_record_value]
-#   ttl     = 300
+  allow_overwrite = true
+}
 
-#   allow_overwrite = true
-# }
-
-# resource "aws_acm_certificate_validation" "this" {
-#   certificate_arn         = aws_acm_certificate.this.arn
-#   validation_record_fqdns = [for record in aws_route53_record.cert_verification : record.fqdn]
-# }
-
+resource "aws_acm_certificate_validation" "this" {
+  certificate_arn         = aws_acm_certificate.this[0].arn
+  validation_record_fqdns = [aws_route53_record.cert_verification[0].fqdn]
+}
 
 # resource "aws_route53_record" "grafana" {
 #   zone_id = aws_route53_zone.this[0].zone_id
@@ -315,7 +313,3 @@ resource "aws_acm_certificate" "this" {
 #     evaluate_target_health = true
 #   }
 # }
-
-output "test" {
-  value = aws_acm_certificate.this
-}
