@@ -306,8 +306,8 @@ resource "cloudflare_dns_record" "ns_delegation" {
 module "ssl_certificate" {
   source = "../ssl-certificate"
   for_each = toset(var.config.dns == null ? [] : concat(
-    var.config.prometheus == null ? [] : [local.prometheus_domain_name]
-    var.config.grafana == null ? [] : [local.grafana_domain_name]
+    var.config.prometheus == null ? [] : [local.prometheus_domain_name],
+    var.config.grafana == null ? [] : [local.grafana_domain_name],
   ))
   domain_name = each.key
   route53_zone = aws_route53_zone.this[0]
