@@ -280,7 +280,7 @@ module "grafana_prometheus_datasource_config" {
       basicAuth = true
       basicAuthUser = "grafana"
       secureJsonData = {
-        basicAuthPassword = local.grafana_prometheus_file_path
+        basicAuthPassword = local.grafana_prometheus_password_file_path
       }
     }]
   })
