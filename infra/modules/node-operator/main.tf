@@ -187,7 +187,7 @@ locals {
 }
 
 module "prometheus-config" {
-  source = "../secret-config"
+  source = "../secret"
   count = var.config.prometheus == null ? 0 : 1
   name = "${var.config.name}-prometheus-config"
   value = yamlencode({
@@ -205,7 +205,7 @@ module "prometheus-config" {
 }
 
 module "prometheus-web-config" {
-  source = "../secret-config"
+  source = "../secret-template"
   count = var.config.prometheus == null ? 0 : 1
   name = "${var.config.name}-prometheus-web-config"
   template = yamlencode({
