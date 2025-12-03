@@ -79,13 +79,10 @@ locals {
 
 module "secret" {
   source = "../secret"
-  for_each = toset([
-    "ecdsa_private_key",
-    "ed25519_secret_key",
-    "smart_contract_encryption_key",
-    "rpc_provider_url",
-    "grafana_admin_password",
-  ])
+  for_each = toset(concat([
+    ["ecdsa_private_key", "ed25519_secret_key", "smart_contract_encryption_key", "rpc_provider_url"],
+    var.config.grafana == null ? [] : ["grafana_admin_password"]
+  ]))
 
   name = "${var.config.name}-${each.key}"
   ephemeral_value = local.secrets[each.key]
@@ -191,6 +188,7 @@ locals {
 
 module "prometheus-config" {
   source = "../secret"
+  count = var.config.prometheus == null ? 0 : 1
   name = "${var.config.name}-prometheus-config"
   value = yamlencode({
     scrape_configs = [{
@@ -208,6 +206,7 @@ module "prometheus-config" {
 
 module "prometheus-web-config" {
   source = "../secret"
+  count = var.config.prometheus == null ? 0 : 1
   name = "${var.config.name}-prometheus-web-config"
   template = yamlencode({
     basic_auth_users = {
