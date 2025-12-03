@@ -245,7 +245,7 @@ module "prometheus" {
     entry_point = ["/bin/sh", "-c"]
     command = [<<-CMD
       printenv CONFIG > /tmp/prometheus.yml && \
-      printenv WEB_CONFIG > /etc/web.yml && \
+      printenv WEB_CONFIG > /tmp/web.yml && \
       exec /bin/prometheus \
       --config.file=/tmp/prometheus.yml \
       --web.config.file=/tmp/web.yml \
