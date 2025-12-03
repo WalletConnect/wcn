@@ -191,6 +191,7 @@ locals {
 
 module "prometheus-config" {
   source = "../secret"
+  name = "${var.config.name}-prometheus-config"
   value = yamlencode({
     scrape_configs = [{
         job_name = local.region_prefix
@@ -207,6 +208,7 @@ module "prometheus-config" {
 
 module "prometheus-web-config" {
   source = "../secret"
+  name = "${var.config.name}-prometheus-web-config"
   template = yamlencode({
     basic_auth_users = {
       grafana = "$${grafana_password_hash}"
