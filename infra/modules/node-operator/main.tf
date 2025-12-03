@@ -276,7 +276,7 @@ module "grafana_prometheus_datasource_config" {
       name = "Prometheus (${region})"
       type = "prometheus"
       access = "proxy"
-      url = "https://prometheus.${region}.${var.config.dns_name}"
+      url = "https://prometheus.${region}.${var.config.dns.domain_name}"
       basicAuth = true
       basicAuthUser = "grafana"
       secureJsonData = {
