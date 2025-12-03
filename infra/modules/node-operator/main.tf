@@ -238,8 +238,8 @@ module "prometheus" {
 
     environment = {}
     secrets = {
-      CONFIG = module.prometheus-config
-      WEB_CONFIG = module.prometheus-web-config
+      CONFIG = module.prometheus-config[0]
+      WEB_CONFIG = module.prometheus-web-config[0]
     }
 
     entry_point = ["/bin/sh", "-c"]
