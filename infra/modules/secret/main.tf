@@ -2,23 +2,32 @@ variable "name" {
   type = string
 }
 
-variable "value" {
+variable "template" {
   type = string
-  ephemeral = true
+  optional = true
 }
 
-variable "value_encrypted" {
-  type = string
+variable "ephemeral_value" {
+  type = any
+  ephemeral = true
+  optional = true
+}
+
+variable "value" {
+  type = any
 }
 
 locals {
-  version = parseint(substr(sha1(var.value_encrypted), 0, 8), 16)
+  ephemeral_value = var.secret.value == null ? null : var.template == null ? var.ephemeral_value : templatestring(var.template, var.ephemeral_value)
+  value = var.template == null ? var.value : templatestring(var.template, var.value)
+
+  version = parseint(substr(sha1(local.value), 0, 8), 16)  
 }
 
 resource "aws_ssm_parameter" "this" {
   name             = var.name
   type             = "SecureString"
-  value_wo         = var.value
+  value_wo         = local.ephemeral_value == null ? local.value : local.ephemeral_value
   value_wo_version = local.version
 }
 

@@ -68,6 +68,7 @@ ephemeral "sops_file" "secrets" {
 locals {
   octet = var.config.vpc_cidr_octet
   region = data.aws_region.current.region
+  region_prefix = split("-", local.region)[0]
 
   encrypted_secrets = jsondecode(file(var.config.secrets_file_path))
   peer_id = local.encrypted_secrets.peer_id_unencrypted
@@ -78,15 +79,17 @@ locals {
 
 module "secret" {
   source = "../secret"
-  for_each = {
-    for k, v in local.encrypted_secrets:
-    # Remove non-encrypted values and SOPS metadata
-    k => v if !endswith(k, "_unencrypted") && k != "sops" 
-  }
+  for_each = toset([
+    "ecdsa_private_key",
+    "ed25519_secret_key",
+    "smart_contract_encryption_key",
+    "rpc_provider_url",
+    "grafana_admin_password",
+  ])
 
   name = "${var.config.name}-${each.key}"
-  value = local.secrets[each.key]
-  value_encrypted = each.value
+  ephemeral_value = local.secrets[each.key]
+  value = local.encrypted_secrets[each.key]
 }
 
 module "vpc" {
@@ -183,7 +186,38 @@ module "node" {
 }
 
 locals {
-  prometheus_port = 3000 
+  prometheus_port = 3000
+}
+
+module "prometheus-config" {
+  source = "../secret"
+  value = yamlencode({
+    scrape_configs = [{
+        job_name = local.region_prefix
+        scrape_interval = "1m"
+        scrape_timeout = "1m"
+        fallback_scrape_protocol = "PrometheusText1.0.0"
+        metrics_path = "/metrics/cluster"
+        static_configs = [{
+          targets = ["${module.node[0].private_ip}:${local.node_metrics_server_port}"]
+        }]
+    }]
+  })
+}
+
+module "prometheus-web-config" {
+  source = "../secret"
+  template = yamlencode({
+    basic_auth_users = {
+      grafana = "$${grafana_password_hash}"
+    }
+  })
+  value_ephemeral = {
+    grafana_password_hash = local.secrets["prometheus_grafana_password_hash"]
+  }
+  value = {
+    grafana_password_hash = local.encrypted_secrets["prometheus_grafana_password_hash"]
+  }
 }
 
 module "prometheus" {
