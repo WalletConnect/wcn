@@ -184,7 +184,7 @@ module "node" {
 
 locals {
   prometheus_port = 3000
-  prometheus_domain_name = try("prometheus.${var.region-prefix}.${var.config.dns.domain_name}", null)
+  prometheus_domain_name = try("prometheus.${local.region_prefix}.${var.config.dns.domain_name}", null)
 }
 
 module "prometheus-config" {
