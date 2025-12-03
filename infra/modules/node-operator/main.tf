@@ -184,6 +184,7 @@ module "node" {
 
 locals {
   prometheus_port = 3000
+  prometheus_domain_name = try("prometheus.${var.region-prefix}.${var.config.dns.domain_name}", null)
 }
 
 module "prometheus-config" {
@@ -304,9 +305,24 @@ resource "cloudflare_dns_record" "ns_delegation" {
 
 module "ssl_certificate" {
   source = "../ssl-certificate"
-  for_each = toset(var.config.dns == null ? [] : [local.grafana_domain_name])
+  for_each = toset(var.config.dns == null ? [] : concat(
+    var.config.prometheus == null ? [] : [local.prometheus_domain_name]
+    var.config.grafana == null ? [] : [local.grafana_domain_name]
+  ))
   domain_name = each.key
   route53_zone = aws_route53_zone.this[0]
+}
+
+module "prometheus_https_gateway" {
+  source = "../https-gateway"
+  count = var.config.prometheus != null ? 1 : 0
+  service = {
+    name = "${var.config.name}-prometheus"
+    ip = module.prometheus[0].private_ip
+    port = local.prometheus_port
+  }
+  vpc = module.vpc
+  certificate_arn = module.ssl_certificate[local.prometheus_domain_name].arn
 }
 
 module "grafana_https_gateway" {
@@ -319,6 +335,19 @@ module "grafana_https_gateway" {
   }
   vpc = module.vpc
   certificate_arn = module.ssl_certificate[local.grafana_domain_name].arn
+}
+
+resource "aws_route53_record" "prometheus" {
+  count = var.config.grafana != null ? 1 : 0
+  zone_id = aws_route53_zone.this[0].zone_id
+  name    = local.prometheus_domain_name
+  type    = "A"
+
+  alias {
+    name                   = module.prometheus_https_gateway[0].lb.dns_name
+    zone_id                = module.prometheus_https_gateway[0].lb.zone_id
+    evaluate_target_health = false
+  }
 }
 
 resource "aws_route53_record" "grafana" {
