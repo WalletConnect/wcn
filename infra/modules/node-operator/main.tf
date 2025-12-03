@@ -215,7 +215,7 @@ module "prometheus" {
 
 locals {
   grafana_port = 9090
-  grafana_domain_name = "grafana.${var.config.dns.domain_name}"
+  grafana_domain_name = try("grafana.${var.config.dns.domain_name}", null)
 }
 
 module "grafana" {

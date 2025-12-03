@@ -18,7 +18,7 @@ variable "certificate_arn" {
 }
 
 locals {
-  name = "${var.service.name}-https-gateway"
+  name = "${var.service.name}-https-gw"
 }
 
 resource "aws_security_group" "this" {
