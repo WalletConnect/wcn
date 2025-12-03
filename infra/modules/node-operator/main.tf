@@ -267,10 +267,10 @@ locals {
 }
 
 module "grafana_prometheus_datasource_config" {
-  source = "../secret"
+  source = "../secret-template"
   count = var.config.grafana == null ? 0 : 1
   name = "${var.config.name}-grafana-prometheus-ds-config"
-  value = yamlencode({
+  template = yamlencode({
     apiVersion: 1
     datasources: [for region in var.config.grafana.prometheus_regions : {
       uid = "prometheus-${region}"
@@ -281,10 +281,16 @@ module "grafana_prometheus_datasource_config" {
       basicAuth = true
       basicAuthUser = "grafana"
       secureJsonData = {
-        basicAuthPasswordFile = local.grafana_prometheus_password_file_path
+        basicAuthPassword = "$${prometheus_password}"
       }
     }]
   })
+  ephemeral_args = {
+    prometheus_password = local.secrets["prometheus_grafana_password"]
+  }
+  args = {
+    prometheus_password = local.encrypted_secrets["prometheus_grafana_password"]
+  }
 }
 
 module "grafana" {
@@ -310,13 +316,11 @@ module "grafana" {
 
     secrets = {
       GF_SECURITY_ADMIN_PASSWORD = module.secret["grafana_admin_password"]
-      PROMETHEUS_PASSWORD = module.secret["prometheus_grafana_password"]
       PROMETHEUS_DATASOURCE_CONFIG = module.grafana_prometheus_datasource_config[0]
     }
 
     entry_point = ["/bin/sh", "-c"]
     command = [<<-CMD
-      printf %s $PROMETHEUS_PASSWORD > ${local.grafana_prometheus_password_file_path} && \
       printenv PROMETHEUS_DATASOURCE_CONFIG > /etc/grafana/provisioning/datasources/prometheus.yaml && \
       exec /run.sh
     CMD
