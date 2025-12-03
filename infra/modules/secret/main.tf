@@ -4,13 +4,13 @@ variable "name" {
 
 variable "template" {
   type = string
-  optional = true
+  default = null
 }
 
 variable "ephemeral_value" {
   type = any
   ephemeral = true
-  optional = true
+  default = null
 }
 
 variable "value" {
