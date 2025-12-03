@@ -75,6 +75,8 @@ locals {
     cpu = 2
     memory = 1
     disk = 5
+
+    prometheus_regions = ["eu"]
   }
 
   eu_smart_contract_address = "0x31551311408e4428b82e1acf042217a5446ff490"

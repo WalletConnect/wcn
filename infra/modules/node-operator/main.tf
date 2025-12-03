@@ -50,6 +50,8 @@ variable "config" {
       cpu = number
       memory = number
       disk = number
+
+      prometheus_regions = list(string)
     }))
 
     dns = optional(object({
@@ -187,7 +189,7 @@ locals {
   prometheus_domain_name = try("prometheus.${local.region_prefix}.${var.config.dns.domain_name}", null)
 }
 
-module "prometheus-config" {
+module "prometheus_config" {
   source = "../secret"
   count = var.config.prometheus == null ? 0 : 1
   name = "${var.config.name}-prometheus-config"
@@ -205,7 +207,7 @@ module "prometheus-config" {
   })
 }
 
-module "prometheus-web-config" {
+module "prometheus_web_config" {
   source = "../secret-template"
   count = var.config.prometheus == null ? 0 : 1
   name = "${var.config.name}-prometheus-web-config"
@@ -239,8 +241,8 @@ module "prometheus" {
 
     environment = {}
     secrets = {
-      CONFIG = module.prometheus-config[0]
-      WEB_CONFIG = module.prometheus-web-config[0]
+      CONFIG = module.prometheus_config[0]
+      WEB_CONFIG = module.prometheus_web_config[0]
     }
 
     entry_point = ["/bin/sh", "-c"]
@@ -260,6 +262,28 @@ module "prometheus" {
 locals {
   grafana_port = 9090
   grafana_domain_name = try("grafana.${var.config.dns.domain_name}", null)
+  grafana_prometheus_password_file_path = "/tmp/prometheus_password"
+}
+
+module "grafana_prometheus_datasource_config" {
+  source = "../secret"
+  count = var.config.grafana == null ? 0 : 1
+  name = "${var.config.name}-grafana-prometheus-ds-config"
+  value = yamlencode({
+    apiVersion: 1
+    datasources: [for region in var.config.grafana.prometheus_regions : {
+      uid = "prometheus-${region}"
+      name = "Prometheus (${region})"
+      type = "prometheus"
+      access = "proxy"
+      url = "https://prometheus.${region}.${var.config.dns_name}"
+      basicAuth = true
+      basicAuthUser = "grafana"
+      secureJsonData = {
+        basicAuthPassword = local.grafana_prometheus_file_path
+      }
+    }]
+  })
 }
 
 module "grafana" {
@@ -285,7 +309,17 @@ module "grafana" {
 
     secrets = {
       GF_SECURITY_ADMIN_PASSWORD = module.secret["grafana_admin_password"]
+      PROMETHEUS_PASSWORD = module.secret["prometheus_grafana_password"]
+      PROMETHEUS_DATASOURCE_CONFIG = module.grafana_prometheus_datasource_config
     }
+
+    entry_point = ["/bin/sh", "-c"]
+    command = [<<-CMD
+      printenv PROMETHEUS_PASSWORD > ${local.grafana_prometheus_password_file_path} && \
+      printenv PROMETHEUS_DATASOURCE_CONFIG > /etc/grafana/provisioning/datasources/prometheus.yaml && \
+      exec /run.sh
+    CMD
+    ]
   })
 }
 
@@ -338,7 +372,7 @@ module "grafana_https_gateway" {
 }
 
 resource "aws_route53_record" "prometheus" {
-  count = var.config.grafana != null ? 1 : 0
+  count = var.config.prometheus != null ? 1 : 0
   zone_id = aws_route53_zone.this[0].zone_id
   name    = local.prometheus_domain_name
   type    = "A"
