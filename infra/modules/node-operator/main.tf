@@ -79,10 +79,10 @@ locals {
 
 module "secret" {
   source = "../secret"
-  for_each = toset(concat([
+  for_each = toset(concat(
     ["ecdsa_private_key", "ed25519_secret_key", "smart_contract_encryption_key", "rpc_provider_url"],
     var.config.grafana == null ? [] : ["grafana_admin_password"]
-  ]))
+  ))
 
   name = "${var.config.name}-${each.key}"
   ephemeral_value = local.secrets[each.key]

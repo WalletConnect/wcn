@@ -18,7 +18,7 @@ variable "value" {
 }
 
 locals {
-  ephemeral_value = var.ephemeral_value == null ? null : var.template == null ? var.ephemeral_value : templatestring(var.template, var.ephemeral_value)
+  ephemeral_value = var.template == null ? var.ephemeral_value : templatestring(var.template, var.ephemeral_value)
   value = var.template == null ? var.value : templatestring(var.template, var.value)
 
   version = parseint(substr(sha1(local.value), 0, 8), 16)  
