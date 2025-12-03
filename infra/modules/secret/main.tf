@@ -13,7 +13,7 @@ variable "value" {
 }
 
 locals {
-  version = parseint(substr(sha1(local.value), 0, 8), 16)  
+  version = parseint(substr(sha1(var.value), 0, 8), 16)  
 }
 
 resource "aws_ssm_parameter" "this" {
