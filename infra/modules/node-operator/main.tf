@@ -316,7 +316,7 @@ module "grafana" {
 
     entry_point = ["/bin/sh", "-c"]
     command = [<<-CMD
-      printenv PROMETHEUS_PASSWORD > ${local.grafana_prometheus_password_file_path} && \
+      printf %s $PROMETHEUS_PASSWORD > ${local.grafana_prometheus_password_file_path} && \
       printenv PROMETHEUS_DATASOURCE_CONFIG > /etc/grafana/provisioning/datasources/prometheus.yaml && \
       exec /run.sh
     CMD
