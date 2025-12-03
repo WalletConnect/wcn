@@ -266,7 +266,7 @@ module "ssl_certificate" {
   route53_zone = aws_route53_zone.this[0]
 }
 
-module "grafana-https-gateway" {
+module "grafana_https_gateway" {
   source = "../https-gateway"
   count = var.config.grafana != null ? 1 : 0
   service = {
@@ -276,6 +276,18 @@ module "grafana-https-gateway" {
   }
   vpc = module.vpc
   certificate_arn = module.ssl_certificate[local.grafana_domain_name].arn
+}
+
+resource "aws_route53_record" "grafana" {
+  count = var.config.grafana != null ? 1 : 0
+  zone_id = aws_route53_zone.this[0].zone_id
+  name    = local.grafana_domain_name
+  type    = "A"
+
+  alias {
+    name                   = module.grafana_https_gateway.lb.dns_name
+    zone_id                = module.grafana_https_gateway.lb.zone_id
+  }
 }
 
 resource "aws_security_group" "ec2_instance_connect_endpoint" {
