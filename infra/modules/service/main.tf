@@ -31,6 +31,7 @@ variable "config" {
       version = number
     }))
 
+    entry_point = optional(list(string))
     command = optional(list(string))
   })
 }
@@ -213,6 +214,7 @@ resource "aws_ecs_task_definition" "this" {
       name      = var.config.name
       image     = var.config.image
       user = "1001:1001"
+      entryPoint = var.config.entry_point
       command = var.config.command
       # Make sure that task doesn't require all the available memory of the instance.
       # Usually around 200-300 MBs are being used by the OS.

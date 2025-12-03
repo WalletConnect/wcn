@@ -237,13 +237,19 @@ module "prometheus" {
     ]
 
     environment = {}
-    secrets = {}
+    secrets = {
+      CONFIG = module.prometheus-config
+      WEB_CONFIG = module.prometheus-web-config
+    }
 
-    command = [
-      "--config.file=/etc/prometheus/prometheus.yml",
-      "--storage.tsdb.path=/data",
-      "--web.enable-lifecycle",
-      "--web.listen-address=:${local.prometheus_port}"
+    entry_point = ["/bin/sh", "-c"]
+    command = [<<-CMD
+      printenv CONFIG > /etc/prometheus/prometheus.yml && \
+      printenv WEB_CONFIG > /etc/prometheus/web.yml && \
+      exec /bin/prometheus \
+      --web.listen-address=:${local.prometheus_port} \
+      --storage.tsdb.path=/data
+    CMD
     ]
   })
 }
