@@ -285,8 +285,9 @@ resource "aws_route53_record" "grafana" {
   type    = "A"
 
   alias {
-    name                   = module.grafana_https_gateway.lb.dns_name
-    zone_id                = module.grafana_https_gateway.lb.zone_id
+    name                   = module.grafana_https_gateway[0].lb.dns_name
+    zone_id                = module.grafana_https_gateway[0].lb.zone_id
+    evaluate_target_health = false
   }
 }
 
