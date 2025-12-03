@@ -244,9 +244,11 @@ module "prometheus" {
 
     entry_point = ["/bin/sh", "-c"]
     command = [<<-CMD
-      printenv CONFIG > /etc/prometheus/prometheus.yml && \
-      printenv WEB_CONFIG > /etc/prometheus/web.yml && \
+      printenv CONFIG > /tmp/prometheus.yml && \
+      printenv WEB_CONFIG > /etc/web.yml && \
       exec /bin/prometheus \
+      --config.file=/tmp/prometheus.yml \
+      --web.config.file=/tmp/web.yml \
       --web.listen-address=:${local.prometheus_port} \
       --storage.tsdb.path=/data
     CMD
