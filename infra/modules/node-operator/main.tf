@@ -214,7 +214,7 @@ module "prometheus-web-config" {
       grafana = "$${grafana_password_hash}"
     }
   })
-  value_ephemeral = {
+  ephemeral_value = {
     grafana_password_hash = local.secrets["prometheus_grafana_password_hash"]
   }
   value = {
