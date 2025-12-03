@@ -317,7 +317,7 @@ module "prometheus_https_gateway" {
   source = "../https-gateway"
   count = var.config.prometheus != null ? 1 : 0
   service = {
-    name = "${var.config.name}-prometheus"
+    name = "${var.config.name}-prom"
     ip = module.prometheus[0].private_ip
     port = local.prometheus_port
   }
