@@ -310,7 +310,7 @@ module "grafana" {
     secrets = {
       GF_SECURITY_ADMIN_PASSWORD = module.secret["grafana_admin_password"]
       PROMETHEUS_PASSWORD = module.secret["prometheus_grafana_password"]
-      PROMETHEUS_DATASOURCE_CONFIG = module.grafana_prometheus_datasource_config
+      PROMETHEUS_DATASOURCE_CONFIG = module.grafana_prometheus_datasource_config[0]
     }
 
     entry_point = ["/bin/sh", "-c"]
