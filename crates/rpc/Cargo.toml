@@ -37,7 +37,7 @@ futures = { workspace = true }
 futures-concurrency = { workspace = true }
 futures-util = { version = "0.3" }
 futures-timer = { version = "3.0" }
-tokio = { workspace = true, features = ["io-util"] }
+tokio = { workspace = true, features = ["io-util", "signal"] }
 tokio-util = { version = "0.7", features = ["compat", "codec"] }
 tokio-serde = { workspace = true, features = ["json"] }
 
