@@ -241,7 +241,7 @@ resource "aws_ecs_task_definition" "this" {
         name      = k
         valueFrom = v.ssm_parameter_arn
       }]
-      mountPoints = [{
+      mountPoints = var.config.disk == null ? [] : [{
         sourceVolume  = "data"
         containerPath = "/data"
         readOnly      = false
