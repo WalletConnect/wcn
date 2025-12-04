@@ -117,6 +117,10 @@ pub struct Config {
     /// List of trusted node operators to use with the cluster API. If the list
     /// is empty, all nodes in the cluster may be used.
     pub trusted_operators: HashSet<NodeOperatorId>,
+
+    /// List of node operators which will not be used to perform storage
+    /// operations.
+    pub ignored_operators: HashSet<NodeOperatorId>,
 }
 
 #[derive(Debug, Clone)]

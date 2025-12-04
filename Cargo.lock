@@ -6000,6 +6000,7 @@ dependencies = [
  "derive_more",
  "fpe",
  "futures",
+ "futures-concurrency",
  "indexmap 2.11.4",
  "itertools 0.14.0",
  "libp2p-identity",
@@ -6187,8 +6188,13 @@ dependencies = [
  "clap",
  "derive_more",
  "libp2p-identity",
+ "quinn-proto",
  "tokio",
+ "tracing",
  "wcn_cluster",
+ "wcn_logging",
+ "wcn_rpc",
+ "wcn_storage_api",
 ]
 
 [[package]]

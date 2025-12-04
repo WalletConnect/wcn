@@ -30,6 +30,7 @@ use {
     tap::{Pipe as _, TapFallible as _},
     tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
+        signal::unix::SignalKind,
         sync::{OwnedSemaphorePermit, Semaphore},
     },
     tokio_serde::Deserializer as _,
@@ -249,6 +250,43 @@ impl ShutdownSignal {
     /// [emitted][`Self::emit`].
     pub fn is_emitted(&self) -> bool {
         self.token.is_cancelled()
+    }
+}
+
+/// Runs `f` while listening for termination signals. If any terminal signal
+/// is sent then emits `snutdown_signal`.
+///
+/// Note: this function does not care whether `f` and `shutdown_signal` are
+/// connected or not. The caller must ensure they are.
+pub async fn run_with_signal_handling<F, E: From<io::Error>>(
+    shutdown_signal: ShutdownSignal,
+    f: F,
+) -> Result<(), E>
+where
+    F: futures::Future<Output = ()>,
+{
+    enum FutureOutput {
+        CtrlC,
+        SigTerm,
+        Node,
+    }
+
+    let mut shutdown_fut = pin!(tokio::signal::ctrl_c().map(|_| FutureOutput::CtrlC).fuse());
+
+    let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
+    let mut sigterm_fut = pin!(sigterm.recv().map(|_| FutureOutput::SigTerm).fuse());
+
+    let mut f_mapped = pin!(f.map(|_| FutureOutput::Node));
+
+    loop {
+        match (&mut shutdown_fut, &mut sigterm_fut, &mut f_mapped)
+            .race()
+            .await
+        {
+            FutureOutput::CtrlC => shutdown_signal.emit(),
+            FutureOutput::SigTerm => shutdown_signal.emit(),
+            FutureOutput::Node => return Ok(()),
+        }
     }
 }
 
