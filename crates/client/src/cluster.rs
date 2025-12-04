@@ -37,6 +37,7 @@ pub struct Node<D> {
     pub private_cluster_conn: Option<ClusterConnection>,
     pub private_coordinator_conn: Option<CoordinatorConnection>,
     pub data: D,
+    pub is_active: bool,
 }
 
 impl<D> Node<D> {
@@ -68,6 +69,7 @@ pub(super) struct Config<D> {
     encryption_key: EncryptionKey,
     cluster_api: ClusterClient,
     coordinator_api: CoordinatorClient,
+    ignored_operators: HashSet<node_operator::Id>,
     _marker: PhantomData<D>,
 }
 
@@ -76,11 +78,13 @@ impl<D> Config<D> {
         encryption_key: EncryptionKey,
         cluster_api: ClusterClient,
         coordinator_api: CoordinatorClient,
+        ignored_operators: HashSet<node_operator::Id>,
     ) -> Self {
         Self {
             encryption_key,
             cluster_api,
             coordinator_api,
+            ignored_operators,
             _marker: PhantomData,
         }
     }
@@ -118,6 +122,7 @@ where
             private_cluster_conn,
             private_coordinator_conn,
             data: D::new(&operator_id, &node),
+            is_active: !self.ignored_operators.contains(&operator_id),
         }
     }
 
