@@ -21,7 +21,7 @@ terraform {
 }
 
 variable "cloudflare_wcf_api_token" {
-  type = string
+  type      = string
   sensitive = true
   ephemeral = true
 }
@@ -32,7 +32,7 @@ provider "aws" {
 
 provider "aws" {
   region = "eu-central-1"
-  alias = "eu"
+  alias  = "eu"
 }
 
 provider "cloudflare" {
@@ -45,36 +45,36 @@ module "sops-encryption-key" {
   source = "../modules/sops-encryption-key"
 }
 
-locals {  
+locals {
   db_config = {
-    image = "ghcr.io/walletconnect/wcn-db:251113.0"
+    image     = "ghcr.io/walletconnect/wcn-db:251113.0"
     cpu_burst = false
-    cpu = 2
-    memory = 4
-    disk = 50
+    cpu       = 2
+    memory    = 4
+    disk      = 50
   }
 
   node_config = {
-    image = "ghcr.io/walletconnect/wcn-node:251113.0"
+    image     = "ghcr.io/walletconnect/wcn-node:251113.0"
     cpu_burst = false
-    cpu = 1
-    memory = 2
+    cpu       = 1
+    memory    = 2
   }
 
   prometheus_config = {
-    image = "docker.io/prom/prometheus:v3.7.3"
+    image     = "docker.io/prom/prometheus:v3.7.3"
     cpu_burst = true
-    cpu = 2
-    memory = 1
-    disk = 20
+    cpu       = 2
+    memory    = 1
+    disk      = 20
   }
 
   grafana_config = {
-    image = "docker.io/grafana/grafana:12.3"
+    image     = "docker.io/grafana/grafana:12.3"
     cpu_burst = true
-    cpu = 2
-    memory = 1
-    disk = 5
+    cpu       = 2
+    memory    = 1
+    disk      = 5
 
     prometheus_regions = ["eu"]
   }
@@ -84,22 +84,22 @@ locals {
   eu_operators = {
     wallet-connect = {
       vpc_cidr_octet = 105 # 10.105.0.0/16
-      db = local.db_config
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
       ]
       prometheus = local.prometheus_config
-      grafana = local.grafana_config
+      grafana    = local.grafana_config
       dns = {
-        domain_name = "testnet.walletconnect.network"
+        domain_name        = "testnet.walletconnect.network"
         cloudflare_zone_id = "a97af2cd2fd2da7a93413e455ed47f2c"
       }
     }
 
     operator-a = {
       vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -108,7 +108,7 @@ locals {
 
     operator-b = {
       vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -117,7 +117,7 @@ locals {
 
     operator-c = {
       vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -126,7 +126,7 @@ locals {
 
     operator-d = {
       vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = local.db_config
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -136,13 +136,13 @@ locals {
 }
 
 module "eu-central-1" {
-  source = "../modules/node-operator"
+  source   = "../modules/node-operator"
   for_each = local.eu_operators
 
   config = merge(each.value, {
-    name    = each.key
+    name                   = each.key
     smart_contract_address = local.eu_smart_contract_address
-    secrets_file_path = "${path.module}/secrets/${each.key}.sops.json"
+    secrets_file_path      = "${path.module}/secrets/${each.key}.sops.json"
   })
 
   providers = {

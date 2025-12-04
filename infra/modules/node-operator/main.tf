@@ -1,61 +1,61 @@
 terraform {
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
+      source = "hashicorp/aws"
     }
     cloudflare = {
       source = "cloudflare/cloudflare"
     }
     sops = {
-      source  = "carlpett/sops"
+      source = "carlpett/sops"
     }
   }
 }
 
 variable "config" {
   type = object({
-    name    = string
-    domain_name = optional(string)
-    secrets_file_path = string
+    name                   = string
+    domain_name            = optional(string)
+    secrets_file_path      = string
     smart_contract_address = string
 
     vpc_cidr_octet = number
-    
+
     db = object({
-      image = string
+      image     = string
       cpu_burst = bool
-      cpu = number
-      memory = number
-      disk = number
+      cpu       = number
+      memory    = number
+      disk      = number
     })
 
     nodes = list(object({
-      image = string
+      image     = string
       cpu_burst = bool
-      cpu = number
-      memory = number
+      cpu       = number
+      memory    = number
     }))
 
     prometheus = optional(object({
-      image = string
+      image     = string
       cpu_burst = bool
-      cpu = number
-      memory = number
-      disk = number
+      cpu       = number
+      memory    = number
+      disk      = number
     }))
 
     grafana = optional(object({
-      image = string
+      image     = string
       cpu_burst = bool
-      cpu = number
-      memory = number
-      disk = number
+      cpu       = number
+      memory    = number
+      disk      = number
 
       prometheus_regions = list(string)
     }))
 
     dns = optional(object({
-      domain_name = string
+      domain_name        = string
       cloudflare_zone_id = string
     }))
   })
@@ -68,12 +68,12 @@ ephemeral "sops_file" "secrets" {
 }
 
 locals {
-  octet = var.config.vpc_cidr_octet
-  region = data.aws_region.current.region
+  octet         = var.config.vpc_cidr_octet
+  region        = data.aws_region.current.region
   region_prefix = split("-", local.region)[0]
 
   encrypted_secrets = jsondecode(file(var.config.secrets_file_path))
-  peer_id = local.encrypted_secrets.peer_id_unencrypted
+  peer_id           = local.encrypted_secrets.peer_id_unencrypted
 
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
@@ -87,9 +87,9 @@ module "secret" {
     var.config.grafana == null ? [] : ["grafana_admin_password"],
   ))
 
-  name = "${var.config.name}-${each.key}"
+  name            = "${var.config.name}-${each.key}"
   ephemeral_value = local.secrets[each.key]
-  value = local.encrypted_secrets[each.key]
+  value           = local.encrypted_secrets[each.key]
 }
 
 module "vpc" {
@@ -101,16 +101,16 @@ module "vpc" {
 
   enable_nat_gateway = true
   single_nat_gateway = true
-  
+
   azs             = ["${local.region}a", "${local.region}b"]
   private_subnets = ["10.${local.octet}.1.0/24"]
   public_subnets  = ["10.${local.octet}.101.0/24", "10.${local.octet}.102.0/24"]
 }
 
 locals {
-  db_primary_rpc_server_port = 3000
+  db_primary_rpc_server_port   = 3000
   db_secondary_rpc_server_port = 3001
-  db_metrics_server_port = 3002
+  db_metrics_server_port       = 3002
 }
 
 module "db" {
@@ -130,10 +130,10 @@ module "db" {
     ]
 
     environment = {
-      PRIMARY_RPC_SERVER_PORT = tostring(local.db_primary_rpc_server_port)
+      PRIMARY_RPC_SERVER_PORT   = tostring(local.db_primary_rpc_server_port)
       SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
-      METRICS_SERVER_PORT = tostring(local.db_metrics_server_port)
-      ROCKSDB_DIR = "/data"
+      METRICS_SERVER_PORT       = tostring(local.db_metrics_server_port)
+      ROCKSDB_DIR               = "/data"
     }
 
     secrets = {
@@ -143,14 +143,14 @@ module "db" {
 }
 
 locals {
-  node_primary_rpc_server_port = 3010
+  node_primary_rpc_server_port   = 3010
   node_secondary_rpc_server_port = 3011
-  node_metrics_server_port = 3012
+  node_metrics_server_port       = 3012
 }
 
 module "node" {
   source = "../service"
-  count = length(var.config.nodes)
+  count  = length(var.config.nodes)
   config = merge(var.config.nodes[count.index], {
     name = "${var.config.name}-node-${count.index + 1}"
 
@@ -166,52 +166,52 @@ module "node" {
     ]
 
     environment = {
-      PRIMARY_RPC_SERVER_PORT = tostring(local.node_primary_rpc_server_port)
-      SECONDARY_RPC_SERVER_PORT = tostring(local.node_secondary_rpc_server_port)
-      METRICS_SERVER_PORT = tostring(local.node_metrics_server_port)
-      DATABASE_RPC_SERVER_ADDRESS = module.db.private_ip
-      DATABASE_PEER_ID = local.peer_id
-      DATABASE_PRIMARY_RPC_SERVER_PORT = tostring(local.db_primary_rpc_server_port)
+      PRIMARY_RPC_SERVER_PORT            = tostring(local.node_primary_rpc_server_port)
+      SECONDARY_RPC_SERVER_PORT          = tostring(local.node_secondary_rpc_server_port)
+      METRICS_SERVER_PORT                = tostring(local.node_metrics_server_port)
+      DATABASE_RPC_SERVER_ADDRESS        = module.db.private_ip
+      DATABASE_PEER_ID                   = local.peer_id
+      DATABASE_PRIMARY_RPC_SERVER_PORT   = tostring(local.db_primary_rpc_server_port)
       DATABASE_SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
-      SMART_CONTRACT_ADDRESS = var.config.smart_contract_address
+      SMART_CONTRACT_ADDRESS             = var.config.smart_contract_address
     }
 
     secrets = {
-      SECRET_KEY = module.secret["ed25519_secret_key"]
+      SECRET_KEY                        = module.secret["ed25519_secret_key"]
       SMART_CONTRACT_SIGNER_PRIVATE_KEY = module.secret["ecdsa_private_key"]
-      SMART_CONTRACT_ENCRYPTION_KEY = module.secret["smart_contract_encryption_key"]
-      RPC_PROVIDER_URL = module.secret["rpc_provider_url"]
+      SMART_CONTRACT_ENCRYPTION_KEY     = module.secret["smart_contract_encryption_key"]
+      RPC_PROVIDER_URL                  = module.secret["rpc_provider_url"]
     }
   })
 }
 
 locals {
-  prometheus_port = 3000
+  prometheus_port        = 3000
   prometheus_domain_name = try("prometheus.${local.region_prefix}.${var.config.dns.domain_name}", null)
 }
 
 module "prometheus_config" {
   source = "../secret"
-  count = var.config.prometheus == null ? 0 : 1
-  name = "${var.config.name}-prometheus-config"
+  count  = var.config.prometheus == null ? 0 : 1
+  name   = "${var.config.name}-prometheus-config"
   value = yamlencode({
     scrape_configs = [{
-        job_name = local.region_prefix
-        scrape_interval = "1m"
-        scrape_timeout = "1m"
-        fallback_scrape_protocol = "PrometheusText1.0.0"
-        metrics_path = "/metrics/cluster"
-        static_configs = [{
-          targets = ["${module.node[0].private_ip}:${local.node_metrics_server_port}"]
-        }]
+      job_name                 = local.region_prefix
+      scrape_interval          = "1m"
+      scrape_timeout           = "1m"
+      fallback_scrape_protocol = "PrometheusText1.0.0"
+      metrics_path             = "/metrics/cluster"
+      static_configs = [{
+        targets = ["${module.node[0].private_ip}:${local.node_metrics_server_port}"]
+      }]
     }]
   })
 }
 
 module "prometheus_web_config" {
   source = "../secret-template"
-  count = var.config.prometheus == null ? 0 : 1
-  name = "${var.config.name}-prometheus-web-config"
+  count  = var.config.prometheus == null ? 0 : 1
+  name   = "${var.config.name}-prometheus-web-config"
   template = yamlencode({
     basic_auth_users = {
       grafana = "$${grafana_password_hash}"
@@ -227,7 +227,7 @@ module "prometheus_web_config" {
 
 module "prometheus" {
   source = "../service"
-  count = var.config.prometheus != null ? 1 : 0
+  count  = var.config.prometheus != null ? 1 : 0
   config = merge(var.config.prometheus, {
     name = "${var.config.name}-prometheus"
 
@@ -242,7 +242,7 @@ module "prometheus" {
 
     environment = {}
     secrets = {
-      CONFIG = module.prometheus_config[0]
+      CONFIG     = module.prometheus_config[0]
       WEB_CONFIG = module.prometheus_web_config[0]
     }
 
@@ -261,24 +261,24 @@ module "prometheus" {
 }
 
 locals {
-  grafana_port = 9090
-  grafana_domain_name = try("grafana.${var.config.dns.domain_name}", null)
+  grafana_port                          = 9090
+  grafana_domain_name                   = try("grafana.${var.config.dns.domain_name}", null)
   grafana_prometheus_password_file_path = "/tmp/prometheus_password"
 }
 
 module "grafana_prometheus_datasource_config" {
   source = "../secret-template"
-  count = var.config.grafana == null ? 0 : 1
-  name = "${var.config.name}-grafana-prometheus-ds-config"
+  count  = var.config.grafana == null ? 0 : 1
+  name   = "${var.config.name}-grafana-prometheus-ds-config"
   template = yamlencode({
-    apiVersion: 1
-    datasources: [for region in var.config.grafana.prometheus_regions : {
-      uid = "prometheus-${region}"
-      name = "Prometheus (${region})"
-      type = "prometheus"
-      access = "proxy"
-      url = "https://prometheus.${region}.${var.config.dns.domain_name}"
-      basicAuth = true
+    apiVersion : 1
+    datasources : [for region in var.config.grafana.prometheus_regions : {
+      uid           = "prometheus-${region}"
+      name          = "Prometheus (${region})"
+      type          = "prometheus"
+      access        = "proxy"
+      url           = "https://prometheus.${region}.${var.config.dns.domain_name}"
+      basicAuth     = true
       basicAuthUser = "grafana"
       secureJsonData = {
         basicAuthPassword = "$${prometheus_password}"
@@ -295,7 +295,7 @@ module "grafana_prometheus_datasource_config" {
 
 module "grafana" {
   source = "../service"
-  count = var.config.grafana != null ? 1 : 0
+  count  = var.config.grafana != null ? 1 : 0
   config = merge(var.config.grafana, {
     name = "${var.config.name}-grafana"
 
@@ -309,13 +309,13 @@ module "grafana" {
     ]
 
     environment = {
-      GF_SERVER_HTTP_PORT = tostring(local.grafana_port)
-      GF_PATHS_DATA = "/data"
+      GF_SERVER_HTTP_PORT    = tostring(local.grafana_port)
+      GF_PATHS_DATA          = "/data"
       GF_SECURITY_ADMIN_USER = "admin"
     }
 
     secrets = {
-      GF_SECURITY_ADMIN_PASSWORD = module.secret["grafana_admin_password"]
+      GF_SECURITY_ADMIN_PASSWORD   = module.secret["grafana_admin_password"]
       PROMETHEUS_DATASOURCE_CONFIG = module.grafana_prometheus_datasource_config[0]
     }
 
@@ -330,11 +330,11 @@ module "grafana" {
 
 resource "aws_route53_zone" "this" {
   count = var.config.dns != null ? 1 : 0
-  name     = var.config.dns.domain_name
+  name  = var.config.dns.domain_name
 }
 
 resource "cloudflare_dns_record" "ns_delegation" {
-  count = var.config.dns != null ? 4 : 0
+  count   = var.config.dns != null ? 4 : 0
   zone_id = var.config.dns.cloudflare_zone_id
   name    = var.config.dns.domain_name
   content = aws_route53_zone.this[0].name_servers[count.index]
@@ -348,36 +348,36 @@ module "ssl_certificate" {
     var.config.prometheus == null ? [] : [local.prometheus_domain_name],
     var.config.grafana == null ? [] : [local.grafana_domain_name],
   ))
-  domain_name = each.key
+  domain_name  = each.key
   route53_zone = aws_route53_zone.this[0]
 }
 
 module "prometheus_https_gateway" {
   source = "../https-gateway"
-  count = var.config.prometheus != null ? 1 : 0
+  count  = var.config.prometheus != null ? 1 : 0
   service = {
     name = "${var.config.name}-prom"
-    ip = module.prometheus[0].private_ip
+    ip   = module.prometheus[0].private_ip
     port = local.prometheus_port
   }
-  vpc = module.vpc
+  vpc             = module.vpc
   certificate_arn = module.ssl_certificate[local.prometheus_domain_name].arn
 }
 
 module "grafana_https_gateway" {
   source = "../https-gateway"
-  count = var.config.grafana != null ? 1 : 0
+  count  = var.config.grafana != null ? 1 : 0
   service = {
     name = "${var.config.name}-grafana"
-    ip = module.grafana[0].private_ip
+    ip   = module.grafana[0].private_ip
     port = local.grafana_port
   }
-  vpc = module.vpc
+  vpc             = module.vpc
   certificate_arn = module.ssl_certificate[local.grafana_domain_name].arn
 }
 
 resource "aws_route53_record" "prometheus" {
-  count = var.config.prometheus != null ? 1 : 0
+  count   = var.config.prometheus != null ? 1 : 0
   zone_id = aws_route53_zone.this[0].zone_id
   name    = local.prometheus_domain_name
   type    = "A"
@@ -390,7 +390,7 @@ resource "aws_route53_record" "prometheus" {
 }
 
 resource "aws_route53_record" "grafana" {
-  count = var.config.grafana != null ? 1 : 0
+  count   = var.config.grafana != null ? 1 : 0
   zone_id = aws_route53_zone.this[0].zone_id
   name    = local.grafana_domain_name
   type    = "A"
@@ -415,7 +415,7 @@ resource "aws_security_group" "ec2_instance_connect_endpoint" {
 }
 
 resource "aws_ec2_instance_connect_endpoint" "this" {
-  subnet_id = module.vpc.private_subnet_objects[0].id
+  subnet_id          = module.vpc.private_subnet_objects[0].id
   security_group_ids = [aws_security_group.ec2_instance_connect_endpoint.id]
   preserve_client_ip = false
 }

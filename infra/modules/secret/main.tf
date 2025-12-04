@@ -3,9 +3,9 @@ variable "name" {
 }
 
 variable "ephemeral_value" {
-  type = string
+  type      = string
   ephemeral = true
-  default = null
+  default   = null
 }
 
 variable "value" {
@@ -13,7 +13,7 @@ variable "value" {
 }
 
 locals {
-  version = parseint(substr(sha1(var.value), 0, 8), 16)  
+  version = parseint(substr(sha1(var.value), 0, 8), 16)
 }
 
 resource "aws_ssm_parameter" "this" {

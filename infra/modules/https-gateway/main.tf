@@ -1,14 +1,14 @@
 variable "service" {
   type = object({
     name = string
-    ip = string
+    ip   = string
     port = number
   })
 }
-  
+
 variable "vpc" {
   type = object({
-    vpc_id = string
+    vpc_id         = string
     public_subnets = list(string)
   })
 }
@@ -22,8 +22,8 @@ locals {
 }
 
 resource "aws_security_group" "this" {
-  name        = local.name
-  vpc_id      = var.vpc.vpc_id
+  name   = local.name
+  vpc_id = var.vpc.vpc_id
 
   ingress {
     from_port   = 443

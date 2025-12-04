@@ -7,9 +7,9 @@ variable "template" {
 }
 
 variable "ephemeral_args" {
-  type = map(string)
+  type      = map(string)
   ephemeral = true
-  default = null
+  default   = null
 }
 
 variable "args" {
@@ -18,9 +18,9 @@ variable "args" {
 
 locals {
   ephemeral_value = var.ephemeral_args == null ? null : templatestring(var.template, var.ephemeral_args)
-  value = templatestring(var.template, var.args)
+  value           = templatestring(var.template, var.args)
 
-  version = parseint(substr(sha1(local.value), 0, 8), 16)  
+  version = parseint(substr(sha1(local.value), 0, 8), 16)
 }
 
 resource "aws_ssm_parameter" "this" {
