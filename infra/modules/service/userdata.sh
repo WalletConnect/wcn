@@ -28,9 +28,6 @@ if [[ $EBS_DEVICE_PATH ]]; then
   mkdir -p $MOUNT_POINT
   mount -a
 
-  # mkdir -p "$MOUNT_POINT/prometheus"
-  # mkdir -p "$MOUNT_POINT/grafana"
-
   chown -R 1001:1001 $MOUNT_POINT
 fi
 
