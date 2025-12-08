@@ -46,8 +46,12 @@ locals {
 
   instance_type = {
     "2cpu-1mem-burst"  = "t4g.micro"
+    "2cpu-4mem-burst" = "t4g.medium"
+    "2cpu-8mem-burst" = "t4g.large"
     "1cpu-2mem-normal" = "c6g.medium"
     "2cpu-4mem-normal" = "c6g.large"
+    "4cpu-8mem-normal" = "c6g.xlarge"
+    "8cpu-16mem-normal" = "c6g.2xlarge"
   }["${var.config.cpu}cpu-${var.config.memory}mem-${var.config.cpu_burst ? "burst" : "normal"}"]
 }
 
