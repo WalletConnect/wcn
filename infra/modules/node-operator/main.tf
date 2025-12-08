@@ -64,7 +64,7 @@ variable "config" {
 }
 
 locals {
-  create_ec2_instance_connect_endpoint = coalesce(var.config.create_ec2_instance_connect_endpoint, false)
+  create_ec2_instance_connect_endpoint = coalesce(var.config.create_ec2_instance_connect_endpoint, true)
 }
 
 data "aws_region" "current" {}

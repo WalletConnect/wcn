@@ -140,6 +140,7 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      create_ec2_instance_connect_endpoint = false
     }
   }
 }
