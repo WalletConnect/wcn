@@ -106,7 +106,7 @@ resource "terraform_data" "userdata_fingerprint" {
 }
 
 resource "aws_iam_role" "this" {
-  name = var.config.name
+  name = "${local.region}-${var.config.name}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
