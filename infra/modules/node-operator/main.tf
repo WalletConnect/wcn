@@ -58,7 +58,13 @@ variable "config" {
       domain_name        = string
       cloudflare_zone_id = string
     }))
+
+    create_ec2_instance_connect_endpoint = optional(bool)
   })
+}
+
+locals {
+  create_ec2_instance_connect_endpoint = coalesce(var.config.create_ec2_instance_connect_endpoint, false)
 }
 
 data "aws_region" "current" {}
@@ -403,6 +409,7 @@ resource "aws_route53_record" "grafana" {
 }
 
 resource "aws_security_group" "ec2_instance_connect_endpoint" {
+  count = local.create_ec2_instance_connect_endpoint ? 1 : 0
   name   = "${var.config.name}-ec2-instance-connect-endpoint"
   vpc_id = module.vpc.vpc_id
 
@@ -415,7 +422,8 @@ resource "aws_security_group" "ec2_instance_connect_endpoint" {
 }
 
 resource "aws_ec2_instance_connect_endpoint" "this" {
+  count = local.create_ec2_instance_connect_endpoint ? 1 : 0
   subnet_id          = module.vpc.private_subnet_objects[0].id
-  security_group_ids = [aws_security_group.ec2_instance_connect_endpoint.id]
+  security_group_ids = [aws_security_group.ec2_instance_connect_endpoint[0].id]
   preserve_client_ip = false
 }
