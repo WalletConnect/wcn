@@ -41,12 +41,21 @@ data "aws_ssm_parameter" "ami_id" {
   name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/al2023-ami-ecs-hvm-2023.0.20251108-kernel-6.1-arm64/image_id"
 }
 
+data "aws_ssm_parameter" "x86_ami_id" {
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/al2023-ami-ecs-hvm-2023.0.20251108-kernel-6.1-x86_64/image_id"
+}
+
 locals {
   az     = var.config.subnet.availability_zone
   region = substr(local.az, 0, length(local.az) - 1)
 
   cpu_arch  = coalesce(var.config.cpu_arch, "arm")
   cpu_burst = coalesce(var.config.cpu_burst, false)
+
+  ami_id = {
+    "arm" = data.aws_ssm_parameter.ami_id
+    "x86" = data.aws_ssm_parameter.x86_ami_id
+  }[local.cpu_arch]
 
   instance_type = {
     "arm-2cpu-1mem-burst"   = "t4g.micro"
@@ -156,7 +165,7 @@ resource "aws_iam_instance_profile" "this" {
 }
 
 resource "aws_instance" "this" {
-  ami           = data.aws_ssm_parameter.ami_id.value
+  ami           = local.ami_id
   instance_type = local.instance_type
 
   primary_network_interface {
