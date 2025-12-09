@@ -120,6 +120,26 @@ module "wallet-connect-eu" {
   }
 }
 
+module "wallet-connect-us" {
+  source = "../modules/node-operator"
+
+  config = {
+    name                   = "wallet-connect"
+    secrets_file_path      = "${path.module}/secrets/wallet-connect-us.sops.json"
+    vpc_cidr_octet         = 6 # 10.6.0.0/16
+    smart_contract_address = "0x352988ff4cee2f218dfd2bf404f06444706af2ea"
+    db                     = local.db_config
+    nodes = [
+      local.node_config,
+      local.node_config,
+    ]
+  }
+
+  providers = {
+    aws = aws.us
+  }
+}
+
 module "wallet-connect-sa" {
   source = "../modules/node-operator"
 
