@@ -76,7 +76,7 @@ Maintenance mode allows you to signal the cluster that your setup could be offli
 Signals to the cluster that you have entered maintenance mode:
 
 ```bash
-$ cargo run --bin wcn_operator -- maintenance start
+$ cargo run --bin wcn_operator -- maintenance start --private-key <PRIVATE_KEY> --encryption-key <ENCRYPTION_KEY> --contract-address <CONTRACT_ADDRESS> --rpc-provider-url <RPC_PROVIDER_URL>
 ```
 
 #### Finish maintenance
@@ -84,5 +84,5 @@ $ cargo run --bin wcn_operator -- maintenance start
 Signals to the cluster that you have exited maintenance mode:
 
 ```bash
-$ cargo run --bin wcn_operator -- maintenance finish
+$ cargo run --bin wcn_operator -- maintenance finish --private-key <PRIVATE_KEY> --encryption-key <ENCRYPTION_KEY> --contract-address <CONTRACT_ADDRESS> --rpc-provider-url <RPC_PROVIDER_URL>
 ```
