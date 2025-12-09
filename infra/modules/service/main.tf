@@ -282,7 +282,7 @@ resource "aws_ecs_service" "this" {
 
   force_delete = true
 
-  depends_on = [aws_instance.this]
+  depends_on = [aws_instance.this, aws_iam_role_policy_attachment.this]
 }
 
 output "private_ip" {
