@@ -62,11 +62,11 @@ module "sops-encryption-key" {
 
 locals {
   db_config = {
-    image    = "ghcr.io/walletconnect/wcn-db:251113.0"
-    cpu_arch = "x86"
-    cpu      = 8
-    memory   = 16
-    disk     = 100
+    image     = "ghcr.io/walletconnect/wcn-db:251113.0"
+    cpu_arch  = "x86"
+    cpu_cures = 8
+    memory    = 16
+    disk      = 100
   }
 
   node_config = {
