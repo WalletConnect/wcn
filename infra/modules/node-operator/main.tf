@@ -182,12 +182,15 @@ module "node" {
       SMART_CONTRACT_ADDRESS             = var.config.smart_contract_address
     }
 
-    secrets = {
+    secrets = merge({
       SECRET_KEY                        = module.secret["ed25519_secret_key"]
-      SMART_CONTRACT_SIGNER_PRIVATE_KEY = module.secret["ecdsa_private_key"]
       SMART_CONTRACT_ENCRYPTION_KEY     = module.secret["smart_contract_encryption_key"]
       RPC_PROVIDER_URL                  = module.secret["rpc_provider_url"]
-    }
+    },
+    # configure pk only for the primary node
+    count.index != 0 ? {} : {
+      SMART_CONTRACT_SIGNER_PRIVATE_KEY = module.secret["ecdsa_private_key"]
+    })
   })
 }
 
