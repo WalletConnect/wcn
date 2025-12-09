@@ -55,7 +55,7 @@ locals {
   ami_id = {
     "arm" = data.aws_ssm_parameter.ami_id
     "x86" = data.aws_ssm_parameter.x86_ami_id
-  }[local.cpu_arch]
+  }[local.cpu_arch].value
 
   instance_type = {
     "arm-2cpu-1mem-burst"   = "t4g.micro"
