@@ -285,11 +285,11 @@ resource "aws_ecs_service" "this" {
   depends_on = [
     aws_instance.this,
     aws_volume_attachment.data,
-    aws_eip_association.this
+    aws_eip_association.this,
     aws_iam_role_policy_attachment.this,
-    aws_iam_role_policy.ssm
+    aws_iam_role_policy.ssm,
     aws_vpc_security_group_egress_rule.all,
-    aws_vpc_security_group_ingress_rule.this
+    aws_vpc_security_group_ingress_rule.this,
   ]
 }
 
