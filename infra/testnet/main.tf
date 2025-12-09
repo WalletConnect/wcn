@@ -48,23 +48,21 @@ module "sops-encryption-key" {
 locals {
   db_config = {
     image     = "ghcr.io/walletconnect/wcn-db:251113.0"
-    cpu_burst = false
-    cpu       = 2
+    cpu_cores = 2
     memory    = 4
     disk      = 50
   }
 
   node_config = {
     image     = "ghcr.io/walletconnect/wcn-node:251113.0"
-    cpu_burst = false
-    cpu       = 1
+    cpu_cores = 1
     memory    = 2
   }
 
   prometheus_config = {
     image     = "docker.io/prom/prometheus:v3.7.3"
     cpu_burst = true
-    cpu       = 2
+    cpu_cores = 2
     memory    = 1
     disk      = 20
   }
@@ -72,7 +70,7 @@ locals {
   grafana_config = {
     image     = "docker.io/grafana/grafana:12.3"
     cpu_burst = true
-    cpu       = 2
+    cpu_cores = 2
     memory    = 1
     disk      = 5
 
@@ -84,7 +82,9 @@ locals {
   eu_operators = {
     wallet-connect = {
       vpc_cidr_octet = 105 # 10.105.0.0/16
-      db             = local.db_config
+      # For this one operator use x86 box instead of the default ARM,
+      # so we have both architectures being actively tested.
+      db = merge(local.db_config, { cpu_arch = "x86" })
       nodes = [
         local.node_config,
         local.node_config,

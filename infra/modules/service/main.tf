@@ -2,8 +2,9 @@ variable "config" {
   type = object({
     name      = string
     image     = string
-    cpu_burst = bool
-    cpu       = number
+    cpu_arch  = optional(string)
+    cpu_burst = optional(bool)
+    cpu_cores = number
     memory    = number
     disk      = optional(number)
     public_ip = bool
@@ -44,11 +45,20 @@ locals {
   az     = var.config.subnet.availability_zone
   region = substr(local.az, 0, length(local.az) - 1)
 
+  cpu_arch  = coalesce(var.config.cpu_arch, "arm")
+  cpu_burst = coalesce(var.config.cpu_burst, false)
+
   instance_type = {
-    "2cpu-1mem-burst"  = "t4g.micro"
-    "1cpu-2mem-normal" = "c6g.medium"
-    "2cpu-4mem-normal" = "c6g.large"
-  }["${var.config.cpu}cpu-${var.config.memory}mem-${var.config.cpu_burst ? "burst" : "normal"}"]
+    "arm-2cpu-1mem-burst"   = "t4g.micro"
+    "arm-2cpu-4mem-burst"   = "t4g.medium"
+    "arm-2cpu-8mem-burst"   = "t4g.large"
+    "arm-1cpu-2mem-normal"  = "c6g.medium"
+    "arm-2cpu-4mem-normal"  = "c6g.large"
+    "arm-4cpu-8mem-normal"  = "c6g.xlarge"
+    "arm-8cpu-16mem-normal" = "c6g.2xlarge"
+    "x86-2cpu-4mem-normal"  = "c5a.large"
+    "x86-8cpu-16mem-normal" = "c5a.2xlarge"
+  }["${local.cpu_arch}-${var.config.cpu_cores}cpu-${var.config.memory}mem-${local.cpu_burst ? "burst" : "normal"}"]
 }
 
 resource "aws_security_group" "this" {
