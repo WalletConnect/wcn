@@ -133,15 +133,15 @@ locals {
       ]
     }
 
-    # operator-e = {
-    #   vpc_cidr_octet = 0 # 10.0.0.0/16
-    #   db             = local.db_config
-    #   nodes = [
-    #     local.node_config,
-    #     local.node_config,
-    #   ]
-    #   create_ec2_instance_connect_endpoint = false
-    # }
+    operator-e = {
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db             = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+      create_ec2_instance_connect_endpoint = false
+    }
   }
 }
 
