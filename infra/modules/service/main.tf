@@ -284,7 +284,17 @@ resource "aws_ecs_service" "this" {
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
 
-  depends_on = [aws_instance.this]
+  force_delete = true
+
+  depends_on = [
+    aws_instance.this,
+    aws_volume_attachment.data,
+    aws_eip_association.this,
+    aws_iam_role_policy_attachment.this,
+    aws_iam_role_policy.ssm,
+    aws_vpc_security_group_egress_rule.all,
+    aws_vpc_security_group_ingress_rule.this,
+  ]
 }
 
 output "private_ip" {
