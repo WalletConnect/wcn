@@ -92,6 +92,17 @@ locals {
 
     prometheus_regions = ["eu", "us", "ap", "sa"]
   }
+
+  sa_operators = {
+    wallet-connect-2 = {
+      vpc_cidr_octet         = 0 # 10.0.0.0/16
+      db                     = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
+  }  
 }
 
 module "wallet-connect-eu" {
@@ -160,25 +171,24 @@ module "wallet-connect-eu" {
 #   }
 # }
 
-module "sa-wallet-connect-extra" {
+module "sa-east-1" {
   source = "../modules/node-operator"
-  count = 1
+  for_each = local.eu_operators
 
-  config = {
-    name                   = "wallet-connect-${count.index + 2}"
-    secrets_file_path      = "${path.module}/secrets/sa.wallet-connect-${count.index + 2}.sops.json"
-    vpc_cidr_octet         = 0 # 10.0.0.0/16
+  config = merge(each.value, {
+    name                   = each.key
     smart_contract_address = "0xca5b9bd2cf8045ff8308454c1b9caef2a6fcc20f"
-    db                     = local.db_config
-    nodes = [
-      local.node_config,
-      local.node_config,
-    ]
-  }
+    secrets_file_path      = "${path.module}/secrets/sa.${each.key}.sops.json"
+  })
 
   providers = {
     aws = aws.sa
   }
+}
+
+moved {
+  from = module.sa-wallet-connect-extra[0]
+  to   = module.sa-east-1["wallet-connect-2"]
 }
 
 output "sops-encryption-key-arn" {
