@@ -140,25 +140,45 @@ module "wallet-connect-us" {
   }
 }
 
-module "wallet-connect-sa" {
-  source = "../modules/node-operator"
+# module "wallet-connect-ap" {
+#   source = "../modules/node-operator"
 
-  config = {
-    name                   = "wallet-connect"
-    secrets_file_path      = "${path.module}/secrets/wallet-connect-sa.sops.json"
-    vpc_cidr_octet         = 8 # 10.8.0.0/16
-    smart_contract_address = "0xca5b9bd2cf8045ff8308454c1b9caef2a6fcc20f"
-    db                     = local.db_config
-    nodes = [
-      local.node_config,
-      local.node_config,
-    ]
-  }
+#   config = {
+#     name                   = "wallet-connect"
+#     secrets_file_path      = "${path.module}/secrets/wallet-connect-ap.sops.json"
+#     vpc_cidr_octet         = 7 # 10.7.0.0/16
+#     smart_contract_address = "0x25cd8e3f33fe5ecb6c04f6176581a855d404dff2"
+#     db                     = local.db_config
+#     nodes = [
+#       local.node_config,
+#       local.node_config,
+#     ]
+#   }
 
-  providers = {
-    aws = aws.sa
-  }
-}
+#   providers = {
+#     aws = aws.ap
+#   }
+# }
+
+# module "wallet-connect-sa" {
+#   source = "../modules/node-operator"
+
+#   config = {
+#     name                   = "wallet-connect"
+#     secrets_file_path      = "${path.module}/secrets/wallet-connect-sa.sops.json"
+#     vpc_cidr_octet         = 8 # 10.8.0.0/16
+#     smart_contract_address = "0xca5b9bd2cf8045ff8308454c1b9caef2a6fcc20f"
+#     db                     = local.db_config
+#     nodes = [
+#       local.node_config,
+#       local.node_config,
+#     ]
+#   }
+
+#   providers = {
+#     aws = aws.sa
+#   }
+# }
 
 output "sops-encryption-key-arn" {
   value = module.sops-encryption-key.arn
