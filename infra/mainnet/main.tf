@@ -186,11 +186,6 @@ module "sa-east-1" {
   }
 }
 
-moved {
-  from = module.sa-wallet-connect-extra[0]
-  to   = module.sa-east-1["wallet-connect-2"]
-}
-
 output "sops-encryption-key-arn" {
   value = module.sops-encryption-key.arn
 }
