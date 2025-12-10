@@ -93,6 +93,17 @@ locals {
     prometheus_regions = ["eu", "us", "ap", "sa"]
   }
 
+  us_operators = {
+    wallet-connect-2 = {
+      vpc_cidr_octet         = 0 # 10.0.0.0/16
+      db                     = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
+  }  
+
   sa_operators = {
     wallet-connect-2 = {
       vpc_cidr_octet         = 0 # 10.0.0.0/16
@@ -131,25 +142,21 @@ module "wallet-connect-eu" {
   }
 }
 
-# module "wallet-connect-us" {
-#   source = "../modules/node-operator"
 
-#   config = {
-#     name                   = "wallet-connect"
-#     secrets_file_path      = "${path.module}/secrets/wallet-connect-us.sops.json"
-#     vpc_cidr_octet         = 6 # 10.6.0.0/16
-#     smart_contract_address = "0x352988ff4cee2f218dfd2bf404f06444706af2ea"
-#     db                     = local.db_config
-#     nodes = [
-#       local.node_config,
-#       local.node_config,
-#     ]
-#   }
+module "us-east-1" {
+  source = "../modules/node-operator"
+  for_each = local.us_operators
 
-#   providers = {
-#     aws = aws.us
-#   }
-# }
+  config = merge(each.value, {
+    name                   = each.key
+    smart_contract_address = "0x352988ff4cee2f218dfd2bf404f06444706af2ea"
+    secrets_file_path      = "${path.module}/secrets/us.${each.key}.sops.json"
+  })
+
+  providers = {
+    aws = aws.us
+  }
+}
 
 # module "wallet-connect-ap" {
 #   source = "../modules/node-operator"
