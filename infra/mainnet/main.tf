@@ -173,7 +173,7 @@ module "wallet-connect-eu" {
 
 module "sa-east-1" {
   source = "../modules/node-operator"
-  for_each = local.eu_operators
+  for_each = local.sa_operators
 
   config = merge(each.value, {
     name                   = each.key
