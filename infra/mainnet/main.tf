@@ -108,33 +108,6 @@ locals {
   }  
 }
 
-module "wallet-connect-eu" {
-  source = "../modules/node-operator"
-
-  config = {
-    name                   = "wallet-connect"
-    secrets_file_path      = "${path.module}/secrets/wallet-connect-eu.sops.json"
-    vpc_cidr_octet         = 5 # 10.5.0.0/16
-    smart_contract_address = "0xa18770BFAb520CdD101680cCF3252D642713F3fC"
-    db                     = local.db_config
-    nodes = [
-      local.node_config,
-      local.node_config,
-    ]
-    # prometheus = local.prometheus_config
-    # grafana    = local.grafana_config
-    # dns = {
-    #   domain_name        = "testnet.walletconnect.network"
-    #   cloudflare_zone_id = "a97af2cd2fd2da7a93413e455ed47f2c"
-    # }
-  }
-
-  providers = {
-    aws = aws.eu
-  }
-}
-
-
 module "us-east-1" {
   source = "../modules/node-operator"
   for_each = local.us_operators
