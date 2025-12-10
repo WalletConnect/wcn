@@ -94,14 +94,6 @@ locals {
   }
 
   us_operators = {
-    wallet-connect-2 = {
-      vpc_cidr_octet         = 0 # 10.0.0.0/16
-      db                     = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
   }  
 
   sa_operators = {
