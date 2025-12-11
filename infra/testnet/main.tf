@@ -63,7 +63,7 @@ locals {
     image     = "docker.io/prom/prometheus:v3.7.3"
     cpu_burst = true
     cpu_cores = 2
-    memory    = 4
+    memory    = 1
     disk      = 20
   }
 
