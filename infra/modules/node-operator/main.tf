@@ -196,7 +196,7 @@ module "node" {
 
 locals {
   prometheus_port        = 3000
-  prometheus_domain_name = try("prometheus.${local.region_prefix}.${var.config.dns.domain_name}", null)
+  prometheus_domain_name = try("prometheus.${local.region_prefix}.${var.config.route53_zone.name}", null)
 }
 
 module "prometheus_config" {
@@ -271,7 +271,7 @@ module "prometheus" {
 
 locals {
   grafana_port                          = 9090
-  grafana_domain_name                   = try("grafana.${var.config.dns.domain_name}", null)
+  grafana_domain_name                   = try("grafana.${var.config.route53_zone.name}", null)
   grafana_prometheus_password_file_path = "/tmp/prometheus_password"
 }
 
