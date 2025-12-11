@@ -93,10 +93,37 @@ locals {
     prometheus_regions = ["eu", "us", "ap", "sa"]
   }
 
+  eu_operators = {
+    wallet-connect = {
+      vpc_cidr_octet         = 5 # 10.5.0.0/16
+      db                     = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
+  }  
+
   us_operators = {
+    wallet-connect = {
+      vpc_cidr_octet         = 6 # 10.6.0.0/16
+      db                     = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
   }  
 
   ap_operators = {
+    wallet-connect = {
+      vpc_cidr_octet         = 7 # 10.7.0.0/16
+      db                     = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
     wallet-connect-2 = {
       vpc_cidr_octet         = 0 # 10.0.0.0/16
       db                     = local.db_config
@@ -108,6 +135,14 @@ locals {
   }  
 
   sa_operators = {
+    wallet-connect = {
+      vpc_cidr_octet         = 8 # 10.8.0.0/16
+      db                     = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
     wallet-connect-2 = {
       vpc_cidr_octet         = 0 # 10.0.0.0/16
       db                     = local.db_config
@@ -117,6 +152,21 @@ locals {
       ]
     }
   }  
+}
+
+module "eu-central-1" {
+  source = "../modules/node-operator"
+  for_each = local.eu_operators
+
+  config = merge(each.value, {
+    name                   = each.key
+    smart_contract_address = "0xa18770BFAb520CdD101680cCF3252D642713F3fC"
+    secrets_file_path      = "${path.module}/secrets/eu.${each.key}.sops.json"
+  })
+
+  providers = {
+    aws = aws.eu
+  }
 }
 
 module "us-east-1" {
@@ -133,26 +183,6 @@ module "us-east-1" {
     aws = aws.us
   }
 }
-
-# module "wallet-connect-ap" {
-#   source = "../modules/node-operator"
-
-#   config = {
-#     name                   = "wallet-connect"
-#     secrets_file_path      = "${path.module}/secrets/wallet-connect-ap.sops.json"
-#     vpc_cidr_octet         = 7 # 10.7.0.0/16
-#     smart_contract_address = "0x25cd8e3f33fe5ecb6c04f6176581a855d404dff2"
-#     db                     = local.db_config
-#     nodes = [
-#       local.node_config,
-#       local.node_config,
-#     ]
-#   }
-
-#   providers = {
-#     aws = aws.ap
-#   }
-# }
 
 module "ap-southeast-1" {
   source = "../modules/node-operator"
