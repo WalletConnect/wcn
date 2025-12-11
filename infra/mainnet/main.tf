@@ -106,9 +106,9 @@ locals {
         local.node_config,
         local.node_config,
       ]
-      prometheus = local.prometheus_config
-      grafana    = local.grafana_config
-      dns = local.dns
+      # prometheus = local.prometheus_config
+      # grafana    = local.grafana_config
+      # dns = local.dns
     }
   }  
 
@@ -120,8 +120,8 @@ locals {
         local.node_config,
         local.node_config,
       ]
-      prometheus = local.prometheus_config
-      dns = local.dns
+      # prometheus = local.prometheus_config
+      # dns = local.dns
     }
   }  
 
@@ -133,8 +133,8 @@ locals {
         local.node_config,
         local.node_config,
       ]
-      prometheus = local.prometheus_config
-      dns = local.dns
+      # prometheus = local.prometheus_config
+      # dns = local.dns
     }
     wallet-connect-2 = {
       vpc_cidr_octet         = 0 # 10.0.0.0/16
@@ -154,8 +154,8 @@ locals {
         local.node_config,
         local.node_config,
       ]
-      prometheus = local.prometheus_config
-      dns = local.dns
+      # prometheus = local.prometheus_config
+      # dns = local.dns
     }
     wallet-connect-2 = {
       vpc_cidr_octet         = 0 # 10.0.0.0/16
