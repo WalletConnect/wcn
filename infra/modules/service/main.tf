@@ -120,6 +120,10 @@ resource "terraform_data" "userdata_fingerprint" {
   input = sha256(data.cloudinit_config.this.rendered)
 }
 
+resource "terraform_data" "instance_type" {
+  input = local.instance_type
+}
+
 resource "aws_iam_role" "this" {
   name = "${local.region}-${var.config.name}"
   assume_role_policy = jsonencode({
@@ -176,7 +180,7 @@ resource "aws_instance" "this" {
   user_data_base64     = data.cloudinit_config.this.rendered
 
   lifecycle {
-    replace_triggered_by = [terraform_data.userdata_fingerprint, aws_instance.this.instance_type]
+    replace_triggered_by = [terraform_data.userdata_fingerprint, terraform_data.instance_type]
   }
 
   tags = {
