@@ -96,6 +96,17 @@ locals {
   us_operators = {
   }  
 
+  ap_operators = {
+    wallet-connect-2 = {
+      vpc_cidr_octet         = 0 # 10.0.0.0/16
+      db                     = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
+    }
+  }  
+
   sa_operators = {
     wallet-connect-2 = {
       vpc_cidr_octet         = 0 # 10.0.0.0/16
@@ -142,6 +153,21 @@ module "us-east-1" {
 #     aws = aws.ap
 #   }
 # }
+
+module "ap-southeast-1" {
+  source = "../modules/node-operator"
+  for_each = local.ap_operators
+
+  config = merge(each.value, {
+    name                   = each.key
+    smart_contract_address = "0x25cd8e3f33fe5ecb6c04f6176581a855d404dff2"
+    secrets_file_path      = "${path.module}/secrets/ap.${each.key}.sops.json"
+  })
+
+  providers = {
+    aws = aws.ap
+  }
+}
 
 module "sa-east-1" {
   source = "../modules/node-operator"
