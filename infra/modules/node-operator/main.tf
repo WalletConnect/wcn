@@ -56,6 +56,7 @@ variable "config" {
     }))
 
     route53_zone = optional(object({
+      name = string
       zone_id = string
     }))
 
