@@ -176,7 +176,7 @@ resource "aws_instance" "this" {
   user_data_base64     = data.cloudinit_config.this.rendered
 
   lifecycle {
-    replace_triggered_by = [terraform_data.userdata_fingerprint aws_instance.this.instance_type]
+    replace_triggered_by = [terraform_data.userdata_fingerprint, aws_instance.this.instance_type]
   }
 
   tags = {
