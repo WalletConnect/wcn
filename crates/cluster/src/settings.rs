@@ -110,14 +110,14 @@ impl TryFrom<Settings> for smart_contract::Settings {
     type Error = TryIntoSmartContractError;
 
     fn try_from(settings: Settings) -> Result<Self, Self::Error> {
-        let extra = ExtraV0::from(settings);
+        let extra = ExtraV1::from(settings);
 
         let size = postcard::experimental::serialized_size(&extra)
             .map_err(TryIntoSmartContractError::from_postcard)?;
 
         // reserve first byte for versioning
         let mut buf = vec![0; size + 1];
-        buf[0] = 0; // current schema version
+        buf[0] = 1; // current schema version
         postcard::to_slice(&extra, &mut buf[1..])
             .map_err(TryIntoSmartContractError::from_postcard)?;
 
