@@ -19,8 +19,10 @@ derive_more = { workspace = true, features = ["as_ref"] }
 # General purpose
 anyhow = { workspace = true }
 
+futures-concurrency = { workspace = true }
+
 # Async
-tokio = { version = "1", default-features = false, features = ["rt-multi-thread"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "signal"] }
 
 # Other
 clap = { workspace = true }

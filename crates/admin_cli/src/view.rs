@@ -4,6 +4,8 @@ pub(super) async fn execute(args: ClusterArgs) -> anyhow::Result<()> {
     let cluster = args.connect().await?;
     let cluster_view = cluster.view();
 
+    println!("{:#?}\n", cluster_view.settings());
+
     for (idx, slot) in cluster_view.node_operators().slots().iter().enumerate() {
         let Some(operator) = slot else {
             println!("{idx}: None");

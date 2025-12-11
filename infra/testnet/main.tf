@@ -63,7 +63,7 @@ locals {
     image     = "docker.io/prom/prometheus:v3.7.3"
     cpu_burst = true
     cpu_cores = 2
-    memory    = 1
+    memory    = 4
     disk      = 20
   }
 
@@ -131,6 +131,7 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      create_ec2_instance_connect_endpoint = false
     }
 
     # Uncomment to deploy an extra operator and test migrations.
@@ -143,7 +144,6 @@ locals {
     #     local.node_config,
     #     local.node_config,
     #   ]
-    #   create_ec2_instance_connect_endpoint = false
     # }
   }
 }
