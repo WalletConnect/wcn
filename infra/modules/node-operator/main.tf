@@ -3,9 +3,6 @@ terraform {
     aws = {
       source = "hashicorp/aws"
     }
-    cloudflare = {
-      source = "cloudflare/cloudflare"
-    }
     sops = {
       source = "carlpett/sops"
     }
@@ -58,9 +55,9 @@ variable "config" {
       prometheus_regions = list(string)
     }))
 
-    dns = optional(object({
-      domain_name        = string
-      cloudflare_zone_id = string
+    route53_zone = optional(object({
+      name    = string
+      zone_id = string
     }))
 
     create_ec2_instance_connect_endpoint = optional(bool)
@@ -199,7 +196,7 @@ module "node" {
 
 locals {
   prometheus_port        = 3000
-  prometheus_domain_name = try("prometheus.${local.region_prefix}.${var.config.dns.domain_name}", null)
+  prometheus_domain_name = try("prometheus.${local.region_prefix}.${var.config.route53_zone.name}", null)
 }
 
 module "prometheus_config" {
@@ -274,7 +271,7 @@ module "prometheus" {
 
 locals {
   grafana_port                          = 9090
-  grafana_domain_name                   = try("grafana.${var.config.dns.domain_name}", null)
+  grafana_domain_name                   = try("grafana.${var.config.route53_zone.name}", null)
   grafana_prometheus_password_file_path = "/tmp/prometheus_password"
 }
 
@@ -289,7 +286,7 @@ module "grafana_prometheus_datasource_config" {
       name          = "Prometheus (${region})"
       type          = "prometheus"
       access        = "proxy"
-      url           = "https://prometheus.${region}.${var.config.dns.domain_name}"
+      url           = "https://prometheus.${region}.${var.config.route53_zone.name}"
       basicAuth     = true
       basicAuthUser = "grafana"
       secureJsonData = {
@@ -340,28 +337,14 @@ module "grafana" {
   })
 }
 
-resource "aws_route53_zone" "this" {
-  count = var.config.dns != null ? 1 : 0
-  name  = var.config.dns.domain_name
-}
-
-resource "cloudflare_dns_record" "ns_delegation" {
-  count   = var.config.dns != null ? 4 : 0
-  zone_id = var.config.dns.cloudflare_zone_id
-  name    = var.config.dns.domain_name
-  content = aws_route53_zone.this[0].name_servers[count.index]
-  type    = "NS"
-  ttl     = 1
-}
-
 module "ssl_certificate" {
   source = "../ssl-certificate"
-  for_each = toset(var.config.dns == null ? [] : concat(
+  for_each = toset(var.config.route53_zone == null ? [] : concat(
     var.config.prometheus == null ? [] : [local.prometheus_domain_name],
     var.config.grafana == null ? [] : [local.grafana_domain_name],
   ))
   domain_name  = each.key
-  route53_zone = aws_route53_zone.this[0]
+  route53_zone = var.config.route53_zone
 }
 
 module "prometheus_https_gateway" {
@@ -390,7 +373,7 @@ module "grafana_https_gateway" {
 
 resource "aws_route53_record" "prometheus" {
   count   = var.config.prometheus != null ? 1 : 0
-  zone_id = aws_route53_zone.this[0].zone_id
+  zone_id = var.config.route53_zone.zone_id
   name    = local.prometheus_domain_name
   type    = "A"
 
@@ -403,7 +386,7 @@ resource "aws_route53_record" "prometheus" {
 
 resource "aws_route53_record" "grafana" {
   count   = var.config.grafana != null ? 1 : 0
-  zone_id = aws_route53_zone.this[0].zone_id
+  zone_id = var.config.route53_zone.zone_id
   name    = local.grafana_domain_name
   type    = "A"
 
