@@ -9,6 +9,7 @@ use {
 mod deploy;
 mod migration;
 mod operator;
+mod settings;
 mod view;
 
 type Cluster = wcn_cluster::Cluster<ClusterConfig>;
@@ -36,6 +37,10 @@ enum Command {
     /// Migration management
     #[command(subcommand)]
     Migration(migration::Command),
+
+    /// Cluster settings management
+    #[command(subcommand)]
+    Settings(settings::Command),
 }
 
 #[derive(Debug, Args)]
@@ -92,6 +97,7 @@ async fn main() -> anyhow::Result<()> {
         Command::View(args) => view::execute(args).await,
         Command::Operator(cmd) => operator::execute(cmd).await,
         Command::Migration(cmd) => migration::execute(cmd).await,
+        Command::Settings(cmd) => settings::execute(cmd).await,
     }
 }
 
