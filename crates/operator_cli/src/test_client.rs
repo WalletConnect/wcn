@@ -1,10 +1,22 @@
 use {
     anyhow::bail,
     clap::Args,
+    futures_concurrency::future::Race,
     libp2p_identity::{Keypair, ed25519},
     quinn_proto::{ConnectionStats, FrameStats, PathStats, UdpStats},
-    std::{net::SocketAddrV4, str::FromStr, time::Duration},
-    tokio::task::{self, JoinSet},
+    std::{
+        net::SocketAddrV4,
+        str::FromStr,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering::Relaxed},
+        },
+        time::{Duration, SystemTime},
+    },
+    tokio::{
+        signal::unix::{SignalKind, signal},
+        task::{self, JoinSet},
+    },
     tracing::{info, warn},
     wcn_rpc::{Client, PeerId, client, transport::Priority},
     wcn_storage_api::{Namespace, RecordVersion, StorageApi, operation::Del, rpc::DatabaseApi},
@@ -24,8 +36,11 @@ pub struct Command {
     num_concurrent_connections: u32,
 
     /// Number of messages to send sequentially per connection
-    #[arg(short = 'N', long, default_value_t = 1_000)]
+    #[arg(short = 'N', long, default_value_t = u32::MAX)]
     num_messages_per_connection: u32,
+
+    #[arg(short, long, default_value = "86400", value_parser = parse_duration_from_secs)]
+    duration_secs: Duration,
 
     #[arg(short = 'i', long, default_value_t = 1_000)]
     reconnect_interval_ms: u64,
@@ -35,6 +50,11 @@ pub struct Command {
 
     #[arg(long, default_value_t = 500)]
     max_idle_connection_timeout_ms: u64,
+}
+
+fn parse_duration_from_secs(s: &str) -> Result<Duration, std::num::ParseIntError> {
+    let i = s.parse()?;
+    Ok(Duration::from_secs(i))
 }
 
 pub(super) async fn execute(args: Command) -> anyhow::Result<()> {
@@ -54,10 +74,34 @@ pub(super) async fn execute(args: Command) -> anyhow::Result<()> {
     let client = client::Client::new(client_config, wcn_storage_api::rpc::DatabaseApi::new())?;
     let namespace = Namespace::from_str("6b6977696b6977696b6977696b6977696b697769/00")?;
 
+    let should_stop = Arc::from(AtomicBool::new(false));
+
     let mut join_set = JoinSet::new();
     for _id in 0..args.num_concurrent_connections {
-        join_set.spawn(tokio::spawn(run(client.clone(), args, peer_id, namespace)));
+        join_set.spawn(tokio::spawn(run(
+            client.clone(),
+            args,
+            peer_id,
+            namespace,
+            should_stop.clone(),
+        )));
     }
+    tokio::spawn(async move {
+        let mut sigint = signal(SignalKind::interrupt()).expect("Unable to listen to SIGINT");
+        let mut sigterm = signal(SignalKind::terminate()).expect("Unable to listen to SIGTERM");
+        let mut sigint_fut = async || {
+            sigint.recv().await;
+            println!("SIGINT received, stopping the application")
+        };
+        let mut sigterm_fut = async || {
+            sigterm.recv().await;
+            println!("SIGTERM received, stopping the application");
+        };
+        loop {
+            (sigint_fut(), sigterm_fut()).race().await;
+            should_stop.store(true, Relaxed);
+        }
+    });
     let results = join_set.join_all().await;
     let mut total_successes = 0;
     let mut total_failures = 0;
@@ -86,13 +130,21 @@ async fn run(
     config: Command,
     peer_id: PeerId,
     namespace: Namespace,
+    should_stop: Arc<AtomicBool>,
 ) -> anyhow::Result<(u32, u32, ConnectionStats)> {
     info!("job {:?} started", task::id());
+    let started_at = SystemTime::now();
     let mut successes = 0;
     let mut failures = 0;
     let mut retries = 10;
     let mut connection_stats = ConnectionStats::default();
-    while successes + failures < config.num_messages_per_connection {
+    let should_continue = |successes: u32, failures: u32| -> anyhow::Result<bool> {
+        let elapsed = started_at.elapsed()?;
+        Ok(!should_stop.load(Relaxed)
+            && elapsed < config.duration_secs
+            && successes + failures < config.num_messages_per_connection)
+    };
+    while should_continue(successes, failures)? {
         let Ok(connection) = client.connect(config.server_address, &peer_id, ()).await else {
             retries -= 1;
             if retries == 0 {
@@ -107,7 +159,7 @@ async fn run(
             version: RecordVersion::from_unix_timestamp_micros(0),
             keyspace_version: None,
         };
-        while successes + failures < config.num_messages_per_connection {
+        while should_continue(successes, failures)? {
             match connection.execute(del.clone().into()).await {
                 Ok(_) => successes += 1,
                 Err(_) => failures += 1,
