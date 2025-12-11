@@ -102,9 +102,9 @@ locals {
         local.node_config,
         local.node_config,
       ]
-      prometheus = local.prometheus_config
-      grafana    = local.grafana_config
-      # route53_zone = aws_route53_zone.this
+      prometheus   = local.prometheus_config
+      grafana      = local.grafana_config
+      route53_zone = aws_route53_zone.this
     }
 
     operator-a = {

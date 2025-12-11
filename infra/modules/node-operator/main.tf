@@ -56,7 +56,7 @@ variable "config" {
     }))
 
     route53_zone = optional(object({
-      name = string
+      name    = string
       zone_id = string
     }))
 
@@ -287,7 +287,7 @@ module "grafana_prometheus_datasource_config" {
       name          = "Prometheus (${region})"
       type          = "prometheus"
       access        = "proxy"
-      url           = "https://prometheus.${region}.${var.config.dns.domain_name}"
+      url           = "https://prometheus.${region}.${var.config.route53_zone.name}"
       basicAuth     = true
       basicAuthUser = "grafana"
       secureJsonData = {
@@ -373,7 +373,7 @@ module "grafana_https_gateway" {
 }
 
 resource "aws_route53_record" "prometheus" {
-  count   = var.config.route53_zone != null && var.config.prometheus != null ? 1 : 0
+  count   = var.config.prometheus != null ? 1 : 0
   zone_id = var.config.route53_zone.zone_id
   name    = local.prometheus_domain_name
   type    = "A"
@@ -386,7 +386,7 @@ resource "aws_route53_record" "prometheus" {
 }
 
 resource "aws_route53_record" "grafana" {
-  count   = var.config.route53_zone != null && var.config.grafana != null ? 1 : 0
+  count   = var.config.grafana != null ? 1 : 0
   zone_id = var.config.route53_zone.zone_id
   name    = local.grafana_domain_name
   type    = "A"
