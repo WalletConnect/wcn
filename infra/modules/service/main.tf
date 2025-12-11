@@ -180,7 +180,13 @@ resource "aws_instance" "this" {
   user_data_base64     = data.cloudinit_config.this.rendered
 
   lifecycle {
-    replace_triggered_by = [terraform_data.userdata_fingerprint, terraform_data.instance_type]
+    replace_triggered_by = [
+      terraform_data.userdata_fingerprint,
+      # The default behaviour on instance_type changes is to start/stop the instance, but ECS agent breaks
+      # after instance type change because of some config shennanigans.
+      # We force recreation of the instance here, on every instance_type change.
+      terraform_data.instance_type,
+    ]
   }
 
   tags = {
@@ -305,6 +311,8 @@ resource "aws_ecs_service" "this" {
 
   force_delete = true
 
+  # If we don't order resources this way, terraform may be unable to delete the ECS service
+  # due to some necessary resources being deleted before the service itself.
   depends_on = [
     aws_instance.this,
     aws_volume_attachment.data,
