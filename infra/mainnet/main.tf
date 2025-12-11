@@ -93,6 +93,11 @@ locals {
     prometheus_regions = ["eu", "us", "ap", "sa"]
   }
 
+  dns = {
+    domain_name        = "mainnet.walletconnect.network"
+    cloudflare_zone_id = "a97af2cd2fd2da7a93413e455ed47f2c"
+  }
+
   eu_operators = {
     wallet-connect = {
       vpc_cidr_octet         = 5 # 10.5.0.0/16
@@ -101,6 +106,9 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      prometheus = local.prometheus_config
+      grafana    = local.grafana_config
+      dns = local.dns
     }
   }  
 
@@ -112,6 +120,8 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      prometheus = local.prometheus_config
+      dns = local.dns
     }
   }  
 
@@ -123,6 +133,8 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      prometheus = local.prometheus_config
+      dns = local.dns
     }
     wallet-connect-2 = {
       vpc_cidr_octet         = 0 # 10.0.0.0/16
@@ -142,6 +154,8 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      prometheus = local.prometheus_config
+      dns = local.dns
     }
     wallet-connect-2 = {
       vpc_cidr_octet         = 0 # 10.0.0.0/16
