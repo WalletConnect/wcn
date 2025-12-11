@@ -139,7 +139,7 @@ locals {
 
     operator-e = {
       vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = merge(local.db_config, { cpu_arch = "x86" })
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
