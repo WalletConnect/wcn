@@ -45,6 +45,19 @@ module "sops-encryption-key" {
   source = "../modules/sops-encryption-key"
 }
 
+resource "aws_route53_zone" "this" {
+  name = "testnet.walletconnect.network"
+}
+
+resource "cloudflare_dns_record" "ns_delegation" {
+  count   = 4
+  zone_id = "a97af2cd2fd2da7a93413e455ed47f2c"
+  name    = aws_route53_zone.this.name
+  content = aws_route53_zone.this.name_servers[count.index]
+  type    = "NS"
+  ttl     = 1
+}
+
 locals {
   db_config = {
     image     = "ghcr.io/walletconnect/wcn-db:251113.0"
@@ -91,10 +104,7 @@ locals {
       ]
       prometheus = local.prometheus_config
       grafana    = local.grafana_config
-      dns = {
-        domain_name        = "testnet.walletconnect.network"
-        cloudflare_zone_id = "a97af2cd2fd2da7a93413e455ed47f2c"
-      }
+      # route53_zone = aws_route53_zone.this
     }
 
     operator-a = {
