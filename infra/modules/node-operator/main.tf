@@ -16,10 +16,10 @@ variable "config" {
     smart_contract_address = string
 
     vpc_cidr_octet = number
-    vpc_peering_connections = optional(object({
+    vpc_peering_connections = optional(map(object({
       account_id = string
       cidr       = string
-    }))
+    })))
 
     db = object({
       image     = string
@@ -58,10 +58,10 @@ variable "config" {
       prometheus_regions = list(string)
     }))
 
-    route53_zone = optional(map(object({
+    route53_zone = optional(object({
       name    = string
       zone_id = string
-    })))
+    }))
 
     create_ec2_instance_connect_endpoint = optional(bool)
   })
