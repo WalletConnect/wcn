@@ -106,78 +106,102 @@ locals {
     prometheus_regions = ["eu", "us", "ap", "sa"]
   }
 
+  relay_account_id = "780545098720"
+  vpc_peering_connections = {
+    "relay-eu-central-1" : {
+      account_id = local.relay_account_id
+      cidr       = "10.11.0.0/16"
+    }
+    "relay-us-east-1" : {
+      account_id = local.relay_account_id
+      cidr       = "10.12.0.0/16"
+    }
+    "relay-ap-southeast-1" : {
+      account_id = local.relay_account_id
+      cidr       = "10.13.0.0/16"
+    }
+    "relay-sa-east-1" : {
+      account_id = local.relay_account_id
+      cidr       = "10.14.0.0/16"
+    }
+  }
+
   eu_operators = {
     wallet-connect = {
-      vpc_cidr_octet         = 5 # 10.5.0.0/16
-      db                     = local.db_config
+      vpc_cidr_octet          = 5 # 10.5.0.0/16
+      vpc_peering_connections = local.vpc_peering_connections
+      db                      = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
       ]
-      prometheus = local.prometheus_config
-      grafana    = local.grafana_config
+      prometheus   = local.prometheus_config
+      grafana      = local.grafana_config
       route53_zone = aws_route53_zone.this
     }
-  }  
+  }
 
   us_operators = {
     wallet-connect = {
-      vpc_cidr_octet         = 6 # 10.6.0.0/16
-      db                     = local.db_config
+      vpc_cidr_octet          = 6 # 10.6.0.0/16
+      vpc_peering_connections = local.vpc_peering_connections
+      db                      = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
       ]
-      prometheus = local.prometheus_config
+      prometheus   = local.prometheus_config
       route53_zone = aws_route53_zone.this
     }
-  }  
+  }
 
   ap_operators = {
     wallet-connect = {
-      vpc_cidr_octet         = 7 # 10.7.0.0/16
-      db                     = local.db_config
+      vpc_cidr_octet          = 7 # 10.7.0.0/16
+      vpc_peering_connections = local.vpc_peering_connections
+      db                      = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
       ]
-      prometheus = local.prometheus_config
+      prometheus   = local.prometheus_config
       route53_zone = aws_route53_zone.this
     }
     wallet-connect-2 = {
-      vpc_cidr_octet         = 0 # 10.0.0.0/16
-      db                     = local.db_config
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
       ]
     }
-  }  
+  }
 
   sa_operators = {
     wallet-connect = {
-      vpc_cidr_octet         = 8 # 10.8.0.0/16
-      db                     = local.db_config
+      vpc_cidr_octet          = 8 # 10.8.0.0/16
+      vpc_peering_connections = local.vpc_peering_connections
+      db                      = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
       ]
-      prometheus = local.prometheus_config
+      prometheus   = local.prometheus_config
       route53_zone = aws_route53_zone.this
     }
     wallet-connect-2 = {
-      vpc_cidr_octet         = 0 # 10.0.0.0/16
-      db                     = local.db_config
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
       ]
     }
-  }  
+  }
 }
 
 module "eu-central-1" {
-  source = "../modules/node-operator"
+  source   = "../modules/node-operator"
   for_each = local.eu_operators
 
   config = merge(each.value, {
@@ -192,7 +216,7 @@ module "eu-central-1" {
 }
 
 module "us-east-1" {
-  source = "../modules/node-operator"
+  source   = "../modules/node-operator"
   for_each = local.us_operators
 
   config = merge(each.value, {
@@ -207,7 +231,7 @@ module "us-east-1" {
 }
 
 module "ap-southeast-1" {
-  source = "../modules/node-operator"
+  source   = "../modules/node-operator"
   for_each = local.ap_operators
 
   config = merge(each.value, {
@@ -222,7 +246,7 @@ module "ap-southeast-1" {
 }
 
 module "sa-east-1" {
-  source = "../modules/node-operator"
+  source   = "../modules/node-operator"
   for_each = local.sa_operators
 
   config = merge(each.value, {

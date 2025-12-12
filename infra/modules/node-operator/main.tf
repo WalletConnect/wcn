@@ -12,11 +12,14 @@ terraform {
 variable "config" {
   type = object({
     name                   = string
-    domain_name            = optional(string)
     secrets_file_path      = string
     smart_contract_address = string
 
     vpc_cidr_octet = number
+    vpc_peering_connections = optional(object({
+      account_id = string
+      cidr       = string
+    }))
 
     db = object({
       image     = string
@@ -55,10 +58,10 @@ variable "config" {
       prometheus_regions = list(string)
     }))
 
-    route53_zone = optional(object({
+    route53_zone = optional(map(object({
       name    = string
       zone_id = string
-    }))
+    })))
 
     create_ec2_instance_connect_endpoint = optional(bool)
   })
@@ -84,6 +87,8 @@ locals {
 
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
   secrets = jsondecode(ephemeral.sops_file.secrets.raw)
+
+  vpc_peering_connections = var.config.vpc_peering_connections == null ? {} : var.config.vpc_peering_connections
 }
 
 module "secret" {
@@ -415,4 +420,37 @@ resource "aws_ec2_instance_connect_endpoint" "this" {
   subnet_id          = module.vpc.private_subnet_objects[0].id
   security_group_ids = [aws_security_group.ec2_instance_connect_endpoint[0].id]
   preserve_client_ip = false
+}
+
+data "aws_vpc_peering_connection" "this" {
+  for_each = local.vpc_peering_connections
+
+  peer_vpc_id = module.vpc.vpc_id
+
+  owner_id   = each.value.account_id
+  cidr_block = each.value.cidr
+
+  filter {
+    name   = "status-code"
+    values = ["pending-acceptance", "provisioning", "active"]
+  }
+}
+
+resource "aws_vpc_peering_connection_accepter" "this" {
+  for_each = local.vpc_peering_connections
+
+  vpc_peering_connection_id = data.aws_vpc_peering_connection.this[each.key].id
+  auto_accept               = true
+}
+
+resource "aws_route" "vpc_peering" {
+  for_each = merge([
+    for idx, id in module.vpc.public_route_table_ids : {
+      for name, conn in local.vpc_peering_connections : "${idx}:${name}" => merge(conn, { name = name, table_id = id })
+    }
+  ]...)
+
+  route_table_id            = each.value.table_id
+  vpc_peering_connection_id = data.aws_vpc_peering_connection.this[each.value.name].id
+  destination_cidr_block    = each.value.cidr
 }
