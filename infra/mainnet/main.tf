@@ -262,7 +262,7 @@ module "sa-east-1" {
   }
 }
 
-resource "cloudflare_record" "monitoring" {
+resource "cloudflare_dns_record" "monitoring" {
   zone_id = local.cloudflare_zone_id
   name    = "monitoring"
   type    = "A"
@@ -277,23 +277,19 @@ resource "cloudflare_ruleset" "monitoring_redirect" {
   kind    = "zone"
   phase   = "http_request_dynamic_redirect"
 
-  rules {
-    enabled     = true
+  rules = [{
     description = "301 monitoring.walletconnect.network -> grafana.mainnet.walletconnect.network"
     expression  = "(http.host eq \"monitoring.walletconnect.network\")"
-
-    action = "redirect"
-
-    action_parameters {
-      from_value {
+    action      = "redirect"
+    action_parameters = {
+      from_value = {
         status_code = 301
-
-        target_url {
+        target_url = {
           value = "https://grafana.mainnet.walletconnect.network"
         }
       }
     }
-  }
+  }]
 }
 
 output "sops-encryption-key-arn" {
