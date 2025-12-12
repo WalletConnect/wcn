@@ -66,7 +66,7 @@ resource "aws_route53_zone" "this" {
 
 resource "cloudflare_dns_record" "ns_delegation" {
   count   = 4
-  zone_id = "a97af2cd2fd2da7a93413e455ed47f2c"
+  zone_id = local.cloudflare_zone_id
   name    = aws_route53_zone.this.name
   content = aws_route53_zone.this.name_servers[count.index]
   type    = "NS"
@@ -74,6 +74,8 @@ resource "cloudflare_dns_record" "ns_delegation" {
 }
 
 locals {
+  cloudflare_zone_id = "a97af2cd2fd2da7a93413e455ed47f2c"
+
   db_config = {
     image     = "ghcr.io/walletconnect/wcn-db:251113.0"
     cpu_arch  = "x86"
@@ -257,6 +259,40 @@ module "sa-east-1" {
 
   providers = {
     aws = aws.sa
+  }
+}
+
+resource "cloudflare_record" "monitoring" {
+  zone_id = local.cloudflare_zone_id
+  name    = "monitoring"
+  type    = "A"
+  value   = "192.0.2.1" # dummy value, won't be used as we are doing a redirect
+  proxied = true
+  ttl     = 1 # auto
+}
+
+resource "cloudflare_ruleset" "monitoring_redirect" {
+  zone_id = local.cloudflare_zone_id
+  name    = "redirect monitoring to grafana.mainnet"
+  kind    = "zone"
+  phase   = "http_request_dynamic_redirect"
+
+  rules {
+    enabled     = true
+    description = "301 monitoring.walletconnect.network -> grafana.mainnet.walletconnect.network"
+    expression  = "(http.host eq \"monitoring.walletconnect.network\")"
+
+    action = "redirect"
+
+    action_parameters {
+      from_value {
+        status_code = 301
+
+        target_url {
+          value = "https://grafana.mainnet.walletconnect.network"
+        }
+      }
+    }
   }
 }
 
