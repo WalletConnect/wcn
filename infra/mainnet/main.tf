@@ -266,7 +266,7 @@ resource "cloudflare_dns_record" "monitoring" {
   zone_id = local.cloudflare_zone_id
   name    = "monitoring"
   type    = "A"
-  value   = "192.0.2.1" # dummy value, won't be used as we are doing a redirect
+  content = "192.0.2.1" # dummy value, won't be used as we are doing a redirect
   proxied = true
   ttl     = 1 # auto
 }
