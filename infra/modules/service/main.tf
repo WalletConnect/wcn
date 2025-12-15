@@ -181,7 +181,7 @@ resource "aws_instance" "this" {
 
   lifecycle {
     replace_triggered_by = [
-      terraform_data.userdata_fingerprint,
+      # terraform_data.userdata_fingerprint,
       # The default behaviour on instance_type changes is to start/stop the instance, but ECS agent breaks
       # after instance type change because of some config shennanigans.
       # We force recreation of the instance here, on every instance_type change.
@@ -313,15 +313,15 @@ resource "aws_ecs_service" "this" {
 
   # If we don't order resources this way, terraform may be unable to delete the ECS service
   # due to some necessary resources being deleted before the service itself.
-  # depends_on = [
-  #   aws_instance.this,
-  #   aws_volume_attachment.data,
-  #   aws_eip_association.this,
-  #   aws_iam_role_policy_attachment.this,
-  #   aws_iam_role_policy.ssm,
-  #   aws_vpc_security_group_egress_rule.all,
-  #   aws_vpc_security_group_ingress_rule.this,
-  # ]
+  depends_on = [
+    aws_instance.this,
+    aws_volume_attachment.data,
+    aws_eip_association.this,
+    aws_iam_role_policy_attachment.this,
+    aws_iam_role_policy.ssm,
+    aws_vpc_security_group_egress_rule.all,
+    aws_vpc_security_group_ingress_rule.this,
+  ]
 }
 
 output "private_ip" {
