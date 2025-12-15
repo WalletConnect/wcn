@@ -26,7 +26,7 @@ variable "cloudflare_wcf_api_token" {
   ephemeral = true
 }
 
-local {
+locals {
   aws_tags = {
     Application = "wcn"
   }
