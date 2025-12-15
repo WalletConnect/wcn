@@ -26,13 +26,25 @@ variable "cloudflare_wcf_api_token" {
   ephemeral = true
 }
 
+locals {
+  aws_tags = {
+    Application = "wcn"
+  }
+}
+
 provider "aws" {
   region = "eu-central-1"
+  default_tags {
+    tags = local.aws_tags
+  }
 }
 
 provider "aws" {
   region = "eu-central-1"
   alias  = "eu"
+  default_tags {
+    tags = local.aws_tags
+  }
 }
 
 provider "cloudflare" {
