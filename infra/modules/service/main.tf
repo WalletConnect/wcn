@@ -116,10 +116,6 @@ data "cloudinit_config" "this" {
   }
 }
 
-resource "terraform_data" "userdata_fingerprint" {
-  input = sha256(data.cloudinit_config.this.rendered)
-}
-
 resource "terraform_data" "instance_type" {
   input = local.instance_type
 }
@@ -178,10 +174,10 @@ resource "aws_instance" "this" {
 
   iam_instance_profile = aws_iam_instance_profile.this.name
   user_data_base64     = data.cloudinit_config.this.rendered
+  user_data_replace_on_change = true
 
   lifecycle {
     replace_triggered_by = [
-      # terraform_data.userdata_fingerprint,
       # The default behaviour on instance_type changes is to start/stop the instance, but ECS agent breaks
       # after instance type change because of some config shennanigans.
       # We force recreation of the instance here, on every instance_type change.

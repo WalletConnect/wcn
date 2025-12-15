@@ -28,17 +28,17 @@ variable "cloudflare_wcf_api_token" {
 
 provider "aws" {
   region = "eu-central-1"
-  # default_tags {
-  #   tags = local.tags
-  # }
+  default_tags {
+    tags = local.tags
+  }
 }
 
 provider "aws" {
   region = "eu-central-1"
   alias  = "eu"
-  # default_tags {
-  #   tags = local.tags
-  # }
+  default_tags {
+    tags = local.tags
+  }
 }
 
 provider "cloudflare" {
