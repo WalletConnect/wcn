@@ -26,28 +26,49 @@ variable "cloudflare_wcf_api_token" {
   ephemeral = true
 }
 
+locals {
+  aws_tags = {
+    Application = "wcn"
+  }
+}
+
 provider "aws" {
   region = "eu-central-1"
+  default_tags {
+    tags = local.aws_tags
+  }
 }
 
 provider "aws" {
   region = "eu-central-1"
   alias  = "eu"
+  default_tags {
+    tags = local.aws_tags
+  }
 }
 
 provider "aws" {
   region = "us-east-1"
   alias  = "us"
+  default_tags {
+    tags = local.aws_tags
+  }
 }
 
 provider "aws" {
   region = "ap-southeast-1"
   alias  = "ap"
+  default_tags {
+    tags = local.aws_tags
+  }
 }
 
 provider "aws" {
   region = "sa-east-1"
   alias  = "sa"
+  default_tags {
+    tags = local.aws_tags
+  }
 }
 
 provider "cloudflare" {
