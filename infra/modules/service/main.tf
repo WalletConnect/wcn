@@ -172,8 +172,8 @@ resource "aws_instance" "this" {
     network_interface_id = aws_network_interface.this.id
   }
 
-  iam_instance_profile = aws_iam_instance_profile.this.name
-  user_data_base64     = data.cloudinit_config.this.rendered
+  iam_instance_profile        = aws_iam_instance_profile.this.name
+  user_data_base64            = data.cloudinit_config.this.rendered
   user_data_replace_on_change = true
 
   lifecycle {

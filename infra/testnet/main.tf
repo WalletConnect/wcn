@@ -66,7 +66,7 @@ resource "cloudflare_dns_record" "ns_delegation" {
 
 locals {
   tags = {
-    Application = "wcn2"
+    Application = "wcn"
   }
 
   db_config = {
