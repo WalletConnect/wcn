@@ -26,10 +26,16 @@ variable "cloudflare_wcf_api_token" {
   ephemeral = true
 }
 
+local {
+  aws_tags = {
+    Application = "wcn"
+  }
+}
+
 provider "aws" {
   region = "eu-central-1"
   default_tags {
-    tags = local.tags
+    tags = local.aws_tags
   }
 }
 
@@ -37,7 +43,7 @@ provider "aws" {
   region = "eu-central-1"
   alias  = "eu"
   default_tags {
-    tags = local.tags
+    tags = local.aws_tags
   }
 }
 
@@ -65,10 +71,6 @@ resource "cloudflare_dns_record" "ns_delegation" {
 }
 
 locals {
-  tags = {
-    Application = "wcn"
-  }
-
   db_config = {
     image     = "ghcr.io/walletconnect/wcn-db:251113.0"
     cpu_cores = 2
