@@ -35,4 +35,3 @@ fi
 dnf install -y ec2-instance-connect
 systemctl restart sshd
 
-# invalidate
