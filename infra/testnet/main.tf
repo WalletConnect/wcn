@@ -67,7 +67,6 @@ resource "cloudflare_dns_record" "ns_delegation" {
 locals {
   tags = {
     Application = "wcn"
-    Environment = "mainnet"
   }
 
   db_config = {
