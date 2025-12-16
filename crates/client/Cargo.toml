@@ -38,6 +38,7 @@ ring = "0.17"
 
 # Other
 libp2p-identity = { workspace = true }
+smallvec = { workspace = true }
 
 [lints]
 workspace = true
