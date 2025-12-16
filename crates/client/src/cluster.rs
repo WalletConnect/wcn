@@ -307,6 +307,10 @@ impl<D: NodeData> Cluster<D> {
         F: Fn(&Node<D>) -> Option<R>,
     {
         let operator_ids = self.operators.load();
+        if operator_ids.is_empty() {
+            return None;
+        }
+
         let next_operator = self.operator_idx.fetch_add(1, atomic::Ordering::Relaxed);
         let (left, right) = operator_ids.split_at(next_operator % operator_ids.len());
         let mut operator_ids = right.iter().chain(left);
