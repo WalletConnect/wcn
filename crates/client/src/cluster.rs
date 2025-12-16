@@ -234,14 +234,14 @@ fn transport_err(err: impl ToString) -> ReadError {
     ReadError::Transport(err.to_string())
 }
 
-pub struct ClusterWrapper<D: NodeData> {
+pub struct Cluster<D: NodeData> {
     cluster: NativeCluster<D>,
     operators: Arc<ArcSwap<Vec<NodeOperatorId>>>,
     operator_idx: AtomicUsize,
     shutdown: Arc<Notify>,
 }
 
-impl<D: NodeData> ClusterWrapper<D> {
+impl<D: NodeData> Cluster<D> {
     pub async fn new(
         config: Config<D>,
         smart_contract: SmartContract<D>,
@@ -336,7 +336,7 @@ impl<D: NodeData> ClusterWrapper<D> {
     }
 }
 
-impl<D: NodeData> Drop for ClusterWrapper<D> {
+impl<D: NodeData> Drop for Cluster<D> {
     fn drop(&mut self) {
         self.shutdown.notify_waiters();
     }

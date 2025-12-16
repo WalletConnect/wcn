@@ -20,7 +20,7 @@ use {
 };
 
 pub struct BaseClient<T: RequestObserver> {
-    cluster: cluster::ClusterWrapper<T::NodeData>,
+    cluster: cluster::Cluster<T::NodeData>,
     connection_timeout: Duration,
     max_attempts: usize,
     observer: T,
@@ -92,7 +92,7 @@ where
             cluster_view: cluster_view.clone(),
             trusted_operators: config.trusted_operators,
         };
-        let cluster = cluster::ClusterWrapper::new(
+        let cluster = cluster::Cluster::new(
             cluster_cfg,
             dynamic_sc,
             cluster_view,
