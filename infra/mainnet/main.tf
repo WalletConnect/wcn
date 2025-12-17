@@ -169,6 +169,7 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      create_ec2_instance_connect_endpoint = false
     }
     wallet-connect-3 = {
       vpc_cidr_octet          = 0 # 10.0.0.0/16
@@ -177,6 +178,7 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      create_ec2_instance_connect_endpoint = false
     }
     wallet-connect-4 = {
       vpc_cidr_octet          = 0 # 10.0.0.0/16
@@ -185,6 +187,7 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      create_ec2_instance_connect_endpoint = false
     }
     wallet-connect-5 = {
       vpc_cidr_octet          = 0 # 10.0.0.0/16
@@ -193,6 +196,7 @@ locals {
         local.node_config,
         local.node_config,
       ]
+      create_ec2_instance_connect_endpoint = false
     }
   }
 
