@@ -164,7 +164,6 @@ locals {
     }
     wallet-connect-2 = {
       vpc_cidr_octet          = 0 # 10.0.0.0/16
-      vpc_peering_connections = local.vpc_peering_connections
       db                      = local.db_config
       nodes = [
         local.node_config,
@@ -173,7 +172,6 @@ locals {
     }
     wallet-connect-3 = {
       vpc_cidr_octet          = 0 # 10.0.0.0/16
-      vpc_peering_connections = local.vpc_peering_connections
       db                      = local.db_config
       nodes = [
         local.node_config,
@@ -182,7 +180,6 @@ locals {
     }
     wallet-connect-4 = {
       vpc_cidr_octet          = 0 # 10.0.0.0/16
-      vpc_peering_connections = local.vpc_peering_connections
       db                      = local.db_config
       nodes = [
         local.node_config,
@@ -191,7 +188,6 @@ locals {
     }
     wallet-connect-5 = {
       vpc_cidr_octet          = 0 # 10.0.0.0/16
-      vpc_peering_connections = local.vpc_peering_connections
       db                      = local.db_config
       nodes = [
         local.node_config,
