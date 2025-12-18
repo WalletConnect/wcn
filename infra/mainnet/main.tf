@@ -163,8 +163,8 @@ locals {
       route53_zone = aws_route53_zone.this
     }
     wallet-connect-2 = {
-      vpc_cidr_octet          = 0 # 10.0.0.0/16
-      db                      = local.db_config
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -172,8 +172,8 @@ locals {
       create_ec2_instance_connect_endpoint = false
     }
     wallet-connect-3 = {
-      vpc_cidr_octet          = 0 # 10.0.0.0/16
-      db                      = local.db_config
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -181,8 +181,8 @@ locals {
       create_ec2_instance_connect_endpoint = false
     }
     wallet-connect-4 = {
-      vpc_cidr_octet          = 0 # 10.0.0.0/16
-      db                      = local.db_config
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -190,8 +190,8 @@ locals {
       create_ec2_instance_connect_endpoint = false
     }
     wallet-connect-5 = {
-      vpc_cidr_octet          = 0 # 10.0.0.0/16
-      db                      = local.db_config
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -302,36 +302,6 @@ module "sa-east-1" {
     aws = aws.sa
   }
 }
-
-# resource "cloudflare_dns_record" "monitoring" {
-#   zone_id = local.cloudflare_zone_id
-#   name    = "monitoring"
-#   type    = "A"
-#   content = "192.0.2.1" # dummy value, won't be used as we are doing a redirect
-#   proxied = true
-#   ttl     = 1 # auto
-# }
-
-# resource "cloudflare_ruleset" "monitoring_redirect" {
-#   zone_id = local.cloudflare_zone_id
-#   name    = "redirect monitoring to grafana.mainnet"
-#   kind    = "zone"
-#   phase   = "http_request_dynamic_redirect"
-
-#   rules = [{
-#     description = "301 monitoring.walletconnect.network -> grafana.mainnet.walletconnect.network"
-#     expression  = "(http.host eq \"monitoring.walletconnect.network\")"
-#     action      = "redirect"
-#     action_parameters = {
-#       from_value = {
-#         status_code = 301
-#         target_url = {
-#           value = "https://grafana.mainnet.walletconnect.network"
-#         }
-#       }
-#     }
-#   }]
-# }
 
 output "sops-encryption-key-arn" {
   value = module.sops-encryption-key.arn
