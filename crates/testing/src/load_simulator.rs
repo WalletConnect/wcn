@@ -839,7 +839,7 @@ impl Map {
                 },
             )
             .pipe(|(count, uncertain_count)| {
-                count.checked_sub(uncertain_count).unwrap_or_default()..=count + uncertain_count
+                count.saturating_sub(uncertain_count)..=count + uncertain_count
             })
     }
 }

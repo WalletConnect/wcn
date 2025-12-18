@@ -15,7 +15,6 @@ use {
         sync::Arc,
         time::{Duration, Instant},
     },
-    tokio::sync::oneshot,
     wc::future::FutureExt,
     wcn_storage_api::{StorageApi, operation as op, rpc::CoordinatorApi},
 };
@@ -26,7 +25,6 @@ pub struct BaseClient<T: RequestObserver> {
     max_attempts: usize,
     observer: T,
     encryption_key: Option<EncryptionKey>,
-    _shutdown_tx: oneshot::Sender<()>,
 }
 
 impl<T> BaseClient<T>
@@ -84,24 +82,23 @@ where
             config.cluster_key,
             cluster_api_client,
             coordinator_api_client,
-            config.ignored_operators,
         );
 
         let bootstrap_sc = cluster::SmartContract::Static(initial_cluster_view);
-        let bootstrap_cluster = cluster::Cluster::new(cluster_cfg.clone(), bootstrap_sc).await?;
+        let bootstrap_cluster =
+            wcn_cluster::Cluster::new(cluster_cfg.clone(), bootstrap_sc).await?;
         let cluster_view = Arc::new(ArcSwap::new(bootstrap_cluster.view()));
         let dynamic_sc = cluster::SmartContract::Dynamic {
             cluster_view: cluster_view.clone(),
             trusted_operators: config.trusted_operators,
         };
-        let cluster = cluster::Cluster::new(cluster_cfg, dynamic_sc).await?;
-
-        let (shutdown_tx, shutdown_rx) = oneshot::channel();
-        tokio::spawn(cluster::update_task(
-            shutdown_rx,
-            cluster.clone(),
+        let cluster = cluster::Cluster::new(
+            cluster_cfg,
+            dynamic_sc,
             cluster_view,
-        ));
+            config.ignored_operators,
+        )
+        .await?;
 
         Ok(Self {
             cluster,
@@ -109,7 +106,6 @@ where
             max_attempts: config.max_retries + 1,
             observer,
             encryption_key,
-            _shutdown_tx: shutdown_tx,
         })
     }
 
@@ -197,35 +193,24 @@ where
         //   broken connections. The expectation is that each operator should have at
         //   least one available node at all times.
 
-        self.cluster.using_view(|view| {
-            let operators = view.node_operators();
+        // Iterate over all of the operators to find one with a connected node. If that
+        // fails, return the next node in hopes that the connection will be established
+        // during the request.
+        self.cluster
+            .find_node(|node| {
+                let connector = node.coordinator_api();
 
-            // Iterate over all of the operators to find one with a connected node.
-            let result = operators.find_next_operator(|operator| {
-                operator.find_next_node(|node| {
-                    if !node.is_active {
-                        return None;
-                    }
-
-                    let connector = node.coordinator_api();
-
-                    connector
-                        .is_open(route)
-                        .then(|| (connector, node.data.clone()))
-                })
-            });
-
-            if let Some(result) = result {
-                // We've found a connected node.
-                result
-            } else {
+                // Check if we've found a connected node.
+                connector
+                    .is_open(route)
+                    .then(|| (connector, node.data.clone()))
+            })
+            .unwrap_or_else(|| {
                 // If the above failed, return the next node in hopes that the connection will
                 // be established during the request.
-                let node = operators.next().next_node();
-
-                (node.coordinator_api(), node.data.clone())
-            }
-        })
+                self.cluster
+                    .next_node(|node| (node.coordinator_api(), node.data.clone()))
+            })
     }
 }
 

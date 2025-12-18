@@ -29,6 +29,11 @@ pub struct NodeOperators<N = Node> {
 }
 
 impl<N> NodeOperators<N> {
+    /// Returns an iterator over all [`NodeOperator`]s.
+    pub fn iter(&self) -> impl Iterator<Item = &NodeOperator<N>> {
+        self.slots.iter().flatten()
+    }
+
     #[allow(clippy::should_implement_trait)]
     /// Converts this collection into an iterator over all [`NodeOperator`]s.
     pub fn into_iter(self) -> impl Iterator<Item = NodeOperator<N>> + Send + 'static
