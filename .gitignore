@@ -10,7 +10,6 @@ target/
 !/contracts/out/ERC1967Proxy.sol
 /contracts/cache/
 .direnv
-.env
 .envrc
 .env.*
 
