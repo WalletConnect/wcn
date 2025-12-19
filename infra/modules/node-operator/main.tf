@@ -11,10 +11,9 @@ terraform {
 
 variable "config" {
   type = object({
-    name                   = string
-    domain_name            = optional(string)
-    sops_file_path         = string
-    smart_contract_address = string
+    name           = string
+    domain_name    = optional(string)
+    sops_file_path = string
 
     vpc_cidr_octet = number
 
@@ -181,7 +180,7 @@ module "node" {
       DATABASE_PEER_ID                   = local.peer_id
       DATABASE_PRIMARY_RPC_SERVER_PORT   = tostring(local.db_primary_rpc_server_port)
       DATABASE_SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
-      SMART_CONTRACT_ADDRESS             = var.config.smart_contract_address
+      SMART_CONTRACT_ADDRESS             = local.smart_contract_address
     }
 
     secrets = merge({
