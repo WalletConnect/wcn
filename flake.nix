@@ -78,7 +78,7 @@
               name = "nu-env";
               text = ''
                 # shellcheck disable=SC1091
-                . ./.env "$1"
+                . ./env.sh "$1"
                 exec nu
               '';
             })
