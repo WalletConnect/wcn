@@ -250,7 +250,7 @@ module "eu-central-1" {
   config = merge(each.value, {
     name                   = each.key
     smart_contract_address = "0xa18770BFAb520CdD101680cCF3252D642713F3fC"
-    secrets_file_path      = "${path.module}/secrets/eu.${each.key}.sops.json"
+    sops_file_path         = "${path.module}/sops/eu.${each.key}.sops.json"
   })
 
   providers = {
@@ -265,7 +265,7 @@ module "us-east-1" {
   config = merge(each.value, {
     name                   = each.key
     smart_contract_address = "0x352988ff4cee2f218dfd2bf404f06444706af2ea"
-    secrets_file_path      = "${path.module}/secrets/us.${each.key}.sops.json"
+    sops_file_path         = "${path.module}/sops/us.${each.key}.sops.json"
   })
 
   providers = {
@@ -280,7 +280,7 @@ module "ap-southeast-1" {
   config = merge(each.value, {
     name                   = each.key
     smart_contract_address = "0x25cd8e3f33fe5ecb6c04f6176581a855d404dff2"
-    secrets_file_path      = "${path.module}/secrets/ap.${each.key}.sops.json"
+    sops_file_path         = "${path.module}/sops/ap.${each.key}.sops.json"
   })
 
   providers = {
@@ -295,7 +295,7 @@ module "sa-east-1" {
   config = merge(each.value, {
     name                   = each.key
     smart_contract_address = "0xca5b9bd2cf8045ff8308454c1b9caef2a6fcc20f"
-    secrets_file_path      = "${path.module}/secrets/sa.${each.key}.sops.json"
+    sops_file_path         = "${path.module}/sops/sa.${each.key}.sops.json"
   })
 
   providers = {
