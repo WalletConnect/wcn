@@ -87,7 +87,7 @@ locals {
   smart_contract_address = local.encrypted_sops.smart_contract_address_unencrypted
 
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
-  sops = jsondecode(ephemeral.sops_file.secrets.raw)
+  sops = jsondecode(ephemeral.sops_file.this.raw)
 
   vpc_peering_connections = var.config.vpc_peering_connections == null ? {} : var.config.vpc_peering_connections
 }
@@ -96,7 +96,8 @@ module "secret" {
   source = "../secret"
   for_each = toset(concat(
     ["ecdsa_private_key", "ed25519_secret_key", "smart_contract_encryption_key", "rpc_provider_url"],
-    var.config.grafana == null ? [] : ["grafana_admin_password", "prometheus_grafana_password"],
+    var.config.prometheus == null ? [] : ["prometheus_grafana_password"],
+    var.config.grafana == null ? [] : ["grafana_admin_password"],
   ))
 
   name            = "${var.config.name}-${each.key}"
