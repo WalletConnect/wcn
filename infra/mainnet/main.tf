@@ -248,9 +248,8 @@ module "eu-central-1" {
   for_each = local.eu_operators
 
   config = merge(each.value, {
-    name                   = each.key
-    smart_contract_address = "0xa18770BFAb520CdD101680cCF3252D642713F3fC"
-    sops_file_path         = "${path.module}/sops/eu.${each.key}.sops.json"
+    name           = each.key
+    sops_file_path = "${path.module}/sops/eu.${each.key}.sops.json"
   })
 
   providers = {
@@ -263,9 +262,8 @@ module "us-east-1" {
   for_each = local.us_operators
 
   config = merge(each.value, {
-    name                   = each.key
-    smart_contract_address = "0x352988ff4cee2f218dfd2bf404f06444706af2ea"
-    sops_file_path         = "${path.module}/sops/us.${each.key}.sops.json"
+    name           = each.key
+    sops_file_path = "${path.module}/sops/us.${each.key}.sops.json"
   })
 
   providers = {
@@ -278,9 +276,8 @@ module "ap-southeast-1" {
   for_each = local.ap_operators
 
   config = merge(each.value, {
-    name                   = each.key
-    smart_contract_address = "0x25cd8e3f33fe5ecb6c04f6176581a855d404dff2"
-    sops_file_path         = "${path.module}/sops/ap.${each.key}.sops.json"
+    name           = each.key
+    sops_file_path = "${path.module}/sops/ap.${each.key}.sops.json"
   })
 
   providers = {
@@ -293,9 +290,8 @@ module "sa-east-1" {
   for_each = local.sa_operators
 
   config = merge(each.value, {
-    name                   = each.key
-    smart_contract_address = "0xca5b9bd2cf8045ff8308454c1b9caef2a6fcc20f"
-    sops_file_path         = "${path.module}/sops/sa.${each.key}.sops.json"
+    name           = each.key
+    sops_file_path = "${path.module}/sops/sa.${each.key}.sops.json"
   })
 
   providers = {

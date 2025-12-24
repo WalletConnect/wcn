@@ -3,6 +3,7 @@
 	"eth_address_unencrypted": "0xbb71dd8a96b3e97b9aa9650f88fddd9711515fb5",
 	"ed25519_secret_key": "ENC[AES256_GCM,data:H5nzQKFsDa4cgVEcV5b2h4qge0X9WYJd3lgvd6Ez7VpcFFmIymkuAPbWReI=,iv:1RQG33+eDaiu7m0cjzV1smQEzO0yQr2JvRIc+t5/wkE=,tag:n74w6jTqx5vkQYHtEkLrJA==,type:str]",
 	"peer_id_unencrypted": "12D3KooWLStsmfcrRxoZ9PqdX5gHxZXPnZsRMgRxZZhpxmtGUsiK",
+	"smart_contract_address_unencrypted": "0x352988ff4cee2f218dfd2bf404f06444706af2ea",
 	"smart_contract_encryption_key": "ENC[AES256_GCM,data:R27bXgxS+yb8085S1nYItu0/u1KfUpQz9hTgf6/Jnq+VQLfPV1zMQtSB3Jsl+0wncigapaECd8zv4+CkwXGQwQ==,iv:Ws2ZeliSJtb3Cg/KelE/VUIqMfW+ZI3EkLR6KZ0LTrM=,tag:4PXZq0GU79+Y2h4rvdaHiQ==,type:str]",
 	"rpc_provider_url": "ENC[AES256_GCM,data:nXFgjqD8O1zHFB84wWKRz71tqk3xoyFM+snghcuIzsdGfDZc+2OckAzGc5kx2bpjskqvWHpqxAekJgWtcxAsR1RZUwK8rB225SNdVavnvFvKlE1d8WvRnNHQ/A==,iv:Ua5s7OEupxVd5fL6oB0CRZoLsfK9/nbSun3l8M+kb7w=,tag:fRV96rjUOiDrVfJm0M8rzA==,type:str]",
 	"prometheus_grafana_password_hash": "ENC[AES256_GCM,data:drgz0l/HCTjh2gjS9WBdQ10xctmJPW43ZeM2/lbFcje4TbnPN86U1OoZkzttjxPG0HYVhzQrLS6zMiU6,iv:STY0YgHyDZ0VklkL4tgG7pqcPWcoW54SqFhBapn0ubM=,tag:TxwtnVnsDC5sCs73h400bA==,type:str]",
@@ -15,8 +16,8 @@
 				"aws_profile": ""
 			}
 		],
-		"lastmodified": "2025-12-11T19:17:14Z",
-		"mac": "ENC[AES256_GCM,data:FhDfn9S5ArnOCFIim08TONSaDvzW234tP9FgdlnlN4QlkeHBfaLYLXPe2sVN3RuGxf211aYFGyGqmIU0TXdYKIFZt8qpMu7+Esuao5tTH7Bpy3afGoxmKXr5uZai+gAVVT5qn+jd4j2W119AAxrR10Kp1mSnNpYcBmRWKweeEpo=,iv:TWTi20xnvYJ9+CVSvKxwwUmXeAAXcL/OpyaxcQ5DqVo=,tag:LSxS6V07aS9aPsOIrRiWlw==,type:str]",
+		"lastmodified": "2025-12-24T10:18:56Z",
+		"mac": "ENC[AES256_GCM,data:4Q016ucScjxepPMMtuCxIsutcBK4I7QgUFsGYThA1y5UNok8YsjzDPP0QYphOJLVkVPxP4Psx5KMeUUV3kWPZZzwddPI0CmwBHU/ofX7+figWDvW1cZawa8PQ8WfeKb17OC/UtNXdjvTP0G6n4sV6i3TYmHtFBH4LGuf5DUukQw=,iv:CeO9vHXXfWysl+q8FneoMcYnwTyCH1zaAX5F6y7wFSU=,tag:zHFZsXfxupmnTrEVJz02GQ==,type:str]",
 		"unencrypted_suffix": "_unencrypted",
 		"version": "3.10.2"
 	}
