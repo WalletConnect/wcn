@@ -74,23 +74,26 @@
               text = ''cargo "$@"'';
             })
 
+            (writeShellApplication {
+              name = "nu-env";
+              text = ''
+                # shellcheck disable=SC1091
+                . ./env.sh "$1"
+                exec nu
+              '';
+            })
+
             fenixPackages.rust-analyzer
             cargo-udeps
             docker-compose
 
             solc
             foundry
-          ];
 
-          shellHook = ''
-            alias ga="$(which git) add"
-            alias gst="$(which git) status"
-            alias gc="$(which git) commit"
-            alias gco="$(which git) checkout -b"
-            alias glog="$(which git) log"
-            alias lsa="ls -lah"
-            alias prettyup="cargo fmt --all && cargo clippy --all-features --fix --allow-dirty"
-          '';
+            terraform
+            sops
+            jq
+          ];
         };
       }
     );
