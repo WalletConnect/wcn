@@ -249,7 +249,7 @@ module "eu-central-1" {
 
   config = merge(each.value, {
     name           = each.key
-    sops_file_path = "${path.module}/sops/eu.${each.key}.sops.json"
+    sops_file_path = "${path.module}/sops/eu.${each.key}.json"
   })
 
   providers = {
@@ -263,7 +263,7 @@ module "us-east-1" {
 
   config = merge(each.value, {
     name           = each.key
-    sops_file_path = "${path.module}/sops/us.${each.key}.sops.json"
+    sops_file_path = "${path.module}/sops/us.${each.key}.json"
   })
 
   providers = {
@@ -277,7 +277,7 @@ module "ap-southeast-1" {
 
   config = merge(each.value, {
     name           = each.key
-    sops_file_path = "${path.module}/sops/ap.${each.key}.sops.json"
+    sops_file_path = "${path.module}/sops/ap.${each.key}.json"
   })
 
   providers = {
@@ -291,7 +291,7 @@ module "sa-east-1" {
 
   config = merge(each.value, {
     name           = each.key
-    sops_file_path = "${path.module}/sops/sa.${each.key}.sops.json"
+    sops_file_path = "${path.module}/sops/sa.${each.key}.json"
   })
 
   providers = {
