@@ -13,7 +13,6 @@ variable "config" {
   type = object({
     name                   = string
     sops_file_path      = string
-    smart_contract_address = string
 
     vpc_cidr_octet = number
     vpc_peering_connections = optional(map(object({
