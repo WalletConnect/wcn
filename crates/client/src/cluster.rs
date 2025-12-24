@@ -4,13 +4,25 @@ use {
     derive_more::derive::AsRef,
     derive_where::derive_where,
     futures::{Stream, StreamExt as _, TryStreamExt as _, future::Either, stream},
-    std::{collections::HashSet, marker::PhantomData, sync::Arc, time::Duration},
-    tokio::sync::oneshot,
+    futures_concurrency::future::Race,
+    rand::seq::SliceRandom,
+    smallvec::SmallVec,
+    std::{
+        collections::HashSet,
+        marker::PhantomData,
+        sync::{
+            Arc,
+            atomic::{self, AtomicUsize},
+        },
+        time::Duration,
+    },
+    tap::Pipe,
+    tokio::sync::Notify,
     wc::future::FutureExt as _,
     wcn_cluster::{
         EncryptionKey,
         PeerId,
-        node_operator,
+        node_operator::Id as NodeOperatorId,
         smart_contract::{ReadError, ReadResult},
     },
     wcn_cluster_api::{
@@ -37,18 +49,17 @@ pub struct Node<D> {
     pub private_cluster_conn: Option<ClusterConnection>,
     pub private_coordinator_conn: Option<CoordinatorConnection>,
     pub data: D,
-    pub is_active: bool,
 }
 
 impl<D> Node<D> {
-    pub(crate) fn cluster_api(&self) -> Connector<ClusterApi> {
+    pub fn cluster_api(&self) -> Connector<ClusterApi> {
         Connector {
             public_conn: self.public_cluster_conn.clone(),
             private_conn: self.private_cluster_conn.clone(),
         }
     }
 
-    pub(crate) fn coordinator_api(&self) -> Connector<CoordinatorApi> {
+    pub fn coordinator_api(&self) -> Connector<CoordinatorApi> {
         Connector {
             public_conn: self.public_coordinator_conn.clone(),
             private_conn: self.private_coordinator_conn.clone(),
@@ -64,12 +75,11 @@ impl<D> AsRef<PeerId> for Node<D> {
 
 #[derive(AsRef)]
 #[derive_where(Clone)]
-pub(super) struct Config<D> {
+pub struct Config<D> {
     #[as_ref]
     encryption_key: EncryptionKey,
     cluster_api: ClusterClient,
     coordinator_api: CoordinatorClient,
-    ignored_operators: HashSet<node_operator::Id>,
     _marker: PhantomData<D>,
 }
 
@@ -78,17 +88,18 @@ impl<D> Config<D> {
         encryption_key: EncryptionKey,
         cluster_api: ClusterClient,
         coordinator_api: CoordinatorClient,
-        ignored_operators: HashSet<node_operator::Id>,
     ) -> Self {
         Self {
             encryption_key,
             cluster_api,
             coordinator_api,
-            ignored_operators,
             _marker: PhantomData,
         }
     }
 }
+
+type NativeCluster<T> = wcn_cluster::Cluster<Config<T>>;
+type NativeView<T> = wcn_cluster::View<Config<T>>;
 
 impl<D> wcn_cluster::Config for Config<D>
 where
@@ -98,7 +109,7 @@ where
     type KeyspaceShards = ();
     type Node = Node<D>;
 
-    fn new_node(&self, operator_id: node_operator::Id, node: wcn_cluster::Node) -> Self::Node {
+    fn new_node(&self, operator_id: NodeOperatorId, node: wcn_cluster::Node) -> Self::Node {
         let id = &node.peer_id;
         let public_addr = node.primary_socket_addr();
 
@@ -122,7 +133,6 @@ where
             private_cluster_conn,
             private_coordinator_conn,
             data: D::new(&operator_id, &node),
-            is_active: !self.ignored_operators.contains(&operator_id),
         }
     }
 
@@ -130,8 +140,8 @@ where
 }
 
 async fn select_open_connection<D>(
-    cluster: &ArcSwap<View<D>>,
-    trusted_operators: &HashSet<node_operator::Id>,
+    cluster: &ArcSwap<NativeView<D>>,
+    trusted_operators: &HashSet<NodeOperatorId>,
 ) -> ClusterConnection
 where
     D: NodeData,
@@ -174,11 +184,11 @@ where
 // is that [`wcn_cluster::View`] is also parametrized over this config, and we
 // need them to be compatible.
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum SmartContract<D: NodeData> {
+pub enum SmartContract<D: NodeData> {
     Static(ClusterView),
     Dynamic {
-        trusted_operators: HashSet<node_operator::Id>,
-        cluster_view: Arc<ArcSwap<View<D>>>,
+        trusted_operators: HashSet<NodeOperatorId>,
+        cluster_view: Arc<ArcSwap<NativeView<D>>>,
     },
 }
 
@@ -224,35 +234,119 @@ fn transport_err(err: impl ToString) -> ReadError {
     ReadError::Transport(err.to_string())
 }
 
-pub(crate) type Cluster<D> = wcn_cluster::Cluster<Config<D>>;
-pub(crate) type View<D> = wcn_cluster::View<Config<D>>;
-
-pub(crate) async fn update_task<D>(
-    shutdown_rx: oneshot::Receiver<()>,
-    cluster: Cluster<D>,
-    view: Arc<ArcSwap<View<D>>>,
-) where
-    D: NodeData,
-{
-    let cluster_update_fut = async {
-        let mut updates = cluster.updates();
-
-        loop {
-            view.store(cluster.view());
-
-            if updates.next().await.is_none() {
-                break;
-            }
-        }
-    };
-
-    tokio::select! {
-        _ = cluster_update_fut => {},
-        _ = shutdown_rx => {},
-    };
+pub struct Cluster<D: NodeData> {
+    cluster: NativeCluster<D>,
+    operators: Arc<ArcSwap<Vec<NodeOperatorId>>>,
+    operator_idx: AtomicUsize,
+    shutdown: Arc<Notify>,
 }
 
-pub(crate) async fn fetch_cluster_view(
+impl<D: NodeData> Cluster<D> {
+    pub async fn new(
+        config: Config<D>,
+        smart_contract: SmartContract<D>,
+        cluster_view: Arc<ArcSwap<NativeView<D>>>,
+        ignored_operators: HashSet<NodeOperatorId>,
+    ) -> Result<Self, Error> {
+        let cluster = NativeCluster::new(config, smart_contract).await?;
+        let operators = Arc::new(ArcSwap::default());
+        let shutdown = Arc::new(Notify::new());
+        let operator_idx = 0.into();
+
+        tokio::spawn({
+            let cluster = cluster.clone();
+            let operators = operators.clone();
+            let shutdown = shutdown.clone();
+
+            async move {
+                let shutdown_fut = shutdown.notified();
+
+                let cluster_update_fut = async {
+                    let mut updates = cluster.updates();
+
+                    loop {
+                        let new_view = cluster.view();
+
+                        let new_operators = new_view
+                            .node_operators()
+                            .iter()
+                            .map(|op| op.id)
+                            .filter(|id| !ignored_operators.contains(id))
+                            .collect::<Vec<_>>()
+                            .pipe(Arc::new);
+
+                        if new_operators.is_empty() {
+                            // If this ever happens, the client will fallback to naive load
+                            // balancing strategy.
+                            tracing::warn!("all node operators are filtered out");
+                        }
+
+                        cluster_view.store(new_view);
+                        operators.store(new_operators);
+
+                        if updates.next().await.is_none() {
+                            break;
+                        }
+                    }
+                };
+
+                (cluster_update_fut, shutdown_fut).race().await;
+            }
+        });
+
+        Ok(Self {
+            cluster,
+            operators,
+            operator_idx,
+            shutdown,
+        })
+    }
+
+    pub fn find_node<F, R>(&self, cb: F) -> Option<R>
+    where
+        F: Fn(&Node<D>) -> Option<R>,
+    {
+        let operator_ids = self.operators.load();
+        if operator_ids.is_empty() {
+            return None;
+        }
+
+        let next_operator = self.operator_idx.fetch_add(1, atomic::Ordering::Relaxed);
+        let (left, right) = operator_ids.split_at(next_operator % operator_ids.len());
+        let mut operator_ids = right.iter().chain(left);
+        let mut rng = rand::rng();
+
+        self.cluster.using_view(|view| {
+            let mut nodes = SmallVec::<[&Node<D>; 4]>::new();
+            let operators = view.node_operators();
+
+            operator_ids.find_map(|id| {
+                let op = operators.get(id)?;
+
+                nodes.clear();
+                nodes.extend(op.nodes());
+                nodes.shuffle(&mut rng);
+                nodes.iter().find_map(|node| cb(*node))
+            })
+        })
+    }
+
+    pub fn next_node<F, R>(&self, cb: F) -> R
+    where
+        F: Fn(&Node<D>) -> R,
+    {
+        self.cluster
+            .using_view(|view| cb(view.node_operators().next().next_node()))
+    }
+}
+
+impl<D: NodeData> Drop for Cluster<D> {
+    fn drop(&mut self) {
+        self.shutdown.notify_waiters();
+    }
+}
+
+pub async fn fetch_cluster_view(
     client: &ClusterClient,
     nodes: &[PeerAddr],
 ) -> Result<ClusterView, Error> {

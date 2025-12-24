@@ -74,6 +74,15 @@
               text = ''cargo "$@"'';
             })
 
+            (writeShellApplication {
+              name = "nu-env";
+              text = ''
+                # shellcheck disable=SC1091
+                . ./env.sh "$1"
+                exec nu
+              '';
+            })
+
             fenixPackages.rust-analyzer
             cargo-udeps
             docker-compose
@@ -83,6 +92,7 @@
 
             terraform
             sops
+            jq
           ];
         };
       }

@@ -12,7 +12,7 @@ terraform {
 variable "config" {
   type = object({
     name                   = string
-    secrets_file_path      = string
+    sops_file_path      = string
     smart_contract_address = string
 
     vpc_cidr_octet = number
@@ -73,8 +73,8 @@ locals {
 
 data "aws_region" "current" {}
 
-ephemeral "sops_file" "secrets" {
-  source_file = var.config.secrets_file_path
+ephemeral "sops_file" "this" {
+  source_file = var.config.sops_file_path
 }
 
 locals {
@@ -82,11 +82,12 @@ locals {
   region        = data.aws_region.current.region
   region_prefix = split("-", local.region)[0]
 
-  encrypted_secrets = jsondecode(file(var.config.secrets_file_path))
-  peer_id           = local.encrypted_secrets.peer_id_unencrypted
+  encrypted_sops         = jsondecode(file(var.config.sops_file_path))
+  peer_id                = local.encrypted_sops.peer_id_unencrypted
+  smart_contract_address = local.encrypted_sops.smart_contract_address_unencrypted
 
   # The decrypted secrets are not being stored in the TF state as they are `ephemeral`.
-  secrets = jsondecode(ephemeral.sops_file.secrets.raw)
+  sops = jsondecode(ephemeral.sops_file.secrets.raw)
 
   vpc_peering_connections = var.config.vpc_peering_connections == null ? {} : var.config.vpc_peering_connections
 }
@@ -99,8 +100,8 @@ module "secret" {
   ))
 
   name            = "${var.config.name}-${each.key}"
-  ephemeral_value = local.secrets[each.key]
-  value           = local.encrypted_secrets[each.key]
+  ephemeral_value = local.sops[each.key]
+  value           = local.encrypted_sops[each.key]
 }
 
 module "vpc" {
@@ -184,7 +185,7 @@ module "node" {
       DATABASE_PEER_ID                   = local.peer_id
       DATABASE_PRIMARY_RPC_SERVER_PORT   = tostring(local.db_primary_rpc_server_port)
       DATABASE_SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
-      SMART_CONTRACT_ADDRESS             = var.config.smart_contract_address
+      SMART_CONTRACT_ADDRESS             = local.smart_contract_address
     }
 
     secrets = merge({
@@ -232,10 +233,10 @@ module "prometheus_web_config" {
     }
   })
   ephemeral_args = {
-    grafana_password_hash = local.secrets["prometheus_grafana_password_hash"]
+    grafana_password_hash = local.sops["prometheus_grafana_password_hash"]
   }
   args = {
-    grafana_password_hash = local.encrypted_secrets["prometheus_grafana_password_hash"]
+    grafana_password_hash = local.encrypted_sops["prometheus_grafana_password_hash"]
   }
 }
 
@@ -300,10 +301,10 @@ module "grafana_prometheus_datasource_config" {
     }]
   })
   ephemeral_args = {
-    prometheus_password = local.secrets["prometheus_grafana_password"]
+    prometheus_password = local.sops["prometheus_grafana_password"]
   }
   args = {
-    prometheus_password = local.encrypted_secrets["prometheus_grafana_password"]
+    prometheus_password = local.encrypted_sops["prometheus_grafana_password"]
   }
 }
 

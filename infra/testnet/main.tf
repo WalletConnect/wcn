@@ -102,8 +102,6 @@ locals {
     prometheus_regions = ["eu"]
   }
 
-  eu_smart_contract_address = "0x31551311408e4428b82e1acf042217a5446ff490"
-
   eu_operators = {
     wallet-connect = {
       vpc_cidr_octet = 105 # 10.105.0.0/16
@@ -175,9 +173,8 @@ module "eu-central-1" {
   for_each = local.eu_operators
 
   config = merge(each.value, {
-    name                   = each.key
-    smart_contract_address = local.eu_smart_contract_address
-    secrets_file_path      = "${path.module}/secrets/${each.key}.sops.json"
+    name           = each.key
+    sops_file_path = "${path.module}/sops/${each.key}.json"
   })
 
   providers = {
