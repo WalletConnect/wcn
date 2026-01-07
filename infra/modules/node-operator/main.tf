@@ -71,7 +71,7 @@ variable "config" {
 
 locals {
   create_ec2_instance_connect_endpoint = coalesce(var.config.create_ec2_instance_connect_endpoint, true)
-  prometheus_s3_export                 = try(var.config.prometheus.s3_export, false)
+  prometheus_s3_export                 = coalesce(try(var.config.prometheus.s3_export, null), false)
 }
 
 data "aws_region" "current" {}
