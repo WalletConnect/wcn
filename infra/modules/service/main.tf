@@ -177,16 +177,20 @@ resource "aws_iam_role_policy" "s3" {
     Version = "2012-10-17",
     Statement = [
       {
+        Effect   = "Allow",
+        Action   = ["s3:ListBucket"],
+        Resource = [for bucket in local.s3_buckets : "arn::aws::s3:::${bucket}"]
+      },
+      {
         Effect = "Allow",
         Action = [
-          "s3:ListBucket",
           "s3:PutObject",
           "s3:AbortMultipartUpload",
           "s3:CreateMultipartUpload",
           "s3:CompleteMultipartUpload",
           "s3:ListMultipartUploadParts",
         ],
-        Resource = [for bucket in local.s3_buckets : "arn::aws::s3::${bucket}"]
+        Resource = [for bucket in local.s3_buckets : "arn::aws::s3:::${bucket}/*"]
       },
     ]
   })
@@ -277,7 +281,8 @@ resource "aws_ecs_task_definition" "this" {
       # Make sure that task doesn't require all the available memory of the instance.
       # Usually around 200-300 MBs are being used by the OS.
       # The task will be able to use more than the specified amount.
-      memoryReservation = i == 0 ? var.config.memory * 1024 / 2 : 0
+      # For sidecards reserve the minimum possible amount.
+      memoryReservation = i == 0 ? var.config.memory * 1024 / 2 : 1
       essential         = coalesce(var.config.containers[i].essential, true)
       portMappings = [for p in var.config.containers[i].ports : {
         containerPort = p.port
