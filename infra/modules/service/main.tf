@@ -73,6 +73,8 @@ locals {
     "x86-2cpu-4mem-normal"  = "c5a.large"
     "x86-8cpu-16mem-normal" = "c5a.2xlarge"
   }["${local.cpu_arch}-${var.config.cpu_cores}cpu-${var.config.memory}mem-${local.cpu_burst ? "burst" : "normal"}"]
+
+  secrets = concat(var.config.containers[*].secrets)
 }
 
 resource "aws_security_group" "this" {
@@ -148,7 +150,7 @@ resource "aws_iam_role_policy_attachment" "this" {
 }
 
 resource "aws_iam_role_policy" "ssm" {
-  count = length(var.config.secrets) > 0 ? 1 : 0
+  count = length(local.secrets) > 0 ? 1 : 0
   name  = "ecs-exec-ssm-kms"
   role  = aws_iam_role.this.id
   policy = jsonencode({
@@ -157,7 +159,7 @@ resource "aws_iam_role_policy" "ssm" {
       {
         Effect   = "Allow",
         Action   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
-        Resource = [for s in var.config.secrets : s.ssm_parameter_arn]
+        Resource = [for s in local.secrets : s.ssm_parameter_arn]
       },
       { Effect = "Allow", Action = ["kms:Decrypt"], Resource = "*" }
     ]
