@@ -179,7 +179,7 @@ resource "aws_iam_role_policy" "s3" {
       {
         Effect   = "Allow",
         Action   = ["s3:ListBucket"],
-        Resource = [for bucket in local.s3_buckets : "arn::aws::s3:::${bucket}"]
+        Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}"]
       },
       {
         Effect = "Allow",
@@ -190,7 +190,7 @@ resource "aws_iam_role_policy" "s3" {
           "s3:CompleteMultipartUpload",
           "s3:ListMultipartUploadParts",
         ],
-        Resource = [for bucket in local.s3_buckets : "arn::aws::s3:::${bucket}/*"]
+        Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}/*"]
       },
     ]
   })
