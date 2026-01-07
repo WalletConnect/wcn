@@ -74,7 +74,7 @@ locals {
     "x86-8cpu-16mem-normal" = "c5a.2xlarge"
   }["${local.cpu_arch}-${var.config.cpu_cores}cpu-${var.config.memory}mem-${local.cpu_burst ? "burst" : "normal"}"]
 
-  secrets = concat(var.config.containers[*].secrets)
+  secrets = flatten(var.config.containers[*].secrets)
 }
 
 resource "aws_security_group" "this" {
@@ -84,7 +84,7 @@ resource "aws_security_group" "this" {
 
 resource "aws_vpc_security_group_ingress_rule" "this" {
   for_each = {
-    for p in concat(var.config.containers[*].ports) :
+    for p in flatten(var.config.containers[*].ports) :
     "${p.port}:${p.protocol}:${p.internal ? "internal" : "external"}" => p
   }
 
@@ -252,7 +252,7 @@ resource "aws_ecs_task_definition" "this" {
       # Usually around 200-300 MBs are being used by the OS.
       # The task will be able to use more than the specified amount.
       memoryReservation = i == 0 ? var.config.memory * 1024 / 2 : 0
-      essential         = coalesce(var.config.containers[i].essencial, true)
+      essential         = coalesce(var.config.containers[i].essential, true)
       portMappings = [for p in var.config.containers[i].ports : {
         containerPort = p.port
         hostPort      = p.port
