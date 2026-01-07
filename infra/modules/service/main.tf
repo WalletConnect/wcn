@@ -19,21 +19,26 @@ variable "config" {
       availability_zone = string
     })
 
-    ports = list(object({
-      port     = number
-      protocol = string
-      internal = bool
+    containers = list(object({
+      name      = optional(string)
+      image     = string
+      essential = optional(bool)
+      ports = list(object({
+        port     = number
+        protocol = string
+        internal = bool
+      }))
+
+      environment = map(string)
+
+      secrets = map(object({
+        ssm_parameter_arn = string
+        version           = number
+      }))
+
+      entry_point = optional(list(string))
+      command     = optional(list(string))
     }))
-
-    environment = map(string)
-
-    secrets = map(object({
-      ssm_parameter_arn = string
-      version           = number
-    }))
-
-    entry_point = optional(list(string))
-    command     = optional(list(string))
   })
 }
 
@@ -77,7 +82,7 @@ resource "aws_security_group" "this" {
 
 resource "aws_vpc_security_group_ingress_rule" "this" {
   for_each = {
-    for p in var.config.ports :
+    for p in concat(var.config.containers[*].ports) :
     "${p.port}:${p.protocol}:${p.internal ? "internal" : "external"}" => p
   }
 
@@ -234,19 +239,19 @@ resource "aws_ecs_task_definition" "this" {
   network_mode             = "host"
   execution_role_arn       = aws_iam_role.this.arn
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode([for i in range(length(var.config.containers)) :
     {
-      name       = var.config.name
-      image      = var.config.image
+      name       = coalesce(var.config.containers[i].name, var.config.name)
+      image      = var.config.containers[i].image
       user       = "1001:1001"
-      entryPoint = var.config.entry_point
-      command    = var.config.command
+      entryPoint = var.config.containers[i].entry_point
+      command    = var.config.containers[i].command
       # Make sure that task doesn't require all the available memory of the instance.
       # Usually around 200-300 MBs are being used by the OS.
       # The task will be able to use more than the specified amount.
-      memoryReservation = var.config.memory * 1024 / 2
-      essential         = true
-      portMappings = [for p in var.config.ports : {
+      memoryReservation = i == 0 ? var.config.memory * 1024 / 2 : 0
+      essential         = coalesce(var.config.containers[i].essencial, true)
+      portMappings = [for p in var.config.containers[i].ports : {
         containerPort = p.port
         hostPort      = p.port
         protocol      = p.protocol
@@ -254,15 +259,15 @@ resource "aws_ecs_task_definition" "this" {
       # Specify secret versions as separate environment variables in order to force
       # task definition updates when secrets change.
       environment = concat(
-        [for k in sort(keys(var.config.environment)) : {
+        [for k in sort(keys(var.config.containers[i].environment)) : {
           name  = k
-          value = var.config.environment[k]
+          value = var.config.containers[i].environment[k]
         }],
-        [for k, v in var.config.secrets : {
+        [for k, v in var.config.containers[i].secrets : {
           name  = "${k}_VERSION"
           value = tostring(v.version)
       }])
-      secrets = [for k, v in var.config.secrets : {
+      secrets = [for k, v in var.config.containers[i].secrets : {
         name      = k
         valueFrom = v.ssm_parameter_arn
       }]

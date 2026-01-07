@@ -90,6 +90,9 @@ locals {
     cpu_cores = 2
     memory    = 4
     disk      = 20
+
+    s3_export = true
+    prom2parquet_image = "ghcr.io/walletconnect/prom2parquet:sha-51efb35"
   }
 
   grafana_config = {
