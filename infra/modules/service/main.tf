@@ -74,7 +74,7 @@ locals {
     "x86-8cpu-16mem-normal" = "c5a.2xlarge"
   }["${local.cpu_arch}-${var.config.cpu_cores}cpu-${var.config.memory}mem-${local.cpu_burst ? "burst" : "normal"}"]
 
-  secrets = flatten(var.config.containers[*].secrets)
+  secrets = merge(var.config.containers[*].secrets...)
 }
 
 resource "aws_security_group" "this" {
