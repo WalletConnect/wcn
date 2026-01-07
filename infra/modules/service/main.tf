@@ -39,6 +39,8 @@ variable "config" {
       entry_point = optional(list(string))
       command     = optional(list(string))
     }))
+
+    s3_buckets = optional(list(string))
   })
 }
 
@@ -74,7 +76,8 @@ locals {
     "x86-8cpu-16mem-normal" = "c5a.2xlarge"
   }["${local.cpu_arch}-${var.config.cpu_cores}cpu-${var.config.memory}mem-${local.cpu_burst ? "burst" : "normal"}"]
 
-  secrets = merge(var.config.containers[*].secrets...)
+  secrets    = merge(var.config.containers[*].secrets...)
+  s3_buckets = coalesce(var.config.s3_buckets, [])
 }
 
 resource "aws_security_group" "this" {
@@ -162,6 +165,29 @@ resource "aws_iam_role_policy" "ssm" {
         Resource = [for s in local.secrets : s.ssm_parameter_arn]
       },
       { Effect = "Allow", Action = ["kms:Decrypt"], Resource = "*" }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "s3" {
+  count = length(local.s3_buckets) > 0 ? 1 : 0
+  name  = "ecs-exec-s3"
+  role  = aws_iam_role.this.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:ListBucket",
+          "s3:PutObject",
+          "s3:AbortMultipartUpload",
+          "s3:CreateMultipartUpload",
+          "s3:CompleteMultipartUpload",
+          "s3:ListMultipartUploadParts",
+        ],
+        Resource = [for bucket in local.s3_buckets : "arn::aws::s3::${bucket}"]
+      },
     ]
   })
 }

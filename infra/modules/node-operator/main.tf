@@ -45,8 +45,9 @@ variable "config" {
       memory    = number
       disk      = number
 
-      s3_export          = optional(bool)
       prom2parquet_image = optional(string)
+      s3_bucket          = optional(string)
+      s3_metrics_prefix  = optional(string)
     }))
 
     grafana = optional(object({
@@ -71,7 +72,7 @@ variable "config" {
 
 locals {
   create_ec2_instance_connect_endpoint = coalesce(var.config.create_ec2_instance_connect_endpoint, true)
-  prometheus_s3_export                 = coalesce(try(var.config.prometheus.s3_export, null), false)
+  prometheus_s3_export                 = try(var.config.prometheus.prom2parquet_image, null) != null
 }
 
 data "aws_region" "current" {}
@@ -297,8 +298,18 @@ module "prometheus" {
 
         environment = {}
         secrets     = {}
+
+        entry_point = ["/prom2parquet"]
+        command = [
+          "--backend", "s3",
+          "--backend-root", "${var.config.prometheus.s3_bucket}",
+          "--prefix", "${var.config.prometheus.s3_metrics_prefix}/${local.region}",
+          "--server-port", tostring(local.prom2parquet_port),
+        ]
       }] : []
     )
+
+    s3_buckets = try([var.config.prometheus.s3_bucket], [])
   })
 }
 

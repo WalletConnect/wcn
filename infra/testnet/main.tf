@@ -91,8 +91,9 @@ locals {
     memory    = 4
     disk      = 20
 
-    s3_export = true
     prom2parquet_image = "ghcr.io/walletconnect/prom2parquet:sha-51efb35"
+    s3_bucket = "walletconnect.data-lake.prod"
+    s3_metrics_prefix = "wcn-testnet"
   }
 
   grafana_config = {
