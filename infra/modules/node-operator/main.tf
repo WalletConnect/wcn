@@ -231,6 +231,10 @@ module "prometheus_config" {
         targets = ["${module.node[0].private_ip}:${local.node_metrics_server_port}"]
       }]
     }]
+    remote_write = local.prometheus_s3_export ? [{
+      url            = "http://localhost:${local.prom2parquet_port}"
+      remote_timeout = "30s"
+    }] : []
   })
 }
 
