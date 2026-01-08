@@ -309,7 +309,7 @@ module "prometheus" {
       }] : []
     )
 
-    s3_buckets = try([var.config.prometheus.s3_bucket], [])
+    s3_buckets = var.config.prometheus.s3_bucket == null ? [] : [var.config.prometheus.s3_bucket]
   })
 }
 

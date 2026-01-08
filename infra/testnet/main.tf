@@ -91,7 +91,7 @@ locals {
     memory    = 4
     disk      = 20
 
-    prom2parquet_image = "ghcr.io/walletconnect/prom2parquet:sha-51efb35"
+    prom2parquet_image = "ghcr.io/walletconnect/prom2parquet:sha-10c80d7"
     s3_bucket = "walletconnect.data-lake.prod"
     s3_metrics_prefix = "wcn-testnet"
   }
