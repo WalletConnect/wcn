@@ -252,7 +252,7 @@ resource "aws_iam_role" "task" {
 resource "aws_iam_role_policy" "s3" {
   count = length(local.s3_buckets) > 0 ? 1 : 0
   name  = "ecs-exec-s3"
-  role  = aws_iam_role.task.id
+  role  = aws_iam_role.task[0].id
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -281,7 +281,7 @@ resource "aws_ecs_task_definition" "this" {
   requires_compatibilities = ["EC2"]
   network_mode             = "host"
   execution_role_arn       = aws_iam_role.this.arn
-  task_role_arn            = try(aws_iam_role.task.arn[0], null)
+  task_role_arn            = try(aws_iam_role.task[0].arn, null)
 
   container_definitions = jsonencode([for i in range(length(var.config.containers)) :
     {
