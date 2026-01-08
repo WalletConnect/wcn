@@ -232,7 +232,7 @@ module "prometheus_config" {
       }]
     }]
     remote_write = local.prometheus_s3_export ? [{
-      url            = "http://localhost:${local.prom2parquet_port}"
+      url            = "http://localhost:${local.prom2parquet_port}/receive"
       remote_timeout = "30s"
     }] : []
   })
