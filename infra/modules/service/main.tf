@@ -169,33 +169,6 @@ resource "aws_iam_role_policy" "ssm" {
   })
 }
 
-resource "aws_iam_role_policy" "s3" {
-  count = length(local.s3_buckets) > 0 ? 1 : 0
-  name  = "ecs-exec-s3"
-  role  = aws_iam_role.this.id
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect   = "Allow",
-        Action   = ["s3:ListBucket"],
-        Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}"]
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "s3:PutObject",
-          "s3:AbortMultipartUpload",
-          "s3:CreateMultipartUpload",
-          "s3:CompleteMultipartUpload",
-          "s3:ListMultipartUploadParts",
-        ],
-        Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}/*"]
-      },
-    ]
-  })
-}
-
 resource "aws_iam_instance_profile" "this" {
   name = "${local.region}-${var.config.name}"
   role = aws_iam_role.this.name
@@ -265,12 +238,50 @@ resource "aws_cloudwatch_log_group" "this" {
   name = "/ecs/${var.config.name}"
 }
 
+resource "aws_iam_role" "task" {
+  count = length(local.s3_buckets) > 0 ? 1 : 0
+  name  = "${local.region}-${var.config.name}-task"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      { Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "s3" {
+  count = length(local.s3_buckets) > 0 ? 1 : 0
+  name  = "ecs-exec-s3"
+  role  = aws_iam_role.task.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["s3:ListBucket"],
+        Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}"]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:AbortMultipartUpload",
+          "s3:CreateMultipartUpload",
+          "s3:CompleteMultipartUpload",
+          "s3:ListMultipartUploadParts",
+        ],
+        Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}/*"]
+      },
+    ]
+  })
+}
+
 resource "aws_ecs_task_definition" "this" {
   family                   = var.config.name
   requires_compatibilities = ["EC2"]
   network_mode             = "host"
   execution_role_arn       = aws_iam_role.this.arn
-  task_role_arn            = length(local.s3_buckets) == 0 ? null : aws_iam_role.this.arn
+  task_role_arn            = try(aws_iam_role.task.arn[0], null)
 
   container_definitions = jsonencode([for i in range(length(var.config.containers)) :
     {
