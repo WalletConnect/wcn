@@ -300,8 +300,10 @@ module "prometheus" {
           { port = local.prom2parquet_port, protocol = "tcp", internal = true },
         ]
 
-        environment = {}
-        secrets     = {}
+        environment = {
+          AWS_REGION = local.region
+        }
+        secrets = {}
 
         entry_point = ["/prom2parquet"]
         command = [
