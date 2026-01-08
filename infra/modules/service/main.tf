@@ -270,6 +270,7 @@ resource "aws_ecs_task_definition" "this" {
   requires_compatibilities = ["EC2"]
   network_mode             = "host"
   execution_role_arn       = aws_iam_role.this.arn
+  task_role_arn            = length(local.s3_buckets) == 0 ? null : aws_iam_role.this.arn
 
   container_definitions = jsonencode([for i in range(length(var.config.containers)) :
     {
