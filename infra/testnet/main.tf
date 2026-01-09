@@ -90,6 +90,10 @@ locals {
     cpu_cores = 2
     memory    = 4
     disk      = 20
+
+    prom2parquet_image = "ghcr.io/walletconnect/prom2parquet:sha-1fee3c3"
+    s3_bucket          = "walletconnect.data-lake.staging"
+    s3_metrics_prefix  = "wcn/testnet"
   }
 
   grafana_config = {

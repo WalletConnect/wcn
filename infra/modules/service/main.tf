@@ -19,21 +19,28 @@ variable "config" {
       availability_zone = string
     })
 
-    ports = list(object({
-      port     = number
-      protocol = string
-      internal = bool
+    containers = list(object({
+      name      = optional(string)
+      image     = string
+      essential = optional(bool)
+      ports = list(object({
+        port     = number
+        protocol = string
+        internal = bool
+      }))
+
+      environment = map(string)
+
+      secrets = map(object({
+        ssm_parameter_arn = string
+        version           = number
+      }))
+
+      entry_point = optional(list(string))
+      command     = optional(list(string))
     }))
 
-    environment = map(string)
-
-    secrets = map(object({
-      ssm_parameter_arn = string
-      version           = number
-    }))
-
-    entry_point = optional(list(string))
-    command     = optional(list(string))
+    s3_buckets = optional(list(string))
   })
 }
 
@@ -68,6 +75,9 @@ locals {
     "x86-2cpu-4mem-normal"  = "c5a.large"
     "x86-8cpu-16mem-normal" = "c5a.2xlarge"
   }["${local.cpu_arch}-${var.config.cpu_cores}cpu-${var.config.memory}mem-${local.cpu_burst ? "burst" : "normal"}"]
+
+  secrets    = merge(var.config.containers[*].secrets...)
+  s3_buckets = coalesce(var.config.s3_buckets, [])
 }
 
 resource "aws_security_group" "this" {
@@ -77,7 +87,7 @@ resource "aws_security_group" "this" {
 
 resource "aws_vpc_security_group_ingress_rule" "this" {
   for_each = {
-    for p in var.config.ports :
+    for p in flatten(var.config.containers[*].ports) :
     "${p.port}:${p.protocol}:${p.internal ? "internal" : "external"}" => p
   }
 
@@ -143,7 +153,7 @@ resource "aws_iam_role_policy_attachment" "this" {
 }
 
 resource "aws_iam_role_policy" "ssm" {
-  count = length(var.config.secrets) > 0 ? 1 : 0
+  count = length(local.secrets) > 0 ? 1 : 0
   name  = "ecs-exec-ssm-kms"
   role  = aws_iam_role.this.id
   policy = jsonencode({
@@ -152,7 +162,7 @@ resource "aws_iam_role_policy" "ssm" {
       {
         Effect   = "Allow",
         Action   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
-        Resource = [for s in var.config.secrets : s.ssm_parameter_arn]
+        Resource = [for s in local.secrets : s.ssm_parameter_arn]
       },
       { Effect = "Allow", Action = ["kms:Decrypt"], Resource = "*" }
     ]
@@ -228,25 +238,59 @@ resource "aws_cloudwatch_log_group" "this" {
   name = "/ecs/${var.config.name}"
 }
 
+resource "aws_iam_role" "task" {
+  count = length(local.s3_buckets) > 0 ? 1 : 0
+  name  = "${local.region}-${var.config.name}-task"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      { Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "s3" {
+  count = length(local.s3_buckets) > 0 ? 1 : 0
+  name  = "ecs-exec-s3"
+  role  = aws_iam_role.task[0].id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["s3:ListBucket"],
+        Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}"]
+      },
+      {
+        Effect = "Allow",
+        Action = ["s3:PutObject"],
+        Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}/*"]
+      },
+    ]
+  })
+}
+
 resource "aws_ecs_task_definition" "this" {
   family                   = var.config.name
   requires_compatibilities = ["EC2"]
   network_mode             = "host"
   execution_role_arn       = aws_iam_role.this.arn
+  task_role_arn            = try(aws_iam_role.task[0].arn, null)
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode([for i in range(length(var.config.containers)) :
     {
-      name       = var.config.name
-      image      = var.config.image
+      name       = coalesce(var.config.containers[i].name, var.config.name)
+      image      = var.config.containers[i].image
       user       = "1001:1001"
-      entryPoint = var.config.entry_point
-      command    = var.config.command
-      # Make sure that task doesn't require all the available memory of the instance.
+      entryPoint = var.config.containers[i].entry_point
+      command    = var.config.containers[i].command
+      # Make sure that the primary task doesn't require all the available memory of the instance.
       # Usually around 200-300 MBs are being used by the OS.
-      # The task will be able to use more than the specified amount.
-      memoryReservation = var.config.memory * 1024 / 2
-      essential         = true
-      portMappings = [for p in var.config.ports : {
+      # For sidecards reserve the minimum possible amount (6 MB).
+      # The tasks will be able to use more than the specified amount.
+      memoryReservation = i == 0 ? var.config.memory * 1024 / 2 : 6
+      essential         = coalesce(var.config.containers[i].essential, true)
+      portMappings = [for p in var.config.containers[i].ports : {
         containerPort = p.port
         hostPort      = p.port
         protocol      = p.protocol
@@ -254,15 +298,15 @@ resource "aws_ecs_task_definition" "this" {
       # Specify secret versions as separate environment variables in order to force
       # task definition updates when secrets change.
       environment = concat(
-        [for k in sort(keys(var.config.environment)) : {
+        [for k in sort(keys(var.config.containers[i].environment)) : {
           name  = k
-          value = var.config.environment[k]
+          value = var.config.containers[i].environment[k]
         }],
-        [for k, v in var.config.secrets : {
+        [for k, v in var.config.containers[i].secrets : {
           name  = "${k}_VERSION"
           value = tostring(v.version)
       }])
-      secrets = [for k, v in var.config.secrets : {
+      secrets = [for k, v in var.config.containers[i].secrets : {
         name      = k
         valueFrom = v.ssm_parameter_arn
       }]

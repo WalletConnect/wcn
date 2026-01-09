@@ -44,6 +44,10 @@ variable "config" {
       cpu_cores = number
       memory    = number
       disk      = number
+
+      prom2parquet_image = optional(string)
+      s3_bucket          = optional(string)
+      s3_metrics_prefix  = optional(string)
     }))
 
     grafana = optional(object({
@@ -68,6 +72,7 @@ variable "config" {
 
 locals {
   create_ec2_instance_connect_endpoint = coalesce(var.config.create_ec2_instance_connect_endpoint, true)
+  prometheus_s3_export                 = try(var.config.prometheus.prom2parquet_image, null) != null
 }
 
 data "aws_region" "current" {}
@@ -134,22 +139,25 @@ module "db" {
 
     public_ip = false
 
-    ports = [
-      { port = local.db_primary_rpc_server_port, protocol = "udp", internal = true },
-      { port = local.db_secondary_rpc_server_port, protocol = "udp", internal = true },
-      { port = local.db_metrics_server_port, protocol = "tcp", internal = true },
-    ]
+    containers = [{
+      image = var.config.db.image
+      ports = [
+        { port = local.db_primary_rpc_server_port, protocol = "udp", internal = true },
+        { port = local.db_secondary_rpc_server_port, protocol = "udp", internal = true },
+        { port = local.db_metrics_server_port, protocol = "tcp", internal = true },
+      ]
 
-    environment = {
-      PRIMARY_RPC_SERVER_PORT   = tostring(local.db_primary_rpc_server_port)
-      SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
-      METRICS_SERVER_PORT       = tostring(local.db_metrics_server_port)
-      ROCKSDB_DIR               = "/data"
-    }
+      environment = {
+        PRIMARY_RPC_SERVER_PORT   = tostring(local.db_primary_rpc_server_port)
+        SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
+        METRICS_SERVER_PORT       = tostring(local.db_metrics_server_port)
+        ROCKSDB_DIR               = "/data"
+      }
 
-    secrets = {
-      SECRET_KEY = module.secret["ed25519_secret_key"]
-    }
+      secrets = {
+        SECRET_KEY = module.secret["ed25519_secret_key"]
+      }
+    }]
   })
 }
 
@@ -170,37 +178,41 @@ module "node" {
 
     public_ip = true
 
-    ports = [
-      { port = local.node_primary_rpc_server_port, protocol = "udp", internal = false },
-      { port = local.node_secondary_rpc_server_port, protocol = "udp", internal = false },
-      { port = local.node_metrics_server_port, protocol = "tcp", internal = true },
-    ]
+    containers = [{
+      image = var.config.nodes[count.index].image
+      ports = [
+        { port = local.node_primary_rpc_server_port, protocol = "udp", internal = false },
+        { port = local.node_secondary_rpc_server_port, protocol = "udp", internal = false },
+        { port = local.node_metrics_server_port, protocol = "tcp", internal = true },
+      ]
 
-    environment = {
-      PRIMARY_RPC_SERVER_PORT            = tostring(local.node_primary_rpc_server_port)
-      SECONDARY_RPC_SERVER_PORT          = tostring(local.node_secondary_rpc_server_port)
-      METRICS_SERVER_PORT                = tostring(local.node_metrics_server_port)
-      DATABASE_RPC_SERVER_ADDRESS        = module.db.private_ip
-      DATABASE_PEER_ID                   = local.peer_id
-      DATABASE_PRIMARY_RPC_SERVER_PORT   = tostring(local.db_primary_rpc_server_port)
-      DATABASE_SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
-      SMART_CONTRACT_ADDRESS             = local.smart_contract_address
-    }
+      environment = {
+        PRIMARY_RPC_SERVER_PORT            = tostring(local.node_primary_rpc_server_port)
+        SECONDARY_RPC_SERVER_PORT          = tostring(local.node_secondary_rpc_server_port)
+        METRICS_SERVER_PORT                = tostring(local.node_metrics_server_port)
+        DATABASE_RPC_SERVER_ADDRESS        = module.db.private_ip
+        DATABASE_PEER_ID                   = local.peer_id
+        DATABASE_PRIMARY_RPC_SERVER_PORT   = tostring(local.db_primary_rpc_server_port)
+        DATABASE_SECONDARY_RPC_SERVER_PORT = tostring(local.db_secondary_rpc_server_port)
+        SMART_CONTRACT_ADDRESS             = local.smart_contract_address
+      }
 
-    secrets = merge({
-      SECRET_KEY                    = module.secret["ed25519_secret_key"]
-      SMART_CONTRACT_ENCRYPTION_KEY = module.secret["smart_contract_encryption_key"]
-      RPC_PROVIDER_URL              = module.secret["rpc_provider_url"]
-      },
-      # configure pk only for the primary node
-      count.index != 0 ? {} : {
-        SMART_CONTRACT_SIGNER_PRIVATE_KEY = module.secret["ecdsa_private_key"]
-    })
+      secrets = merge({
+        SECRET_KEY                    = module.secret["ed25519_secret_key"]
+        SMART_CONTRACT_ENCRYPTION_KEY = module.secret["smart_contract_encryption_key"]
+        RPC_PROVIDER_URL              = module.secret["rpc_provider_url"]
+        },
+        # configure pk only for the primary node
+        count.index != 0 ? {} : {
+          SMART_CONTRACT_SIGNER_PRIVATE_KEY = module.secret["ecdsa_private_key"]
+      })
+    }]
   })
 }
 
 locals {
   prometheus_port        = 3000
+  prom2parquet_port      = 4000
   prometheus_domain_name = try("prometheus.${local.region_prefix}.${var.config.route53_zone.name}", null)
 }
 
@@ -219,6 +231,10 @@ module "prometheus_config" {
         targets = ["${module.node[0].private_ip}:${local.node_metrics_server_port}"]
       }]
     }]
+    remote_write = local.prometheus_s3_export ? [{
+      url            = "http://localhost:${local.prom2parquet_port}/receive"
+      remote_timeout = "30s"
+    }] : []
   })
 }
 
@@ -250,27 +266,56 @@ module "prometheus" {
 
     public_ip = false
 
-    ports = [
-      { port = local.prometheus_port, protocol = "tcp", internal = true },
-    ]
+    containers = concat(
+      [{
+        name  = "prometheus"
+        image = var.config.prometheus.image
+        ports = [
+          { port = local.prometheus_port, protocol = "tcp", internal = true },
+        ]
 
-    environment = {}
-    secrets = {
-      CONFIG     = module.prometheus_config[0]
-      WEB_CONFIG = module.prometheus_web_config[0]
-    }
+        environment = {}
+        secrets = {
+          CONFIG     = module.prometheus_config[0]
+          WEB_CONFIG = module.prometheus_web_config[0]
+        }
 
-    entry_point = ["/bin/sh", "-c"]
-    command = [<<-CMD
-      printenv CONFIG > /tmp/prometheus.yml && \
-      printenv WEB_CONFIG > /tmp/web.yml && \
-      exec /bin/prometheus \
-      --config.file=/tmp/prometheus.yml \
-      --web.config.file=/tmp/web.yml \
-      --web.listen-address=:${local.prometheus_port} \
-      --storage.tsdb.path=/data
-    CMD
-    ]
+        entry_point = ["/bin/sh", "-c"]
+        command = [<<-CMD
+          printenv CONFIG > /tmp/prometheus.yml && \
+          printenv WEB_CONFIG > /tmp/web.yml && \
+          exec /bin/prometheus \
+          --config.file=/tmp/prometheus.yml \
+          --web.config.file=/tmp/web.yml \
+          --web.listen-address=:${local.prometheus_port} \
+          --storage.tsdb.path=/data
+        CMD
+        ]
+      }],
+      local.prometheus_s3_export ? [{
+        name      = "prom2parquet"
+        image     = var.config.prometheus.prom2parquet_image
+        essential = false
+        ports = [
+          { port = local.prom2parquet_port, protocol = "tcp", internal = true },
+        ]
+
+        environment = {
+          AWS_REGION = local.region
+        }
+        secrets = {}
+
+        entry_point = ["/prom2parquet"]
+        command = [
+          "--backend", "s3",
+          "--backend-root", "${var.config.prometheus.s3_bucket}",
+          "--prefix", "${var.config.prometheus.s3_metrics_prefix}/${local.region}",
+          "--server-port", tostring(local.prom2parquet_port),
+        ]
+      }] : []
+    )
+
+    s3_buckets = var.config.prometheus.s3_bucket == null ? [] : [var.config.prometheus.s3_bucket]
   })
 }
 
@@ -318,27 +363,30 @@ module "grafana" {
 
     public_ip = false
 
-    ports = [
-      { port = local.grafana_port, protocol = "tcp", internal = true },
-    ]
+    containers = [{
+      image = var.config.grafana.image
+      ports = [
+        { port = local.grafana_port, protocol = "tcp", internal = true },
+      ]
 
-    environment = {
-      GF_SERVER_HTTP_PORT    = tostring(local.grafana_port)
-      GF_PATHS_DATA          = "/data"
-      GF_SECURITY_ADMIN_USER = "admin"
-    }
+      environment = {
+        GF_SERVER_HTTP_PORT    = tostring(local.grafana_port)
+        GF_PATHS_DATA          = "/data"
+        GF_SECURITY_ADMIN_USER = "admin"
+      }
 
-    secrets = {
-      GF_SECURITY_ADMIN_PASSWORD   = module.secret["grafana_admin_password"]
-      PROMETHEUS_DATASOURCE_CONFIG = module.grafana_prometheus_datasource_config[0]
-    }
+      secrets = {
+        GF_SECURITY_ADMIN_PASSWORD   = module.secret["grafana_admin_password"]
+        PROMETHEUS_DATASOURCE_CONFIG = module.grafana_prometheus_datasource_config[0]
+      }
 
-    entry_point = ["/bin/sh", "-c"]
-    command = [<<-CMD
-      printenv PROMETHEUS_DATASOURCE_CONFIG > /etc/grafana/provisioning/datasources/prometheus.yaml && \
-      exec /run.sh
-    CMD
-    ]
+      entry_point = ["/bin/sh", "-c"]
+      command = [<<-CMD
+        printenv PROMETHEUS_DATASOURCE_CONFIG > /etc/grafana/provisioning/datasources/prometheus.yaml && \
+        exec /run.sh
+      CMD
+      ]
+    }]
   })
 }
 
