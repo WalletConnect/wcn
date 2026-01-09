@@ -263,13 +263,7 @@ resource "aws_iam_role_policy" "s3" {
       },
       {
         Effect = "Allow",
-        Action = [
-          "s3:PutObject",
-          "s3:AbortMultipartUpload",
-          "s3:CreateMultipartUpload",
-          "s3:CompleteMultipartUpload",
-          "s3:ListMultipartUploadParts",
-        ],
+        Action = ["s3:PutObject"],
         Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}/*"]
       },
     ]
