@@ -93,7 +93,7 @@ locals {
 
     prom2parquet_image = "ghcr.io/walletconnect/prom2parquet:sha-1fee3c3"
     s3_bucket          = "walletconnect.data-lake.prod"
-    s3_metrics_prefix  = "WCN/testnet"
+    s3_metrics_prefix  = "wcn/testnet"
   }
 
   grafana_config = {
