@@ -52,7 +52,7 @@ dependencies = [
 [[package]]
 name = "alloc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=28c1255#28c12551893d51e291453e24afb2a444310521fa"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
 dependencies = [
  "serde",
  "serde_json",
@@ -1517,7 +1517,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=28c1255#28c12551893d51e291453e24afb2a444310521fa"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
 
 [[package]]
 name = "colorchoice"
@@ -2301,7 +2301,7 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 [[package]]
 name = "future"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=28c1255#28c12551893d51e291453e24afb2a444310521fa"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
 dependencies = [
  "pin-project",
  "thiserror 1.0.69",
@@ -3377,9 +3377,9 @@ dependencies = [
 
 [[package]]
 name = "metrics-exporter-prometheus"
-version = "0.17.2"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b166dea96003ee2531cf14833efedced545751d800f03535801d833313f8c15"
+checksum = "3589659543c04c7dc5526ec858591015b87cd8746583b51b48ef4353f99dbcda"
 dependencies = [
  "base64",
  "indexmap 2.11.4",
@@ -5926,7 +5926,7 @@ dependencies = [
 [[package]]
 name = "wc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=28c1255#28c12551893d51e291453e24afb2a444310521fa"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
 dependencies = [
  "alloc",
  "collections",
@@ -5937,7 +5937,7 @@ dependencies = [
 [[package]]
 name = "wc_metrics"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=28c1255#28c12551893d51e291453e24afb2a444310521fa"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
 dependencies = [
  "arc-swap",
  "enum-ordinalize",
