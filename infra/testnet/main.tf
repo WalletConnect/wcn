@@ -74,6 +74,7 @@ locals {
   db_config = {
     image     = "ghcr.io/walletconnect/wcn-db:251113.0"
     cpu_cores = 2
+    cpu_arch  = "x86"
     memory    = 4
     disk      = 50
   }
@@ -111,7 +112,7 @@ locals {
       vpc_cidr_octet = 105 # 10.105.0.0/16
       # For this one operator use x86 box instead of the default ARM,
       # so we have both architectures being actively tested.
-      db = merge(local.db_config, { cpu_arch = "x86" })
+      db = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -123,7 +124,7 @@ locals {
 
     operator-a = {
       vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = merge(local.db_config, { cpu_arch = "x86" })
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -132,7 +133,7 @@ locals {
 
     operator-b = {
       vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = merge(local.db_config, { cpu_arch = "x86" })
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -141,7 +142,7 @@ locals {
 
     operator-c = {
       vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = merge(local.db_config, { cpu_arch = "x86" })
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
@@ -150,7 +151,7 @@ locals {
 
     operator-d = {
       vpc_cidr_octet = 0 # 10.0.0.0/16
-      db = merge(local.db_config, { cpu_arch = "x86" })
+      db             = local.db_config
       nodes = [
         local.node_config,
         local.node_config,
