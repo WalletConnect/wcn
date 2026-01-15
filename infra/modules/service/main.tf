@@ -262,8 +262,8 @@ resource "aws_iam_role_policy" "s3" {
         Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}"]
       },
       {
-        Effect = "Allow",
-        Action = ["s3:PutObject"],
+        Effect   = "Allow",
+        Action   = ["s3:PutObject"],
         Resource = [for bucket in local.s3_buckets : "arn:aws:s3:::${bucket}/*"]
       },
     ]
