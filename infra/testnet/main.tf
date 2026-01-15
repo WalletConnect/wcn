@@ -110,8 +110,6 @@ locals {
   eu_operators = {
     wallet-connect = {
       vpc_cidr_octet = 105 # 10.105.0.0/16
-      # For this one operator use x86 box instead of the default ARM,
-      # so we have both architectures being actively tested.
       db = local.db_config
       nodes = [
         local.node_config,
