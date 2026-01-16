@@ -1,4 +1,4 @@
 *
 
-!target/*/release/wcn_node
-!target/*/release/wcn_db
+!target/*/*/wcn_node
+!target/*/*/wcn_db
