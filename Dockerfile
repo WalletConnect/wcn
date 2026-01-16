@@ -5,7 +5,7 @@ ARG BINARY
 
 WORKDIR /app
 
-COPY target/${TARGET}/release/${BINARY} /app/bin
+COPY target/${TARGET}/release-debug/${BINARY} /app/bin
 
 RUN chmod +x /app/bin
 

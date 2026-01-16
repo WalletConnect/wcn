@@ -124,7 +124,7 @@ locals {
       vpc_cidr_octet = 0 # 10.0.0.0/16
       db             = local.db_config
       nodes = [
-        local.node_config,
+        merge(local.node_config, { image = "ghcr.io/walletconnect/wcn-node:32a686f-arm64" }),
         local.node_config,
       ]
     }
