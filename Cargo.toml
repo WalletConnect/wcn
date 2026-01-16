@@ -8,14 +8,14 @@ incremental = false
 [profile.release]
 lto = "fat"
 
-[profile.release-lite]
-inherits = "release"
-lto = "thin"
-
 [profile.release-debug]
 inherits = "release"
 lto = "thin"
 debug = 1
+
+[profile.release-lite]
+inherits = "release"
+lto = "thin"
 
 [workspace.dependencies]
 # Local

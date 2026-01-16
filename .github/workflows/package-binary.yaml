@@ -86,6 +86,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY }}-${{ env.SHA_SHORT }}-${{ env.ARCH }}
-          path: target/${{ env.TARGET }}/release/${{ env.BINARY }}
+          path: target/${{ env.TARGET }}/release-debug/${{ env.BINARY }}
           if-no-files-found: error
           retention-days: 1
