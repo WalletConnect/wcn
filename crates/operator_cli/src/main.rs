@@ -10,6 +10,7 @@ mod client;
 mod key;
 mod maintenance;
 mod node;
+mod rename;
 mod test_client;
 mod test_server;
 mod view;
@@ -28,6 +29,9 @@ struct Cli {
 enum Command {
     /// Get overview of your Node Operator
     View(ClusterArgs),
+
+    /// Change the name of your Node Operator
+    Rename(rename::Args),
 
     /// Key management
     #[command(subcommand)]
@@ -103,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::View(args) => view::execute(args).await?,
+        Command::Rename(args) => rename::execute(args).await?,
         Command::Key(cmd) => key::execute(cmd),
         Command::Node(cmd) => node::execute(cmd).await?,
         Command::Client(cmd) => client::execute(cmd).await?,
