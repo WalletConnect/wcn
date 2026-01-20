@@ -1,7 +1,7 @@
 use {crate::ClusterArgs, anyhow::Context, clap::Subcommand};
 
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub(super) enum Command {
     /// Start maintenance
     Start(ClusterArgs),
 
