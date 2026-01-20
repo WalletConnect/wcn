@@ -7,6 +7,7 @@ use {
 };
 
 mod deploy;
+mod maintenance;
 mod migration;
 mod operator;
 mod settings;
@@ -37,6 +38,10 @@ enum Command {
     /// Migration management
     #[command(subcommand)]
     Migration(migration::Command),
+
+    /// Maintenance scheduling
+    #[command(subcommand)]
+    Maintenance(maintenance::Command),
 
     /// Cluster settings management
     #[command(subcommand)]
@@ -97,6 +102,7 @@ async fn main() -> anyhow::Result<()> {
         Command::View(args) => view::execute(args).await,
         Command::Operator(cmd) => operator::execute(cmd).await,
         Command::Migration(cmd) => migration::execute(cmd).await,
+        Command::Maintenance(cmd) => maintenance::execute(cmd).await,
         Command::Settings(cmd) => settings::execute(cmd).await,
     }
 }
