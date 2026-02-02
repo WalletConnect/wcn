@@ -297,7 +297,7 @@ fn meter_write_key_value_sizes(op: &Operation<'_>) {
             operation::Owned::HSet(hset) => map_entry_size(&hset.entry.borrow()),
             operation::Owned::Del(_) | operation::Owned::SetExp(_) => 0,
             operation::Owned::HDel(hdel) => hdel.field.len(),
-            operation::Owned::HSetExp(hset_exp) => hset_exp.field.len(),
+            operation::Owned::HSetExp(hset_exp) => hset_exp.field.len() + 8, // 8 bytes TTL
             _ => return,
         },
         Operation::Borrowed(borrowed) => match borrowed {
@@ -305,7 +305,7 @@ fn meter_write_key_value_sizes(op: &Operation<'_>) {
             operation::Borrowed::HSet(hset) => map_entry_size(&hset.entry),
             operation::Borrowed::Del(_) | operation::Borrowed::SetExp(_) => 0,
             operation::Borrowed::HDel(hdel) => hdel.field.len(),
-            operation::Borrowed::HSetExp(hset_exp) => hset_exp.field.len(),
+            operation::Borrowed::HSetExp(hset_exp) => hset_exp.field.len() + 8, // 8 bytes TTL
             _ => return,
         },
     } as u64;
