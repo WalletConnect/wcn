@@ -110,7 +110,7 @@ locals {
   eu_operators = {
     wallet-connect = {
       vpc_cidr_octet = 105 # 10.105.0.0/16
-      db             = local.db_config
+      db             = merge(local.db_config, { image = "ghcr.io/walletconnect/wcn-db:885f751-amd64" })
       nodes = [
         local.node_config,
         local.node_config,

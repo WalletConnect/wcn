@@ -3,7 +3,7 @@ use {
     futures::{Stream, StreamExt as _, TryStreamExt as _},
     std::{ops::RangeInclusive, sync::Arc},
     tap::Pipe as _,
-    wc::metrics::{future_metrics, FutureExt as _},
+    wc::metrics::{self, future_metrics, FutureExt as _},
     wcn_rocks::db::{
         cf::{ColumnFamilyName, DbColumn},
         migration::{ExportFrame, ExportItem},
@@ -17,9 +17,11 @@ use {
         DataItem,
         DataType,
         MapEntry,
+        MapEntryBorrowed,
         MapPage,
         Operation,
         Record,
+        RecordBorrowed,
         RecordExpiration,
         RecordVersion,
         StorageApi,
@@ -54,6 +56,8 @@ impl Server {
 impl StorageApi for Server {
     async fn execute(&self, op: Operation<'_>) -> storage_api::Result<Output> {
         use storage_api::{Error, ErrorKind};
+
+        meter_write_key_value_sizes(&op);
 
         let res = match op.into_owned() {
             operation::Owned::Get(op) => self
@@ -284,4 +288,41 @@ fn map_expiration(
         Err(wcn_rocks::Error::EntryNotFound) => Ok(None),
         Err(err) => Err(err),
     }
+}
+
+fn meter_write_key_value_sizes(op: &Operation<'_>) {
+    // 8 is TTL bytes
+    let bytes = match op {
+        Operation::Owned(owned) => match owned {
+            operation::Owned::Set(set) => record_size(&set.record.borrow()),
+            operation::Owned::HSet(hset) => map_entry_size(&hset.entry.borrow()),
+            operation::Owned::Del(_) => 0,
+            operation::Owned::SetExp(_) => 8,
+            operation::Owned::HDel(hdel) => hdel.field.len(),
+            operation::Owned::HSetExp(hset_exp) => hset_exp.field.len() + 8,
+            _ => return,
+        },
+        Operation::Borrowed(borrowed) => match borrowed {
+            operation::Borrowed::Set(set) => record_size(&set.record),
+            operation::Borrowed::HSet(hset) => map_entry_size(&hset.entry),
+            operation::Borrowed::Del(_) => 0,
+            operation::Borrowed::SetExp(_) => 8,
+            operation::Borrowed::HDel(hdel) => hdel.field.len(),
+            operation::Borrowed::HSetExp(hset_exp) => hset_exp.field.len() + 8,
+            _ => return,
+        },
+    } as u64;
+
+    let key_bytes = op.key().len() as u64;
+
+    metrics::counter!("write_key_bytes").increment(key_bytes);
+    metrics::counter!("write_bytes").increment(key_bytes + bytes);
+}
+
+fn record_size(record: &RecordBorrowed<'_>) -> usize {
+    record.value.len() + 8 // 8 bytes TTL
+}
+
+fn map_entry_size(entry: &MapEntryBorrowed<'_>) -> usize {
+    record_size(&entry.record) + entry.field.len()
 }

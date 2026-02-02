@@ -280,6 +280,15 @@ pub struct MapEntryBorrowed<'a> {
     pub record: RecordBorrowed<'a>,
 }
 
+impl MapEntry {
+    pub fn borrow(&self) -> MapEntryBorrowed<'_> {
+        MapEntryBorrowed {
+            field: &self.field,
+            record: self.record.borrow(),
+        }
+    }
+}
+
 /// Expiration time of a [`Record`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Message)]
 pub struct RecordExpiration {
