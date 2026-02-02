@@ -291,21 +291,24 @@ fn map_expiration(
 }
 
 fn meter_write_key_value_sizes(op: &Operation<'_>) {
+    // 8 is TTL bytes
     let bytes = match op {
         Operation::Owned(owned) => match owned {
             operation::Owned::Set(set) => record_size(&set.record.borrow()),
             operation::Owned::HSet(hset) => map_entry_size(&hset.entry.borrow()),
-            operation::Owned::Del(_) | operation::Owned::SetExp(_) => 0,
+            operation::Owned::Del(_) => 0,
+            operation::Owned::SetExp(_) => 8,
             operation::Owned::HDel(hdel) => hdel.field.len(),
-            operation::Owned::HSetExp(hset_exp) => hset_exp.field.len() + 8, // 8 bytes TTL
+            operation::Owned::HSetExp(hset_exp) => hset_exp.field.len() + 8,
             _ => return,
         },
         Operation::Borrowed(borrowed) => match borrowed {
             operation::Borrowed::Set(set) => record_size(&set.record),
             operation::Borrowed::HSet(hset) => map_entry_size(&hset.entry),
-            operation::Borrowed::Del(_) | operation::Borrowed::SetExp(_) => 0,
+            operation::Borrowed::Del(_) => 0,
+            operation::Borrowed::SetExp(_) => 8,
             operation::Borrowed::HDel(hdel) => hdel.field.len(),
-            operation::Borrowed::HSetExp(hset_exp) => hset_exp.field.len() + 8, // 8 bytes TTL
+            operation::Borrowed::HSetExp(hset_exp) => hset_exp.field.len() + 8,
             _ => return,
         },
     } as u64;
