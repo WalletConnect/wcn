@@ -218,6 +218,14 @@ impl smart_contract::Write for SmartContract {
     async fn update_settings(&self, new_settings: Settings) -> WriteResult<()> {
         check_receipt(self.alloy.updateSettings(new_settings.into())).await
     }
+
+    async fn transfer_ownership(&self, new_owner: AccountAddress) -> WriteResult<()> {
+        check_receipt(self.alloy.transferOwnership(new_owner.into())).await
+    }
+
+    async fn accept_ownership(&self) -> WriteResult<()> {
+        check_receipt(self.alloy.acceptOwnership()).await
+    }
 }
 
 async fn check_receipt<D>(call: CallBuilder<&DynProvider, D>) -> WriteResult<()>

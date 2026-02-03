@@ -491,6 +491,31 @@ where
         Ok(())
     }
 
+    /// Calls [`SmartContract::transfer_ownership`].
+    pub async fn transfer_ownership(
+        &self,
+        new_owner: smart_contract::AccountAddress,
+    ) -> Result<(), TransferOwnershipError> {
+        self.using_view(move |view| {
+            view.ownership()
+                .require_owner(self.smart_contract_signer()?)?;
+
+            Ok::<_, TransferOwnershipError>(())
+        })?;
+
+        self.inner
+            .smart_contract
+            .transfer_ownership(new_owner)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Calls [`SmartContract::accept_ownership`].
+    pub async fn accept_ownership(&self) -> Result<(), smart_contract::WriteError> {
+        self.inner.smart_contract.accept_ownership().await
+    }
+
     fn smart_contract_signer(
         &self,
     ) -> Result<&smart_contract::AccountAddress, NoSmartContractSingerError> {
@@ -759,6 +784,9 @@ pub enum UpdateSettingsError {
 /// [`Cluster::transfer_ownership`] error.
 #[derive(Debug, thiserror::Error)]
 pub enum TransferOwnershipError {
+    #[error(transparent)]
+    NoSigner(#[from] NoSmartContractSingerError),
+
     #[error(transparent)]
     NotOwner(#[from] ownership::NotOwnerError),
 

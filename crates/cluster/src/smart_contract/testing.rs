@@ -393,6 +393,14 @@ impl super::Write for FakeSmartContract {
         })
         .await
     }
+
+    async fn transfer_ownership(&self, _new_owner: AccountAddress) -> WriteResult<()> {
+        Ok(())
+    }
+
+    async fn accept_ownership(&self) -> WriteResult<()> {
+        Ok(())
+    }
 }
 
 impl super::Read for FakeSmartContract {
