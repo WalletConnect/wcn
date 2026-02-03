@@ -44,7 +44,7 @@ async fn transfer_ownership(args: TransferArgs) -> anyhow::Result<()> {
     }
 
     println!(
-        "The complete the transfer the new owner is required to call `wcn_admin ownership accept` \
+        "To complete the transfer the new owner is required to call `wcn_admin ownership accept` \
          command"
     );
 
