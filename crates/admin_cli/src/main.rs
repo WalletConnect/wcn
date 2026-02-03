@@ -9,6 +9,7 @@ use {
 mod deploy;
 mod migration;
 mod operator;
+mod ownership;
 mod settings;
 mod view;
 
@@ -41,6 +42,10 @@ enum Command {
     /// Cluster settings management
     #[command(subcommand)]
     Settings(settings::Command),
+
+    /// Cluster ownership management
+    #[command(subcommand)]
+    Ownership(ownership::Command),
 }
 
 #[derive(Debug, Args)]
@@ -98,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Operator(cmd) => operator::execute(cmd).await,
         Command::Migration(cmd) => migration::execute(cmd).await,
         Command::Settings(cmd) => settings::execute(cmd).await,
+        Command::Ownership(cmd) => ownership::execute(cmd).await,
     }
 }
 
