@@ -1,5 +1,7 @@
 //! EVM implementation of [`SmartContract`](super::SmartContract).
 
+#[cfg(feature = "kms")]
+use alloy::signers::aws::AwsSigner;
 use {
     super::*,
     crate::{migration, node_operator, smart_contract},
@@ -9,7 +11,7 @@ use {
         primitives::{Address as AlloyAddress, U256},
         providers::{DynProvider, Provider, ProviderBuilder, WsConnect},
         rpc::types::{Filter, Log},
-        signers::{aws::AwsSigner, local::PrivateKeySigner},
+        signers::local::PrivateKeySigner,
         sol_types::{SolCall, SolEventInterface, SolInterface},
         transports::http::reqwest,
     },
@@ -47,6 +49,7 @@ impl RpcProvider {
     pub async fn new(url: RpcUrl, signer: Signer) -> Result<Self, RpcProviderCreationError> {
         let wallet: EthereumWallet = match &signer.kind {
             SignerKind::PrivateKey(key) => key.clone().into(),
+            #[cfg(feature = "kms")]
             SignerKind::Kms(key) => key.clone().into(),
         };
 
@@ -724,6 +727,8 @@ impl Signer {
 #[derive(Clone)]
 enum SignerKind {
     PrivateKey(PrivateKeySigner),
+
+    #[cfg(feature = "kms")]
     Kms(AwsSigner),
 }
 
