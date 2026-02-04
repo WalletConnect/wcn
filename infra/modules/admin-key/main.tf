@@ -1,8 +1,10 @@
 data "aws_caller_identity" "current" {}
 
 resource "aws_kms_key" "this" {
-  description  = "Key used for encryption/decryption of WCN SOPS secrets"
-  multi_region = true
+  description              = "WCN Cluster Smart-Contract admin (owner) key"
+  key_usage                = "SIGN_VERIFY"
+  customer_master_key_spec = "ECC_SECG_P256K1"
+  multi_region             = true
 }
 
 resource "aws_kms_key_policy" "this" {
@@ -28,14 +30,12 @@ resource "aws_kms_key_policy" "this" {
         Principal = {
           AWS = "*"
         },
-        Action = [
-          "kms:DescribeKey",
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey",
-          "kms:GenerateDataKeyWithoutPlaintext"
-        ],
+        actions = [
+          "kms:Sign",
+          "kms:Verify",
+          "kms:GetPublicKey",
+          "kms:DescribeKey"
+        ]
         Resource = "*",
         "Condition" : {
           "ArnLike" : {

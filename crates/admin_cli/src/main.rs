@@ -1,9 +1,9 @@
 use {
     anyhow::Context,
-    clap::{Args, Parser, Subcommand},
+    clap::{ArgGroup, Args, Parser, Subcommand},
     derive_more::AsRef,
     std::io::{self, Write as _},
-    wcn_cluster::NodeOperator,
+    wcn_cluster::{NodeOperator, smart_contract::evm},
 };
 
 mod deploy;
@@ -49,14 +49,20 @@ enum Command {
 }
 
 #[derive(Debug, Args)]
+#[command(group(
+    ArgGroup::new("signer")
+        .required(true)
+        .multiple(false)
+        .args(["private_key", "kms_key_id"])
+))]
 struct ClusterArgs {
     /// Private key of the WCN Cluster Smart-Contract owner
-    #[arg(
-        id = "PRIVATE_KEY",
-        long = "private-key",
-        env = "WCN_CLUSTER_SMART_CONTRACT_OWNER_PRIVATE_KEY"
-    )]
-    signer: wcn_cluster::smart_contract::evm::Signer,
+    #[arg(long, env = "WCN_CLUSTER_SMART_CONTRACT_OWNER_PRIVATE_KEY")]
+    private_key: Option<String>,
+
+    /// KMS key id of the WCN Cluster Smart-Contract owner
+    #[arg(long, env = "WCN_CLUSTER_SMART_CONTRACT_OWNER_KMS_KEY_ID")]
+    kms_key_id: Option<String>,
 
     /// WCN Cluster Smart-Contract encryption key
     #[arg(
@@ -82,8 +88,19 @@ impl ClusterArgs {
             encryption_key: self.encryption_key,
         };
 
+        let signer = if let Some(pk) = self.private_key {
+            evm::Signer::try_from_private_key(&pk)?
+        } else if let Some(key_id) = self.kms_key_id {
+            let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+            let client = aws_sdk_kms::Client::new(&config);
+            evm::Signer::try_from_kms(client, key_id).await?
+        } else {
+            // `clap` validates that exactly one required argument is present
+            unreachable!()
+        };
+
         let connector =
-            wcn_cluster::smart_contract::evm::RpcProvider::new(self.rpc_provider_url, self.signer)
+            wcn_cluster::smart_contract::evm::RpcProvider::new(self.rpc_provider_url, signer)
                 .await
                 .context("RpcProvider::new")?;
 

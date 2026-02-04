@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 # Local
-wcn_cluster = { workspace = true, features = ["evm"] }
+wcn_cluster = { workspace = true, features = ["evm", "kms"] }
 
 # Derives
 derive_more = { workspace = true, features = ["as_ref"] }
@@ -21,6 +21,8 @@ futures = { workspace = true }
 # Other
 clap = { workspace = true }
 libp2p-identity = { workspace = true }
+aws-sdk-kms = { workspace = true }
+aws-config = "1.8"
 
 [lints]
 workspace = true
