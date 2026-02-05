@@ -114,8 +114,6 @@ impl ClusterArgs {
             unreachable!()
         };
 
-        println!("{}", signer.address());
-
         let connector =
             wcn_cluster::smart_contract::evm::RpcProvider::new(self.rpc_provider_url, signer)
                 .await
