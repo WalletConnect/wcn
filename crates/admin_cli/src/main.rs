@@ -101,7 +101,10 @@ impl ClusterArgs {
                 ))
                 .build_https();
 
+            let region = key_arn.split(':').nth(3).context("Invalid KMS ARN")?;
+
             let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                .region(aws_config::Region::new(region.to_owned()))
                 .http_client(client)
                 .sleep_impl(aws_smithy_async::rt::sleep::TokioSleep::new())
                 .load()
