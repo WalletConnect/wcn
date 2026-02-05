@@ -98,14 +98,14 @@ module "admin-key-us" {
 module "admin-key-ap" {
   source = "../modules/admin-key"
   providers = {
-    aws = aws.us
+    aws = aws.ap
   }
 }
 
 module "admin-key-sa" {
   source = "../modules/admin-key"
   providers = {
-    aws = aws.us
+    aws = aws.sa
   }
 }
 
