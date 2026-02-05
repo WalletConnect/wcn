@@ -53,7 +53,7 @@ enum Command {
     ArgGroup::new("signer")
         .required(true)
         .multiple(false)
-        .args(["private_key", "kms_key_id"])
+        .args(["private_key", "kms_key_arn"])
 ))]
 struct ClusterArgs {
     /// Private key of the WCN Cluster Smart-Contract owner
@@ -61,8 +61,8 @@ struct ClusterArgs {
     private_key: Option<String>,
 
     /// KMS key id of the WCN Cluster Smart-Contract owner
-    #[arg(long, env = "WCN_CLUSTER_SMART_CONTRACT_OWNER_KMS_KEY_ID")]
-    kms_key_id: Option<String>,
+    #[arg(long, env = "WCN_CLUSTER_SMART_CONTRACT_OWNER_KMS_KEY_ARN")]
+    kms_key_arn: Option<String>,
 
     /// WCN Cluster Smart-Contract encryption key
     #[arg(
@@ -90,14 +90,31 @@ impl ClusterArgs {
 
         let signer = if let Some(pk) = self.private_key {
             evm::Signer::try_from_private_key(&pk)?
-        } else if let Some(key_id) = self.kms_key_id {
-            let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+        } else if let Some(key_arn) = self.kms_key_arn {
+            use aws_smithy_http_client::tls;
+
+            // Force `aws_sdk` to use `ring` instead of `aws-lc`, otherwise we get a runtime
+            // conflict in `rustls`.
+            let client = aws_smithy_http_client::Builder::new()
+                .tls_provider(tls::Provider::Rustls(
+                    tls::rustls_provider::CryptoMode::Ring,
+                ))
+                .build_https();
+
+            let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                .http_client(client)
+                .sleep_impl(aws_smithy_async::rt::sleep::TokioSleep::new())
+                .load()
+                .await;
+
             let client = aws_sdk_kms::Client::new(&config);
-            evm::Signer::try_from_kms(client, key_id).await?
+            evm::Signer::try_from_kms(client, key_arn).await?
         } else {
             // `clap` validates that exactly one required argument is present
             unreachable!()
         };
+
+        println!("{}", signer.address());
 
         let connector =
             wcn_cluster::smart_contract::evm::RpcProvider::new(self.rpc_provider_url, signer)
