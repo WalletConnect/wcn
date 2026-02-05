@@ -89,6 +89,7 @@ envy = { version = "0.4", default-features = false }
 vergen-pretty = { version = "1.0", default-features = false, features = ["trace"] }
 vergen = { version = "9", default-features = false, features = ["build", "cargo", "rustc", "si"] }
 clap = { version = "4.5", features = ["derive", "env"] }
+aws-sdk-kms = { version = "1.96", default-features = false }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

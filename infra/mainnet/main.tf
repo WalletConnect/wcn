@@ -81,6 +81,34 @@ module "sops-encryption-key" {
   source = "../modules/sops-encryption-key"
 }
 
+module "admin-key-eu" {
+  source = "../modules/admin-key"
+  providers = {
+    aws = aws.eu
+  }
+}
+
+module "admin-key-us" {
+  source = "../modules/admin-key"
+  providers = {
+    aws = aws.us
+  }
+}
+
+module "admin-key-ap" {
+  source = "../modules/admin-key"
+  providers = {
+    aws = aws.ap
+  }
+}
+
+module "admin-key-sa" {
+  source = "../modules/admin-key"
+  providers = {
+    aws = aws.sa
+  }
+}
+
 resource "aws_route53_zone" "this" {
   name = "mainnet.walletconnect.network"
 }

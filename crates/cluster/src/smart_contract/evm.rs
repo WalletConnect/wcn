@@ -1,5 +1,7 @@
 //! EVM implementation of [`SmartContract`](super::SmartContract).
 
+#[cfg(feature = "kms")]
+use alloy::signers::aws::AwsSigner;
 use {
     super::*,
     crate::{migration, node_operator, smart_contract},
@@ -47,6 +49,8 @@ impl RpcProvider {
     pub async fn new(url: RpcUrl, signer: Signer) -> Result<Self, RpcProviderCreationError> {
         let wallet: EthereumWallet = match &signer.kind {
             SignerKind::PrivateKey(key) => key.clone().into(),
+            #[cfg(feature = "kms")]
+            SignerKind::Kms(key) => key.clone().into(),
         };
 
         let builder = ProviderBuilder::new().wallet(wallet);
@@ -679,7 +683,7 @@ pub struct Signer {
 }
 
 impl FromStr for Signer {
-    type Err = InvalidPrivateKeyError;
+    type Err = InvalidSignerError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_from_private_key(s)
@@ -687,9 +691,26 @@ impl FromStr for Signer {
 }
 
 impl Signer {
-    pub fn try_from_private_key(hex: &str) -> Result<Self, InvalidPrivateKeyError> {
+    #[cfg(feature = "kms")]
+    pub async fn try_from_kms(
+        kms: aws_sdk_kms::Client,
+        key_id: String,
+    ) -> Result<Self, InvalidSignerError> {
+        use alloy::{network::TxSigner, signers::Signature};
+
+        let aws_signer = AwsSigner::new(kms, key_id, None)
+            .await
+            .map_err(|err| InvalidSignerError(format!("KMS: {err:?}")))?;
+
+        Ok(Self {
+            address: TxSigner::<Signature>::address(&aws_signer).into(),
+            kind: SignerKind::Kms(aws_signer),
+        })
+    }
+
+    pub fn try_from_private_key(hex: &str) -> Result<Self, InvalidSignerError> {
         let private_key = PrivateKeySigner::from_str(hex)
-            .map_err(|err| InvalidPrivateKeyError(format!("{err:?}")))?;
+            .map_err(|err| InvalidSignerError(format!("Private key: {err:?}")))?;
 
         Ok(Self {
             address: private_key.address().into(),
@@ -706,8 +727,11 @@ impl Signer {
 #[derive(Clone)]
 enum SignerKind {
     PrivateKey(PrivateKeySigner),
+
+    #[cfg(feature = "kms")]
+    Kms(AwsSigner),
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("Invalid private key: {0:?}")]
-pub struct InvalidPrivateKeyError(String);
+#[error("Invalid signer: {0:?}")]
+pub struct InvalidSignerError(String);
