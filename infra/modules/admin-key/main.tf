@@ -30,7 +30,7 @@ resource "aws_kms_key_policy" "this" {
         Principal = {
           AWS = "*"
         },
-        actions = [
+        Action = [
           "kms:Sign",
           "kms:Verify",
           "kms:GetPublicKey",
