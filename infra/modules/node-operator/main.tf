@@ -100,7 +100,11 @@ module "secret" {
   source = "../secret"
   for_each = toset(concat(
     ["ecdsa_private_key", "ed25519_secret_key", "smart_contract_encryption_key", "rpc_provider_url"],
-    var.config.grafana == null ? [] : ["grafana_admin_password", "prometheus_grafana_password"],
+    var.config.grafana == null ? [] : [
+      "grafana_admin_password",
+      "grafana_oauth_client_secret",
+      "prometheus_grafana_password"
+    ],
   ))
 
   name            = "${var.config.name}-${each.key}"
@@ -373,10 +377,21 @@ module "grafana" {
         GF_SERVER_HTTP_PORT    = tostring(local.grafana_port)
         GF_PATHS_DATA          = "/data"
         GF_SECURITY_ADMIN_USER = "admin"
+
+        GF_AUTH_GOOGLE_ENABLED         = "true"
+        GF_AUTH_GOOGLE_ALLOW_SIGN_UP   = "true"
+        GF_AUTH_GOOGLE_CLIENT_ID       = local.encrypted_sops.grafana_oauth_client_id_unencrypted
+        GF_AUTH_GOOGLE_SCOPES          = "openid email profile"
+        GF_AUTH_GOOGLE_AUTH_URL        = "https://accounts.google.com/o/oauth2/v2/auth"
+        GF_AUTH_GOOGLE_TOKEN_URL       = "https://oauth2.googleapis.com/token"
+        GF_AUTH_GOOGLE_API_URL         = "https://openidconnect.googleapis.com/v1/userinfo"
+        GF_AUTH_GOOGLE_ALLOWED_DOMAINS = local.encrypted_sops.grafana_oauth_allowed_domains_unencrypted
+        GF_AUTH_GOOGLE_USE_PKCE        = "true"
       }
 
       secrets = {
         GF_SECURITY_ADMIN_PASSWORD   = module.secret["grafana_admin_password"]
+        GF_AUTH_GOOGLE_CLIENT_SECRET = module.secret["grafana_oauth_client_secret"]
         PROMETHEUS_DATASOURCE_CONFIG = module.grafana_prometheus_datasource_config[0]
       }
 
