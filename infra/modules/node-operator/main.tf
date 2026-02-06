@@ -375,6 +375,7 @@ module "grafana" {
 
       environment = {
         GF_SERVER_HTTP_PORT    = tostring(local.grafana_port)
+        GF_SERVER_DOMAIN       = local.grafana_domain_name
         GF_PATHS_DATA          = "/data"
         GF_SECURITY_ADMIN_USER = "admin"
 
