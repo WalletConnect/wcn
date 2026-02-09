@@ -1,15 +1,16 @@
 use {
     anyhow::Context,
-    clap::{Args, Parser, Subcommand},
+    clap::{ArgGroup, Args, Parser, Subcommand},
     derive_more::AsRef,
     std::io::{self, Write as _},
-    wcn_cluster::NodeOperator,
+    wcn_cluster::{NodeOperator, smart_contract::evm},
 };
 
 mod deploy;
 mod maintenance;
 mod migration;
 mod operator;
+mod ownership;
 mod settings;
 mod view;
 
@@ -46,17 +47,27 @@ enum Command {
     /// Cluster settings management
     #[command(subcommand)]
     Settings(settings::Command),
+
+    /// Cluster ownership management
+    #[command(subcommand)]
+    Ownership(ownership::Command),
 }
 
 #[derive(Debug, Args)]
+#[command(group(
+    ArgGroup::new("signer")
+        .required(true)
+        .multiple(false)
+        .args(["private_key", "kms_key_arn"])
+))]
 struct ClusterArgs {
     /// Private key of the WCN Cluster Smart-Contract owner
-    #[arg(
-        id = "PRIVATE_KEY",
-        long = "private-key",
-        env = "WCN_CLUSTER_SMART_CONTRACT_OWNER_PRIVATE_KEY"
-    )]
-    signer: wcn_cluster::smart_contract::evm::Signer,
+    #[arg(long, env = "WCN_CLUSTER_SMART_CONTRACT_OWNER_PRIVATE_KEY")]
+    private_key: Option<String>,
+
+    /// KMS key id of the WCN Cluster Smart-Contract owner
+    #[arg(long, env = "WCN_CLUSTER_SMART_CONTRACT_OWNER_KMS_KEY_ARN")]
+    kms_key_arn: Option<String>,
 
     /// WCN Cluster Smart-Contract encryption key
     #[arg(
@@ -82,8 +93,37 @@ impl ClusterArgs {
             encryption_key: self.encryption_key,
         };
 
+        let signer = if let Some(pk) = self.private_key {
+            evm::Signer::try_from_private_key(&pk)?
+        } else if let Some(key_arn) = self.kms_key_arn {
+            use aws_smithy_http_client::tls;
+
+            // Force `aws_sdk` to use `ring` instead of `aws-lc`, otherwise we get a runtime
+            // conflict in `rustls`.
+            let client = aws_smithy_http_client::Builder::new()
+                .tls_provider(tls::Provider::Rustls(
+                    tls::rustls_provider::CryptoMode::Ring,
+                ))
+                .build_https();
+
+            let region = key_arn.split(':').nth(3).context("Invalid KMS ARN")?;
+
+            let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                .region(aws_config::Region::new(region.to_owned()))
+                .http_client(client)
+                .sleep_impl(aws_smithy_async::rt::sleep::TokioSleep::new())
+                .load()
+                .await;
+
+            let client = aws_sdk_kms::Client::new(&config);
+            evm::Signer::try_from_kms(client, key_arn).await?
+        } else {
+            // `clap` validates that exactly one required argument is present
+            unreachable!()
+        };
+
         let connector =
-            wcn_cluster::smart_contract::evm::RpcProvider::new(self.rpc_provider_url, self.signer)
+            wcn_cluster::smart_contract::evm::RpcProvider::new(self.rpc_provider_url, signer)
                 .await
                 .context("RpcProvider::new")?;
 
@@ -104,6 +144,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Migration(cmd) => migration::execute(cmd).await,
         Command::Maintenance(cmd) => maintenance::execute(cmd).await,
         Command::Settings(cmd) => settings::execute(cmd).await,
+        Command::Ownership(cmd) => ownership::execute(cmd).await,
     }
 }
 

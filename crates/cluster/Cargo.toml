@@ -8,6 +8,7 @@ publish = false
 default = ["evm"]
 testing = []
 evm = ["dep:alloy"]
+kms = ["dep:aws-sdk-kms", "alloy/signer-aws"]
 
 [lints]
 workspace = true
@@ -67,6 +68,7 @@ alloy = { workspace = true, optional = true, features = [
     "provider-ws",
     "rpc-types",
 ] }
+aws-sdk-kms = { workspace = true, optional = true }
 
 [dev-dependencies]
 libp2p-identity = { workspace = true, features = ["rand"] }

@@ -212,6 +212,19 @@ pub trait Write {
     /// The implementation MUST emit [`settings::Updated`] event on
     /// success.
     fn update_settings(&self, new_settings: Settings) -> impl Future<Output = WriteResult<()>>;
+
+    /// Transfers ownership of the [`Cluster`] to the specified
+    /// [`AccountAddress`].
+    ///
+    /// The new owner is required to confirm the transfer using
+    /// [`SmartContract::accept_ownership`].
+    fn transfer_ownership(
+        &self,
+        new_owner: AccountAddress,
+    ) -> impl Future<Output = WriteResult<()>>;
+
+    /// Accepts ownership of the [`Cluster`].
+    fn accept_ownership(&self) -> impl Future<Output = WriteResult<()>>;
 }
 
 /// Read [`SmartContract`] calls.
