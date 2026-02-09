@@ -9,6 +9,9 @@
 	"grafana_admin_password": "ENC[AES256_GCM,data:vjHieWD40PMIvONwSEdOoerD+1fDCAZAMcFV9cq9nkgXhPaROCIOi0euyIfyHTgKJ4sfyDU9+jYeh+tb2ZmNNQ==,iv:mvPJn4DO8JV1uewKf5mTPDtVhaMMNYURKgR06q67hNs=,tag:ljnUvAoM78Jm6akRQ7KHrQ==,type:str]",
 	"prometheus_grafana_password": "ENC[AES256_GCM,data:nkxgVBRxusitxXUpofS4BrAverei0jDK1H5XRQVgQFVw9b+4N73j/x7SKw==,iv:w2MkO2yztke63WMl3xH5b+o3ug1txk8CPnpoungHVm0=,tag:Q6BnRSP+wr4+sZU5Pvp1XA==,type:str]",
 	"prometheus_grafana_password_hash": "ENC[AES256_GCM,data:TwF3JW99an38Vj2kaXwNMu9QqnmWQiGWgnD1ZTRsWMUGz8d77tCXe1YFEKha86fXt60/1YvoM2wChzZs,iv:/bqBIIBLMfrpbYl8Enwqm2NaoUHi2Ic5p3tlh9gDJKg=,tag:I8s1hEDwEyuD2vwt9YqvPg==,type:str]",
+	"grafana_oauth_client_id_unencrypted": "476524165225-0cfbc0cma6lc7buajv5b1tls222uhtok.apps.googleusercontent.com",
+	"grafana_oauth_client_secret": "ENC[AES256_GCM,data:4U1i0OkfDhQ3dr+Y/ycuk3FweAGRc7XjsYuc1Lf5LngYgb8=,iv:p/CDnZUYN7vx1poUntQJ20p5wsr7UTLihujHsoqhcDw=,tag:Rk/eS1KGN/KiTj9t8oHywA==,type:str]",
+	"grafana_oauth_allowed_domains_unencrypted": "walletconnect.com reown.com",
 	"sops": {
 		"kms": [
 			{
@@ -18,8 +21,8 @@
 				"aws_profile": ""
 			}
 		],
-		"lastmodified": "2025-12-19T16:05:06Z",
-		"mac": "ENC[AES256_GCM,data:3cmZO4b7ZUXjfqWdHMfvAMh+0F22kASNw1wKnKpjBe/lzB43eSUkfpA6EtUWBBEAjc9DOZwBKLbsKTGwmfiicp8Sribx+GZof3aPio1UJYhWQG9ugcUUWsttfhwrsJ9m/fuXd+ilF3W5e5J23AlYpRs3myMGNQTMzhyBXbaJCiY=,iv:2sEofcf7cdKJCi+QYRuto/5yUpFAqdY7eKeYLL/9NbE=,tag:gwZHkcoVM2LKMhWSDiXN9g==,type:str]",
+		"lastmodified": "2026-02-06T15:10:52Z",
+		"mac": "ENC[AES256_GCM,data:BQcHbobLwJ7ue8oyKZJZeirNlQuG8Inkm6qhDBvqsytbSSvAr8zkI3P/91oj1dJ1qBHTTX/7qwwrfmWeMGUgyBBryyFIhqAprOw2SYnjn2u1uDhYpKLBdQErSRQ/11XGioFdwVydDEzPhtNkyVCl385B7fWHxLmwcxKubQMg/a0=,iv:ivj2ytx2SbXX0vU4TwNjD2tgqEWW9/tMQpQVVLXje2E=,tag:+LZQ3DN22EOAyeHqv8czeA==,type:str]",
 		"unencrypted_suffix": "_unencrypted",
 		"version": "3.10.2"
 	}
