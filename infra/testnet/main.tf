@@ -57,6 +57,13 @@ module "sops-encryption-key" {
   source = "../modules/sops-encryption-key"
 }
 
+module "admin-key-eu" {
+  source = "../modules/admin-key"
+  providers = {
+    aws = aws.eu
+  }
+}
+
 resource "aws_route53_zone" "this" {
   name = "testnet.walletconnect.network"
 }
@@ -92,7 +99,7 @@ locals {
     memory    = 4
     disk      = 20
 
-    prom2parquet_image = "ghcr.io/walletconnect/prom2parquet:sha-1fee3c3"
+    prom2parquet_image = "ghcr.io/walletconnect/prom2parquet:sha-0cd5c42"
     s3_bucket          = "walletconnect.data-lake.staging"
     s3_metrics_prefix  = "wcn/testnet"
   }

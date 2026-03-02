@@ -119,8 +119,11 @@ jobs:
           toolchain: ${{ env.RUST_STABLE }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --workspace --all-features
-      # Check that `wcn_operator` specifically builds outside of the cargo workspace
+      # Check that binaries can be built outside of the cargo workspace
+      - run: cargo build -p wcn_node
+      - run: cargo build -p wcn_db
       - run: cargo build -p wcn_operator
+      - run: cargo build -p wcn_admin
 
   cargo-test:
     needs: [changed-files]
