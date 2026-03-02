@@ -373,6 +373,7 @@ module "grafana" {
         GF_SERVER_HTTP_PORT    = tostring(local.grafana_port)
         GF_PATHS_DATA          = "/data"
         GF_SECURITY_ADMIN_USER = "admin"
+        GF_METRICS_ENABLED     = "false"
       }
 
       secrets = {
