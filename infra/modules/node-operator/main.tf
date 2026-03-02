@@ -380,6 +380,7 @@ module "grafana" {
 
         GF_PATHS_DATA          = "/data"
         GF_SECURITY_ADMIN_USER = "admin"
+        GF_METRICS_ENABLED     = "false"
 
         GF_AUTH_GOOGLE_ENABLED         = "true"
         GF_AUTH_GOOGLE_ALLOW_SIGN_UP   = "true"
