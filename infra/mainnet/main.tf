@@ -198,30 +198,6 @@ locals {
         local.node_config,
       ]
     }
-    wallet-connect-3 = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db             = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
-    wallet-connect-4 = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db             = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
-    wallet-connect-5 = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db             = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
   }
 
   us_operators = {
