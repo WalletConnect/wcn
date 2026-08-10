@@ -434,6 +434,9 @@ pub enum ErrorKind {
     /// Internal error.
     Internal,
 
+    /// Invalid argument.
+    InvalidArgument,
+
     /// Transport error.
     Transport,
 
@@ -465,6 +468,11 @@ impl Error {
         Self::new(ErrorKind::Internal)
     }
 
+    /// Creates a new [`Error`] with [`ErrorKind::InvalidArgument`].
+    pub const fn invalid_argument() -> Self {
+        Self::new(ErrorKind::InvalidArgument)
+    }
+
     pub fn with_message(mut self, message: impl ToString) -> Self {
         self.message = Some(message.to_string());
         self
@@ -478,7 +486,7 @@ impl Error {
     /// Indicates whether this [`Error`] is transient and can be retried.
     pub fn is_transient(&self) -> bool {
         match self.kind {
-            ErrorKind::Unauthorized | ErrorKind::Unknown => false,
+            ErrorKind::Unauthorized | ErrorKind::InvalidArgument | ErrorKind::Unknown => false,
             ErrorKind::KeyspaceVersionMismatch
             | ErrorKind::Timeout
             | ErrorKind::Internal
