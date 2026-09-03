@@ -171,10 +171,6 @@ locals {
       account_id = local.relay_account_id
       cidr       = "10.13.0.0/16"
     }
-    "relay-sa-east-1" : {
-      account_id = local.relay_account_id
-      cidr       = "10.14.0.0/16"
-    }
   }
 
   eu_operators = {
@@ -233,6 +229,14 @@ locals {
       ]
       prometheus   = local.prometheus_config
       route53_zone = aws_route53_zone.this
+    }
+    wallet-connect-2 = {
+      vpc_cidr_octet = 0 # 10.0.0.0/16
+      db             = local.db_config
+      nodes = [
+        local.node_config,
+        local.node_config,
+      ]
     }
   }
 
