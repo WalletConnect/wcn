@@ -26,6 +26,8 @@ use {
     },
 };
 
+const MAX_HSCAN_COUNT: u32 = 5000;
+
 struct Inner {
     storage: Storage,
 }
@@ -169,6 +171,10 @@ impl StorageApi for Server {
                 .map(|card| Output::Cardinality(card as u64)),
 
             operation::Owned::HScan(op) => {
+                if op.count > MAX_HSCAN_COUNT {
+                    return Err(Error::invalid_argument());
+                }
+
                 let opts = ScanOptions::new(op.count as usize).with_cursor(op.cursor);
 
                 self.map_storage()
