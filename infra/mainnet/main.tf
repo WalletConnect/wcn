@@ -171,10 +171,6 @@ locals {
       account_id = local.relay_account_id
       cidr       = "10.13.0.0/16"
     }
-    "relay-sa-east-1" : {
-      account_id = local.relay_account_id
-      cidr       = "10.14.0.0/16"
-    }
   }
 
   eu_operators = {
