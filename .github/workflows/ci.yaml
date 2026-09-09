@@ -197,4 +197,4 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           rust-version: ${{ env.RUST_STABLE }}
-          command: check license
+          command: check licenses
