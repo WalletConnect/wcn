@@ -186,14 +186,6 @@ locals {
       grafana      = local.grafana_config
       route53_zone = aws_route53_zone.this
     }
-    wallet-connect-2 = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db             = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
   }
 
   us_operators = {
@@ -213,28 +205,6 @@ locals {
   ap_operators = {
     wallet-connect = {
       vpc_cidr_octet          = 7 # 10.7.0.0/16
-      vpc_peering_connections = local.vpc_peering_connections
-      db                      = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-      prometheus   = local.prometheus_config
-      route53_zone = aws_route53_zone.this
-    }
-    wallet-connect-2 = {
-      vpc_cidr_octet = 0 # 10.0.0.0/16
-      db             = local.db_config
-      nodes = [
-        local.node_config,
-        local.node_config,
-      ]
-    }
-  }
-
-  sa_operators = {
-    wallet-connect = {
-      vpc_cidr_octet          = 8 # 10.8.0.0/16
       vpc_peering_connections = local.vpc_peering_connections
       db                      = local.db_config
       nodes = [
@@ -286,20 +256,6 @@ module "ap-southeast-1" {
 
   providers = {
     aws = aws.ap
-  }
-}
-
-module "sa-east-1" {
-  source   = "../modules/node-operator"
-  for_each = local.sa_operators
-
-  config = merge(each.value, {
-    name           = each.key
-    sops_file_path = "${path.module}/sops/sa.${each.key}.json"
-  })
-
-  providers = {
-    aws = aws.sa
   }
 }
 
