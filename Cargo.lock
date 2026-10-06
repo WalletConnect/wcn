@@ -52,7 +52,7 @@ dependencies = [
 [[package]]
 name = "alloc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=74ff898#74ff89821f29c4086478ae82ac50957908caf5d1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1855,7 +1855,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=74ff898#74ff89821f29c4086478ae82ac50957908caf5d1"
 
 [[package]]
 name = "colorchoice"
@@ -2179,7 +2179,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d162beedaa69905488a8da94f5ac3edb4dd4788b732fadb7bd120b2625c1976"
 dependencies = [
  "data-encoding",
- "syn 2.0.106",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2649,7 +2649,7 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 [[package]]
 name = "future"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=74ff898#74ff89821f29c4086478ae82ac50957908caf5d1"
 dependencies = [
  "pin-project",
  "thiserror 1.0.69",
@@ -6362,7 +6362,7 @@ dependencies = [
 [[package]]
 name = "wc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=74ff898#74ff89821f29c4086478ae82ac50957908caf5d1"
 dependencies = [
  "alloc",
  "collections",
@@ -6373,7 +6373,7 @@ dependencies = [
 [[package]]
 name = "wc_metrics"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?rev=9486ec2#9486ec2764be7dfa7f62dad10ab701f0ebbb2769"
+source = "git+https://github.com/WalletConnect/utils-rs.git?rev=74ff898#74ff89821f29c4086478ae82ac50957908caf5d1"
 dependencies = [
  "arc-swap",
  "enum-ordinalize",
