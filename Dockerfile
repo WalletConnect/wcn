@@ -1,4 +1,7 @@
-FROM alpine:3.22
+FROM alpine:3.22.8
+
+# Pull latest security fixes (incl. ca-certificates-bundle) at build time.
+RUN apk upgrade --no-cache
 
 ARG TARGET
 ARG BINARY
