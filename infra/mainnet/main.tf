@@ -192,9 +192,10 @@ locals {
     wallet-connect = {
       vpc_cidr_octet          = 6 # 10.6.0.0/16
       vpc_peering_connections = local.vpc_peering_connections
-      db                      = local.db_config
+      # Canary: 261110.0 on the DB and node 0 before operators roll it out.
+      db = merge(local.db_config, { image = "ghcr.io/walletconnect/wcn-db:261110.0" })
       nodes = [
-        local.node_config,
+        merge(local.node_config, { image = "ghcr.io/walletconnect/wcn-node:261110.0" }),
         local.node_config,
       ]
       prometheus   = local.prometheus_config
